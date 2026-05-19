@@ -17,7 +17,7 @@ int IMU_1_Open_flag = 0;//开启IMU标志位
 
 void IMU_init(void)//IMU初始化
 {
-    imu963ra_init();  //IMU660惯导初始化
+    imu963ra_init();  //IMU963RA惯导初始化
     IMU_gyro_Offset_Init();// 陀螺仪零漂初始化
 }
 
@@ -69,7 +69,7 @@ void IMU_Handle_180(void)
 
 void IMU_data_get(void)
 {
-    imu660ra_get_gyro();
+    imu963ra_get_gyro();
 
     if(IMU_1_Open_flag==1)
     {

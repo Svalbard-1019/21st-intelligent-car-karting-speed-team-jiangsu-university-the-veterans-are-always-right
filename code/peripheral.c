@@ -181,7 +181,6 @@ void Encoder_count_init(Encoder_t *count)
 void Encoder_Init(void)
 {
     encoder_quad_init(ENCODER_QUADDEC, ENCODER_QUADDEC_A, ENCODER_QUADDEC_B);
-    encoder_dir_init(ENCODER_DIR, ENCODER_DIR_PULSE, ENCODER_DIR_DIR);
 
 }
 
@@ -189,16 +188,15 @@ void Encoder_Init(void)
 void Encoder_Get(Encoder_t *count)
 {
 
-    count->right_counter  = -r_ecdcounter();                // 获取编码器计数
-    count->left_counter = l_ecdcounter();                  // 获取编码器计数
-    count->delta_r = calculate_delta(count->right_counter,count-> last_ecdcount_r);
+    count->left_counter = l_ecdcounter();                  // 获取左编码器计数
     count->delta_l = calculate_delta(count->left_counter,count ->last_ecdcount_l);
+    count->right_counter  = count->left_counter;           // 当前只接左编码器，左右后轮共用速度反馈
+    count->delta_r = count->delta_l;
 //    ips200_show_int(X(1),  Y(8),count->delta_l ,5);
 //    ips200_show_int(X(10),  Y(8),count->delta_r ,5);
     count ->last_ecdcount_l = count->left_counter;
     count-> last_ecdcount_r = count->right_counter ;
 //    encoder_clear_count(ENCODER_QUADDEC);                                       // 清空编码器计数
-//    encoder_clear_count(ENCODER_DIR);                                           // 清空编码器计数
 
 }
 

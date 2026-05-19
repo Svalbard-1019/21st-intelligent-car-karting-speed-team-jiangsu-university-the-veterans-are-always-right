@@ -38,7 +38,7 @@ extern Encoder_t Steer_ecd;
 
 //∫Í∂®“Â
 #define r_ecdcounter()    encoder_get_count(ENCODER_QUADDEC)
-#define l_ecdcounter()    encoder_get_count(ENCODER_DIR)
+#define l_ecdcounter()    encoder_get_count(ENCODER_QUADDEC)
 #define BUZZER_PIN  (P33_10)      //∑‰√˘∆˜
 
 #define KEY1                    (P20_6)    //∞¥º¸“˝Ω≈≈‰÷√   //P20_6  //P11_3
@@ -58,9 +58,6 @@ extern Encoder_t Steer_ecd;
 #define ENCODER_QUADDEC                 (TIM2_ENCODER)
 #define ENCODER_QUADDEC_A               (TIM2_ENCODER_CH1_P33_7)
 #define ENCODER_QUADDEC_B               (TIM2_ENCODER_CH2_P33_6)
-#define ENCODER_DIR                     (TIM5_ENCODER)
-#define ENCODER_DIR_PULSE               (TIM5_ENCODER_CH1_P10_3)
-#define ENCODER_DIR_DIR                 (TIM5_ENCODER_CH2_P10_1)
 
 #define PWM_L              (ATOM0_CH3_P21_5)
 #define PWM_R              (ATOM0_CH1_P21_3)
