@@ -1,0 +1,29 @@
+# Build output
+Debug/
+Release/
+
+# ADS / Eclipse generated metadata
+.metadata/
+.recommenders/
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+*.orig
+*.swp
+*.swo
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Generated dependency/object/binary artifacts
+*.o
+*.obj
+*.d
+*.elf
+*.hex
+*.map
+*.mdf
+*.src
