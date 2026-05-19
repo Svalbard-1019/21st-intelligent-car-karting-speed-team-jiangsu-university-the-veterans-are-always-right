@@ -26,8 +26,8 @@ int angle_speed = 0;
 int angle_test = 0;
 void Steer_Moter_Init(void)
 {
-
-
+    angle_control_init();
+    angle_control_set_target(0);
 }
 
 
@@ -58,31 +58,15 @@ void Speed_Control(float tar_l, float tar_r)
 
 void Steer_Moter_Contral(float servo_out)
 {
-    float kp = 0.1;
-    servo_out = VEER_MOTOR_MID - servo_out;
-    Value_Limit_float(&servo_out ,VEER_MOTOR_MIN ,VEER_MOTOR_MAX );
+    Value_Limit_float(&servo_out, ANGLE_MIN_DEGREE, ANGLE_MAX_DEGREE);
+    angle_control_set_target((int32)servo_out);
+    angle_control_update();
 
-//    steer_moter.Ecd_Delta = (int16)absolute_encoder_get_location()*360/4095;
-//    steer_moter.Ecd_Sum += steer_moter.Ecd_Delta;
-
-        angle =absolute_encoder_get_location()*360/4095-80;
-        if(angle <= 0)angle+=360;
-//        angle_speed =(float)absolute_encoder_get_offset();
-    Steer_D_Loop.err =servo_out -(float)angle;
-    if(fabs(Steer_D_Loop.err) <= 10){    Steer_D_Loop.Kp = fabs(Steer_D_Loop.err)*40.0;}
-    else {Steer_D_Loop.Kp =1000.0f;}
-    PID_Place(&Steer_D_Loop , Steer_D_Loop.err);
-//    Steer_S_Loop.err = Steer_D_Loop.out - angle_speed;
-////    Steer_S_Loop.err = 5;
-//    PID_Place(&Steer_S_Loop , Steer_S_Loop.err);
-   if(servo_out == 0)Steer_D_Loop.out =0;
-   else if(servo_out >=0)Steer_D_Loop.out -= 900.0f;
-   else if(servo_out <=0)Steer_D_Loop.out += 900.0f;
-    VeerMoter_Set(Steer_D_Loop.out);
+    angle = angle_control_get_current_angle();
+    angle_speed = (int)angle_ctrl.pid.Output;
 
 
 }
-
 void Steer_UpPID(_pid*p ,float error)
 {
     static float final_out = 0;

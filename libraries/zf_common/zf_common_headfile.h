@@ -123,6 +123,8 @@
 #include "display.h"
 #include "peripheral.h"
 #include "formula.h"
+#include "PID.h"
+#include "angle_control.h"
 #include "control.h"
 #include "flash.h"
 #include "IMU_2.h"

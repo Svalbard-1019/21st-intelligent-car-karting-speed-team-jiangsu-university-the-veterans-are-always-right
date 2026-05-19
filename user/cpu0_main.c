@@ -58,7 +58,7 @@ int core0_main(void)
     // 此处编写用户代码 例如外设初始化代码等
 
     Init_All();
-    absolute_encoder_init();                                                         // 初始化绝对值编码器，用于获取舵机或电机的位置反馈
+    // 前轮转向改为 TIM4 磁编码器闭环，不再初始化 SPI 绝对值编码器
     hotRc_Control_init();                                                              // 初始化遥控器控制功能，用于接收遥控器信号
    pit_ms_init(CCU61_CH1, 1);
    pit_ms_init(CCU61_CH0, 1);

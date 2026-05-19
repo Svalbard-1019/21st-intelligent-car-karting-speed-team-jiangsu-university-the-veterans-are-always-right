@@ -180,7 +180,7 @@ void Encoder_count_init(Encoder_t *count)
 }
 void Encoder_Init(void)
 {
-    encoder_dir_init(ENCODER_QUADDEC, ENCODER_QUADDEC_A, ENCODER_QUADDEC_B);
+    encoder_quad_init(ENCODER_QUADDEC, ENCODER_QUADDEC_A, ENCODER_QUADDEC_B);
     encoder_dir_init(ENCODER_DIR, ENCODER_DIR_PULSE, ENCODER_DIR_DIR);
 
 }
@@ -206,30 +206,13 @@ void Motor_init(void)//电机初始化
 {
        pwm_init(PWM_L, 17000, 0);                                                 // PWM 通道 L1 初始化频率 17KHz 占空比初始为 0
        pwm_init(PWM_R, 17000, 0);                                                // PWM 通道 L2 初始化频率 17KHz 占空比初始为 0
-       pwm_init(PWM_V, 17000, 0);                                                // PWM 通道 L2 初始化频率 17KHz 占空比初始为 0
-       gpio_init(MOTOR_GPIO_V, GPO, 1, GPO_PUSH_PULL);       //左电机  1正转
        gpio_init(MOTOR_GPIO_L, GPO, 1, GPO_PUSH_PULL);       //左电机  1正转
        gpio_init(MOTOR_GPIO_R, GPO, 1, GPO_PUSH_PULL);       //右电机  1正转
 }
 void VeerMoter_Set(int moter )
 {
-//    moter = -moter;
     moter=LimitMax(moter,S_MOTER_MAX);
-
-    if(moter>=0)
-    {
-        pwm_set_duty(PWM_V, moter);
-        gpio_set_level(MOTOR_GPIO_V, 1);
-    }
-    else if(moter<0)
-    {
-        pwm_set_duty(PWM_V, -moter);
-        gpio_set_level(MOTOR_GPIO_V ,0);
-    }
-
-
-
-
+    angle_motor_set_pwm(moter);
 
 }
 
