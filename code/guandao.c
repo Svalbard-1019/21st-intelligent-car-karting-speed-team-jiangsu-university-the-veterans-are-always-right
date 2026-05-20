@@ -19,6 +19,15 @@
  */
 
 /*
+ * 主函数/科目一调用链：
+ * 1. core0_main() 主循环根据 main_mode 分流：Guandao_Recode_Mode 调 guandao_recode(&INS)，Guandao_portion_1 调 portion_1()。
+ * 2. 记录模式 guandao_recode() 调 update_state() 用后轮编码器和 Yaw_1 积分当前位置，再由 recode_waypoint() 按距离阈值自动保存路线点。
+ * 3. 自动驾驶 portion_1() 调 guandao_trace(&INS)，guandao_trace() 再调用 pursuit_contral_mode() 计算 out_v_l、out_v_r 和 out_servo。
+ * 4. out_servo 在 CCU61_CH0 中断里送入 Steer_Moter_Contral() 控制前轮；out_v_l/out_v_r 在主循环末尾由 Guandao_Rear_Motor_Update() 转成后轮 m/s 目标。
+ */
+
+
+/*
  * guandao.c
  *
  *  Created on: 2026年3月16日
@@ -55,6 +64,15 @@ static uint8 portion1_state_flag = 0;
 static uint16 portion1_finally_length = 0;
 
 /*初始化管道状态数据结构*/
+/**
+ * 函数说明：guandao_state_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - e：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void guandao_state_init(guandao_state * e)
 {
     e->current_point_index =0;
@@ -67,6 +85,15 @@ void guandao_state_init(guandao_state * e)
 
 }
 /*初始化路径数据结构链*/
+/**
+ * 函数说明：guandao_chain_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void guandao_chain_init(void)
 {
     INS.next = &passage;
@@ -75,12 +102,32 @@ void guandao_chain_init(void)
     portion_2.next = NULL;
 }
 /*计算两点之间的欧氏距离*/
+/**
+ * 函数说明：get_distance()。读取当前模块保存的状态量，主要用于屏幕显示和调试。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - p1：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * - p2：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * 返回值：返回 float 类型结果，通常用于上层判断状态、显示调试值或继续参与控制计算。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 float get_distance(state_t p1, state_t p2)
 {
     return hypotf(p2.x - p1.x, p2.y - p1.y);
 }
 
 /*基于编码器数据更新当前位姿（航迹推算）*/
+/**
+ * 函数说明：update_state()。周期更新内部状态，依赖中断或主循环按固定节拍调用。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * - ecd：编码器相关输入或计数值，用于速度、里程或角度换算。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void update_state(guandao_state * state , Encoder_t * ecd)
 {
     float delta_real_center = 0;
@@ -123,8 +170,6 @@ void update_state(guandao_state * state , Encoder_t * ecd)
     }
 
 
-
-
     state->current_state.x+=delta_real_center*sinf(state->current_state.theta/180.0f*M_PI);
     state->current_state.y+=delta_real_center*cosf(state->current_state.theta/180.0f*M_PI);
 
@@ -132,6 +177,15 @@ void update_state(guandao_state * state , Encoder_t * ecd)
 // 科目一自动驾驶入口前的状态复位。
 // 注意：Flash 里的 INS.length_index 不能清零，它是已保存路线长度；这里只清运行态。
 // current_point_index 从 1 开始，是为了避开记录路线时的第 0 个起点，防止起步时追起点。
+/**
+ * 函数说明：portion_1_reset()。清零内部状态和控制输出，用于重新进入测试/自动驾驶前恢复初始状态。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void portion_1_reset(void)
 {
     portion1_state_flag = 0;
@@ -153,6 +207,15 @@ void portion_1_reset(void)
 // 科目一主流程。
 // 每次循环先用后轮编码器+Yaw 更新 INS.current_state，随后用纯追踪计算左右速度和转向目标。
 // 如果打点时设置了停车点 daoche_point_length，则本次只追到停车点；否则追完整条路线。
+/**
+ * 函数说明：portion_1()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void portion_1(void)
 {
     update_state(&INS,&guandao_ecd);                              // 更新当前车辆位姿（基于编码器航迹推算）
@@ -187,6 +250,15 @@ void portion_1(void)
 支持遥控器按键触发记录倒车点
 
 自动过滤距离过近的点*/
+/**
+ * 函数说明：recode_waypoint()。记录当前位置/路线点，用于后续自动追踪。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void recode_waypoint(guandao_state * state)
 {
     if(state ->length_index >=MAX_LENGTH_INDEX)return;
@@ -224,6 +296,15 @@ void recode_waypoint(guandao_state * state)
 按键1触发记录起始点
 
 记录指定长度（PORTION_TWO_INDEX）的路径点*/
+/**
+ * 函数说明：portion2_points_recode()。记录当前位置/路线点，用于后续自动追踪。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void portion2_points_recode(void)
 {
     static int16 p2p_r_flag1= 0 ;
@@ -249,6 +330,18 @@ void portion2_points_recode(void)
  * 3. 使用 preview_spets 预瞄点计算前轮目标角。
  * 4. 根据终点距离 final_dsts 做末段减速。
  * 5. 将中心速度拆成左右轮速度，交给 cpu0_main.c 换算成 m/s 后驱动后轮。
+ */
+/**
+ * 函数说明：pursuit_contral_mode()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * - out_v_l：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * - out_v_r：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * - out_servo：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,float *out_servo)
 {
@@ -368,6 +461,19 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
  * 用于在车辆接近终点时修正行驶方向，
  * 确保以特定角度到达目标点。
  */
+/**
+ * 函数说明：azimuth_adjust()。处理 IMU/陀螺仪数据，用于更新车体姿态和航向角。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * - start_d：目标值，单位由函数名决定，常见为角度 deg、速度 m/s 或 PWM 计数。
+ * - dist_to_final：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * - target_steering：目标值，单位由函数名决定，常见为角度 deg、速度 m/s 或 PWM 计数。
+ * - target_yaw：目标值，单位由函数名决定，常见为角度 deg、速度 m/s 或 PWM 计数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void azimuth_adjust(guandao_state * state ,float start_d , float dist_to_final , float * target_steering , float target_yaw )
 {
     float angle_delta = 0;
@@ -396,6 +502,19 @@ void azimuth_adjust(guandao_state * state ,float start_d , float dist_to_final ,
 // 自动驾驶时预瞄 current_point_index + index；记录模式下只用于显示最后一个记录点方向。
 // 计算预瞄点相对车辆的角度和距离。
 // 自动驾驶时预瞄 current_point_index + index；记录模式下只用于显示最后一个记录点方向。
+/**
+ * 函数说明：pursuit_midhandle()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * - current_state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * - index：路线点索引或通道编号，用于选择数据来源/目标点。
+ * - angle：角度或航向相关参数，除特别说明外单位为度。
+ * - distanse：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void pursuit_midhandle(guandao_state * state ,state_t * current_state , int index ,float * angle , float * distanse)
 {
     int preview_index = 0;
@@ -424,6 +543,15 @@ void pursuit_midhandle(guandao_state * state ,state_t * current_state , int inde
 
 }
 /* 手动建图*/
+/**
+ * 函数说明：build_map_text()。完成本模块中的一个独立步骤，具体行为由函数体内的状态变量和硬件调用决定。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void build_map_text(guandao_state * state)
 {
     float length = 0.176f *6.0;
@@ -450,8 +578,6 @@ void build_map_text(guandao_state * state)
         state->recode_map[i].x =-length* 20 + length * i;
 
 
-
-
         state->recode_map[i].y = length* 20 - length* i;
         state->recode_map[i].theta = 45.0f;
     }
@@ -475,6 +601,15 @@ float out_servo = 0;
  * 普通路线点不需要按键，车辆移动超过 recode_threshold 就会自动记录。
  * KEY1 短按：记录科目一停车点；KEY1 长按：保存当前路线到 Flash；KEY2：可选 GPS 辅助点。
  * route_setting_choice 决定当前写入 INS、passage、portion_3 还是 portion_2。
+ */
+/**
+ * 函数说明：guandao_recode()。记录当前位置/路线点，用于后续自动追踪。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void guandao_recode(guandao_state * state)
 {
@@ -535,7 +670,6 @@ void guandao_recode(guandao_state * state)
 //     guandao_show();
 
 
-
     if((x6f_out[2] == 200)&&flag1){   Flash_Store_Mode(route_setting_choice);  Buzzer_check(50);  flag1 = 0; };    // Flash存储触发：长按KEY1或遥控器通道2（值为200）
     // flag1确保只存储一次，避免重复写入
 
@@ -544,6 +678,15 @@ void guandao_recode(guandao_state * state)
  * 用于自动构建一个对称的8段式复杂路径。
  * 它通过复制、镜像、插值等方式，
  * 从初始的几段路径数据生成完整的往返赛道路径。*/
+/**
+ * 函数说明：portion2_points_build()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：返回 uint8 类型结果，通常用于上层判断状态、显示调试值或继续参与控制计算。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 uint8 portion2_points_build(void)
 {
 
@@ -594,6 +737,17 @@ uint8 portion2_points_build(void)
 /*这是一个四阶段状态机函数，用于实现复杂路径的组合跟踪。
  * 它通过从passage（通道路径）中提取不同的路径段，
  * 组合成新的路径portion_2，并交替执行路径跟踪。*/
+/**
+ * 函数说明：portion2_points_trace()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - channal1：路线点索引或通道编号，用于选择数据来源/目标点。
+ * - channal2：路线点索引或通道编号，用于选择数据来源/目标点。
+ * - state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void portion2_points_trace(uint8 channal1 , uint8 channal2 ,uint8 state )
 {
     static uint8 p2p_state = 0;
@@ -656,6 +810,15 @@ void portion2_points_trace(uint8 channal1 , uint8 channal2 ,uint8 state )
 如果启用GPS，调用GPS轨迹跟踪
 
 显示跟踪状态*/
+/**
+ * 函数说明：guandao_trace()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void guandao_trace(guandao_state * state)
 {
 //    static uint8 flag2 = 1;
@@ -681,6 +844,16 @@ void guandao_trace(guandao_state * state)
 
 
 /*真实速度计算*/
+/**
+ * 函数说明：speed_calculate()。完成本模块中的一个独立步骤，具体行为由函数体内的状态变量和硬件调用决定。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - ecd：编码器相关输入或计数值，用于速度、里程或角度换算。
+ * - time_tick：时间周期或采样间隔，速度计算时会参与单位换算。
+ * 返回值：返回 float 类型结果，通常用于上层判断状态、显示调试值或继续参与控制计算。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 float speed_calculate(Encoder_t * ecd , float time_tick)
 {
     float v_speed = (ecd->delta_l +ecd->delta_r)*ONE_TICK_DISTANCE/time_tick/2.0f;
@@ -693,6 +866,16 @@ float speed_calculate(Encoder_t * ecd , float time_tick)
 当速度>1m/s且差值超阈值时判定为打滑
 
 根据左右轮增量判断打滑方向（左滑/右滑）*/
+/**
+ * 函数说明：slip_cheak()。完成本模块中的一个独立步骤，具体行为由函数体内的状态变量和硬件调用决定。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - ecd：编码器相关输入或计数值，用于速度、里程或角度换算。
+ * - steer_angle：角度或航向相关参数，除特别说明外单位为度。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void slip_cheak(Encoder_t * ecd,float steer_angle)
 {
     static int flag = 0;
@@ -721,6 +904,15 @@ void slip_cheak(Encoder_t * ecd,float steer_angle)
 
 uint16 portion3_foint_flag = 0;
 /*这个函数用于对第三部分路径进行翻转和反向处理，实现路径的镜像或回程路径生成。主要用于创建往返路径或对称轨迹。*/
+/**
+ * 函数说明：portion3_points_switch()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：返回 uint8 类型结果，通常用于上层判断状态、显示调试值或继续参与控制计算。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 uint8 portion3_points_switch(void)
 {
     float x_delta = portion_3.recode_map[portion_3.length_index -1 ].x ;
@@ -768,6 +960,15 @@ uint8 portion3_points_switch(void)
 绘制进度条（绿色线）
 
 每点延时20ms，形成动画效果*/
+/**
+ * 函数说明：Guandao_Points_Show()。负责屏幕显示或菜单跳转，不直接改变底层硬件接线。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - e：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Guandao_Points_Show(guandao_state * e)
 {
     int choice_flag = 0;
@@ -819,9 +1020,16 @@ void Guandao_Points_Show(guandao_state * e)
     }
 
 
-
 }
-/**/
+/**
+ * 函数说明：guandao_show()。负责屏幕显示或菜单跳转，不直接改变底层硬件接线。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - p：PID 控制器结构体指针，函数会读取或修改其中的误差、积分和输出字段。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void guandao_show(guandao_state * p)
 {
 
@@ -831,7 +1039,15 @@ void guandao_show(guandao_state * p)
 
 
 }
-/**/
+/**
+ * 函数说明：follow_points_show()。负责屏幕显示或菜单跳转，不直接改变底层硬件接线。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - p：PID 控制器结构体指针，函数会读取或修改其中的误差、积分和输出字段。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void follow_points_show(guandao_state * p)
 {
 
@@ -840,7 +1056,15 @@ void follow_points_show(guandao_state * p)
     ips200_show_int(X(10),  Y(15) ,p->current_point_index, 5);                                   ips200_show_int(X(15),  Y(15) ,p->length_index, 5);
     ips200_show_float(X(15),Y(16),p->current_state.theta,3,2);
 }
-/**/
+/**
+ * 函数说明：Key_Recode_Point()。记录当前位置/路线点，用于后续自动追踪。
+ * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
+ * 参数说明：
+ * - e：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Key_Recode_Point(guandao_state * e)
 {
     if(e->length_index >MAX_LENGTH_INDEX) return;

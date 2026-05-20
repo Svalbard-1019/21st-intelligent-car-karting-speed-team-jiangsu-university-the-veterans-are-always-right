@@ -14,6 +14,15 @@
  */
 
 /*
+ * 主函数/科目一调用链：
+ * 1. core0_main() 首先调用 Init_All()，Init_All() 集中初始化屏幕、按键、蜂鸣器、编码器、电机、IMU、GPS 和惯导状态。
+ * 2. CCU61_CH1 中断周期调用 Key_Scan()、IMU_GetValues()；CCU61_CH0 中断周期调用转向控制、GPS 解析和后轮编码器采样。
+ * 3. 科目一记录模式通过 Encoder_Get(&guandao_ecd) 获取后轮里程；当前左右反馈共用左后轮编码器。
+ * 4. Rack_Test_Run() 是架上调试入口，用来分别验证前轮转向、后轮速度和 IMU 直线保持，避免一上来就跑完整科目一。
+ */
+
+
+/*
  * peripheral.c
  *
  *  Created on: 2025年11月20日
@@ -40,6 +49,15 @@ static float rack_straight_last_yaw_error = 0.0f;
 #define RACK_STRAIGHT_KP        (2.0f)
 #define RACK_STRAIGHT_KD        (0.45f)
 #define RACK_STRAIGHT_LIMIT_DEG (22.0f)
+/**
+ * 函数说明：Init_All()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Init_All(void)
 {
 
@@ -67,6 +85,15 @@ void Init_All(void)
     Steer_Moter_Init();
 }
 
+/**
+ * 函数说明：Key_Init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Key_Init(void)
 {
     gpio_init(KEY1, GPI, GPIO_LOW, GPI_PULL_UP);           // 初始化 KEY1 输入 默认高电平 上拉输入
@@ -104,6 +131,15 @@ uint8 key4_flag= 0 ;
 
 uint8 key_val;
 uint8 key_value;
+/**
+ * 函数说明：Key_Scan()。处理按键输入、按键标志或按键触发的参数修改。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Key_Scan(void)
 {
 
@@ -131,6 +167,15 @@ void Key_Scan(void)
 
 }
 
+/**
+ * 函数说明：Buzzer_Init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Buzzer_Init(void)
 {
     gpio_init(BUZZER_PIN, GPO, 0, GPO_PUSH_PULL);
@@ -138,6 +183,15 @@ void Buzzer_Init(void)
 
 #define PASSIVE_BUZZER_HALF_PERIOD_US  (250u)   // 2kHz square wave for passive buzzer
 
+/**
+ * 函数说明：Buzzer_check()。驱动蜂鸣器发声，用于保存成功、模式切换等提示。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - time2：时间周期或采样间隔，速度计算时会参与单位换算。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Buzzer_check(int time2)//蜂鸣器的自检函数
 {
     uint32 toggle_count = 0;
@@ -158,12 +212,30 @@ void Buzzer_check(int time2)//蜂鸣器的自检函数
     gpio_set_level(BUZZER_PIN,0);
 }
 
+/**
+ * 函数说明：Steer_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Steer_init(void)//舵机初始化
 {
     pwm_init(SERVO_MOTOR_PWM, SERVO_MOTOR_FREQ, (uint32)SERVO_MOTOR_DUTY(SERVO_MOTOR_MID));
 
 }
 
+/**
+ * 函数说明：Steer_set()。写入上层给定的目标值或执行器输出，并在函数内部做必要限幅。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - angle：角度或航向相关参数，除特别说明外单位为度。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Steer_set(int angle)//舵机驱动
 {
     if(angle<SERVO_MOTOR_LMAX){angle=SERVO_MOTOR_LMAX;}
@@ -172,6 +244,15 @@ void Steer_set(int angle)//舵机驱动
 
 }
 
+/**
+ * 函数说明：Steer_text()。驱动电机或转向执行器，调用前需要确认方向和限幅。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Steer_text(void)//舵机测试
 {
 
@@ -211,7 +292,15 @@ int motor_pwm_l = 0;
 int motor_pwm_r = 0;
 
 
-
+/**
+ * 函数说明：Encoder_count_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - count：编码器相关输入或计数值，用于速度、里程或角度换算。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Encoder_count_init(Encoder_t *count)
 {
     count->left_counter =0;
@@ -222,6 +311,15 @@ void Encoder_count_init(Encoder_t *count)
     count ->last_ecdcount_r =0;
 
 }
+/**
+ * 函数说明：Encoder_Init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Encoder_Init(void)
 {
     encoder_quad_init(ENCODER_QUADDEC, ENCODER_QUADDEC_A, ENCODER_QUADDEC_B);
@@ -229,6 +327,15 @@ void Encoder_Init(void)
 }
 
 
+/**
+ * 函数说明：Encoder_Get()。读取当前模块保存的状态量，主要用于屏幕显示和调试。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - count：编码器相关输入或计数值，用于速度、里程或角度换算。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Encoder_Get(Encoder_t *count)
 {
 
@@ -245,6 +352,15 @@ void Encoder_Get(Encoder_t *count)
 
 }
 
+/**
+ * 函数说明：Motor_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Motor_init(void)//电机初始化
 {
        pwm_init(PWM_L, 17000, 0);                                                 // PWM 通道 L1 初始化频率 17KHz 占空比初始为 0
@@ -252,6 +368,15 @@ void Motor_init(void)//电机初始化
        gpio_init(MOTOR_GPIO_L, GPO, 1, GPO_PUSH_PULL);       //左电机  1正转
        gpio_init(MOTOR_GPIO_R, GPO, 1, GPO_PUSH_PULL);       //右电机  1正转
 }
+/**
+ * 函数说明：VeerMoter_Set()。写入上层给定的目标值或执行器输出，并在函数内部做必要限幅。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - moter：PWM 或电机输出值，正负号通常表示方向。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void VeerMoter_Set(int moter )
 {
     moter=LimitMax(moter,S_MOTER_MAX);
@@ -259,6 +384,16 @@ void VeerMoter_Set(int moter )
 
 }
 
+/**
+ * 函数说明：Moter_Set()。写入上层给定的目标值或执行器输出，并在函数内部做必要限幅。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - moter_l：PWM 或电机输出值，正负号通常表示方向。
+ * - moter_r：PWM 或电机输出值，正负号通常表示方向。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Moter_Set(int moter_l , int moter_r)
 {
     moter_l =LimitMax(moter_l,MOTER_MAX);
@@ -287,9 +422,17 @@ void Moter_Set(int moter_l , int moter_r)
     }
 
 
-
-
 }
+/**
+ * 函数说明：LimitMax()。对输入变量进行限幅，防止控制量超过安全范围。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - input：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * - max：限幅边界值，用于保护控制输出或参数范围。
+ * 返回值：返回 int 类型结果，通常用于上层判断状态、显示调试值或继续参与控制计算。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 int LimitMax(int input, int max)
     {
         if (input > max)
@@ -304,6 +447,15 @@ int LimitMax(int input, int max)
     }
 
 
+/**
+ * 函数说明：Control()。完成本模块中的一个独立步骤，具体行为由函数体内的状态变量和硬件调用决定。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Control(void)
 {
     ips200_show_int(0,  16*3,encoder_l , 5);
@@ -338,8 +490,16 @@ void Control(void)
    }
 
 
-
 }
+/**
+ * 函数说明：Rack_Test_Reset_Targets()。清零内部状态和控制输出，用于重新进入测试/自动驾驶前恢复初始状态。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 static void Rack_Test_Reset_Targets(void)
 {
     rack_test_speed_target = 0;
@@ -351,6 +511,15 @@ static void Rack_Test_Reset_Targets(void)
     }
 }
 
+/**
+ * 函数说明：Rack_Straight_Reset()。清零内部状态和控制输出，用于重新进入测试/自动驾驶前恢复初始状态。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Rack_Straight_Reset(void)
 {
     rack_straight_target_yaw = Yaw_1;
@@ -359,6 +528,15 @@ void Rack_Straight_Reset(void)
     rack_straight_steer_target = 0.0f;
 }
 
+/**
+ * 函数说明：Rack_Straight_Update()。周期更新内部状态，依赖中断或主循环按固定节拍调用。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Rack_Straight_Update(void)
 {
     float yaw_error = rack_straight_target_yaw - Yaw_1;
@@ -374,6 +552,15 @@ void Rack_Straight_Update(void)
     Value_Limit_float(&rack_straight_steer_target, -RACK_STRAIGHT_LIMIT_DEG, RACK_STRAIGHT_LIMIT_DEG);
 }
 
+/**
+ * 函数说明：Rack_Test_Run()。完成本模块中的一个独立步骤，具体行为由函数体内的状态变量和硬件调用决定。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Rack_Test_Run(void)
 {
     if(key1_flag == 1)
@@ -447,6 +634,15 @@ void Rack_Test_Run(void)
         ips200_show_string(X(1), Y(8), "PWM");        ips200_show_int(X(10), Y(8), rear_motor_get_pwm(), 5);
     }
 }
+/**
+ * 函数说明：GPS_Init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
+ * 所属模块：整车外设底层模块，主函数初始化和中断周期任务都依赖这里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void GPS_Init(void)
 {
     gnss_init(TAU1201);               // GN42A 为GPS模块 GN43RFA 为RTK模块

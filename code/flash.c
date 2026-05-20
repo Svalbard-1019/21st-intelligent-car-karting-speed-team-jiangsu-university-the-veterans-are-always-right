@@ -17,6 +17,15 @@
  */
 
 /*
+ * 主函数/科目一调用链：
+ * 1. core0_main() 上电初始化后调用 Flash_Main_Read()，恢复 PID 参数、INS 路线、passage 路线、portion_3 路线和 GPS 校验点。
+ * 2. 记录模式 guandao_recode() 里长按 KEY1 会触发 Flash_Store_Mode(route_setting_choice)，把当前选择的路线写入对应 Flash 页。
+ * 3. 科目一自动驾驶 portion_1() 使用的 INS.length_index 和 INS.map[] 来自 Flash_Read_INSpoints() 恢复的数据。
+ * 4. 如果重新烧录但没有擦除对应 Flash 页，路线点通常还在；如果换工程或擦 Flash，则需要重新记录。
+ */
+
+
+/*
  * flash.c
  *
  *  Created on: 2025年11月23日
@@ -31,7 +40,15 @@ float ki;
 float kd;
 
 
-
+/**
+ * 函数说明：Flash_Read_pid()。从 Flash、传感器或缓存中读取数据，并同步到全局运行变量。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Read_pid(void)
 {
     if(flash_check(FLASH_SECTION_INDEX,SPEED_PID_PAGE_INDEX))
@@ -61,10 +78,17 @@ void Flash_Read_pid(void)
     }
 
 
-
-
 }
 
+/**
+ * 函数说明：Flash_Write_pid()。把当前运行参数或路线点写入 Flash，掉电后仍可恢复。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Write_pid(void)
 {
     flash_buffer_clear();
@@ -97,6 +121,15 @@ void Flash_Write_pid(void)
       flash_write_page_from_buffer(FLASH_SECTION_INDEX,SPEED_PID_PAGE_INDEX);
 
 }
+/**
+ * 函数说明：Flash_Store_Mode()。把当前运行参数或路线点写入 Flash，掉电后仍可恢复。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - route_choice：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Store_Mode(uint8 route_choice)
 {
     switch(route_choice)
@@ -117,6 +150,15 @@ void Flash_Store_Mode(uint8 route_choice)
 
 
 }
+/**
+ * 函数说明：Flash_Main_Read()。从 Flash、传感器或缓存中读取数据，并同步到全局运行变量。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Main_Read(void)
 {
     Flash_Read_pid();
@@ -127,6 +169,15 @@ void Flash_Main_Read(void)
 
 
 }
+/**
+ * 函数说明：Flash_Write_passage_points()。把当前运行参数或路线点写入 Flash，掉电后仍可恢复。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Write_passage_points(void)
 {
     int max_storage = 2 * passage.length_index +2 ;
@@ -150,6 +201,15 @@ void Flash_Write_passage_points(void)
     }
     flash_write_page_from_buffer(FLASH_SECTION_INDEX,RECODE_PASSAGE);
 }
+/**
+ * 函数说明：Flash_Read_passage_points()。从 Flash、传感器或缓存中读取数据，并同步到全局运行变量。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Read_passage_points(void)
 {
     int get_max_storage = 0;
@@ -170,6 +230,15 @@ void Flash_Read_passage_points(void)
     }
 }
 
+/**
+ * 函数说明：Flash_Write_portion_3points()。把当前运行参数或路线点写入 Flash，掉电后仍可恢复。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Write_portion_3points(void)
 {
     int max_storage = 2 * portion_3.length_index +2 ;
@@ -194,6 +263,15 @@ void Flash_Write_portion_3points(void)
     flash_write_page_from_buffer(FLASH_SECTION_INDEX,RECODE_PORTION_THREE);
 
 }
+/**
+ * 函数说明：Flash_Read_portion_3points()。从 Flash、传感器或缓存中读取数据，并同步到全局运行变量。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Read_portion_3points(void)
 {
     int get_max_storage = 0;
@@ -214,6 +292,15 @@ void Flash_Read_portion_3points(void)
     }
 }
 
+/**
+ * 函数说明：Flash_Write_INSpoints()。把当前运行参数或路线点写入 Flash，掉电后仍可恢复。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Write_INSpoints(void)
 {
 
@@ -252,6 +339,15 @@ void Flash_Write_INSpoints(void)
     flash_write_page_from_buffer(FLASH_SECTION_INDEX,RECODE_MAP_POINTS_INDEX);
 
 }
+/**
+ * 函数说明：Flash_Read_INSpoints()。从 Flash、传感器或缓存中读取数据，并同步到全局运行变量。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Read_INSpoints(void)
 {
     int get_max_storage = 0;
@@ -285,6 +381,15 @@ void Flash_Read_INSpoints(void)
 
 }
 
+/**
+ * 函数说明：Flash_Read_gpscheak()。从 Flash、传感器或缓存中读取数据，并同步到全局运行变量。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Read_gpscheak(void)
 {
     if(flash_check(FLASH_SECTION_INDEX,GPS_CHEAK_FLAG))
@@ -303,6 +408,15 @@ void Flash_Read_gpscheak(void)
     }
 
 }
+/**
+ * 函数说明：Flash_Write_gpscheak()。把当前运行参数或路线点写入 Flash，掉电后仍可恢复。
+ * 所属模块：Flash 参数和路线持久化模块，负责把调试好的路线/参数保存到板子里。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void Flash_Write_gpscheak(void)
 {
     flash_buffer_clear();

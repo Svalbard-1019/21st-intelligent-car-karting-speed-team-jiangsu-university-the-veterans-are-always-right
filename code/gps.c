@@ -16,6 +16,15 @@
  */
 
 /*
+ * 主函数/科目一调用链：
+ * 1. Init_All() 中调用 GPS_Init() 初始化 GNSS 串口；UART3 接收中断调用 gnss_uart_callback() 收数据。
+ * 2. CCU61_CH0 中断检测 gnss_flag 后调用 gnss_data_parse()，Main_Key_Flag 打开后继续调用 update_gpsinformation() 更新经纬度缓存。
+ * 3. core0_main() 在 Flash_Main_Read() 后，如果 GPS_WORK_FLAG 打开，会调用 GPS_WorkMap_Copy(&INS) 复制 GPS 辅助点。
+ * 4. 记录模式可通过 recode_gps() 保存 GPS 校验点，自动驾驶时 trace_gps()/swtich_gps() 用于辅助判断路线段或显示调试。
+ */
+
+
+/*
  * gps.c
  *
  *  Created on: 2026年4月23日
@@ -26,6 +35,15 @@
 
 GPS_work gps_work;
 Lost_Point lost_judge;
+/**
+ * 函数说明：angle_plan()。完成本模块中的一个独立步骤，具体行为由函数体内的状态变量和硬件调用决定。
+ * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
+ * 参数说明：
+ * - angle：角度或航向相关参数，除特别说明外单位为度。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void angle_plan(float * angle)
 {
     if(* angle >= 180){* angle -= 360 ;}
@@ -33,6 +51,15 @@ void angle_plan(float * angle)
 
 }
 
+/**
+ * 函数说明：recode_gps()。记录当前位置/路线点，用于后续自动追踪。
+ * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
+ * 参数说明：
+ * - state：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void recode_gps(guandao_state * state)
 {
     static uint8 rcd_gps_flag = 0 ;
@@ -58,6 +85,15 @@ void recode_gps(guandao_state * state)
 
 }
 
+/**
+ * 函数说明：swtich_gps()。处理 GPS 辅助点、GPS 显示或 GPS 校验逻辑。
+ * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：返回 uint8 类型结果，通常用于上层判断状态、显示调试值或继续参与控制计算。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 uint8 swtich_gps(void)
 {
     static float loop_theta = 0;
@@ -92,6 +128,15 @@ uint8 swtich_gps(void)
 
 }
 
+/**
+ * 函数说明：trace_gps()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
+ * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
+ * 参数说明：
+ * - e：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void trace_gps(guandao_state * e)
 {
     if( gps_work.gps_update_flag == 1)
@@ -119,6 +164,15 @@ void trace_gps(guandao_state * e)
     }
 
 }
+/**
+ * 函数说明：update_gpsinformation()。周期更新内部状态，依赖中断或主循环按固定节拍调用。
+ * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void update_gpsinformation(void)
 {
     if(gps_work.gps_current_point >= gps_work.work_gps_length)return;
@@ -130,12 +184,30 @@ void update_gpsinformation(void)
     gps_work.gps_update_flag = 1;
 }
 
+/**
+ * 函数说明：double_to_int32()。完成本模块中的一个独立步骤，具体行为由函数体内的状态变量和硬件调用决定。
+ * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
+ * 参数说明：
+ * - y：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * 返回值：返回 int32 类型结果，通常用于上层判断状态、显示调试值或继续参与控制计算。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 int32 double_to_int32(double y)
 {
     int32 x = 0;
     x = (int32)(y*10000000);
     return x;
 }
+/**
+ * 函数说明：int32_to_double()。完成本模块中的一个独立步骤，具体行为由函数体内的状态变量和硬件调用决定。
+ * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
+ * 参数说明：
+ * - y：输入/输出参数，具体含义需要结合函数名和调用位置理解。
+ * 返回值：返回 double 类型结果，通常用于上层判断状态、显示调试值或继续参与控制计算。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 double int32_to_double(int32 y)
 {
     double x = 0;
@@ -143,6 +215,15 @@ double int32_to_double(int32 y)
     return x;
 }
 
+/**
+ * 函数说明：GPS_WorkMap_Copy()。处理 GPS 辅助点、GPS 显示或 GPS 校验逻辑。
+ * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
+ * 参数说明：
+ * - e：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void GPS_WorkMap_Copy(guandao_state * e)
 {
     int choice_flag = 0;
@@ -170,6 +251,15 @@ void GPS_WorkMap_Copy(guandao_state * e)
 }
 
 
+/**
+ * 函数说明：GPS_Points_Show()。负责屏幕显示或菜单跳转，不直接改变底层硬件接线。
+ * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
+ * 参数说明：
+ * - e：惯导路线/车辆状态结构体指针，保存当前位姿、路线点和追踪索引。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void GPS_Points_Show(guandao_state * e)
 {
     double Max_R_Line = -10000.0f , Max_D_Line = -10000.0f , Min_L_Line = 10000.0f , Min_U_Line = 10000.0f;
@@ -196,7 +286,6 @@ void GPS_Points_Show(guandao_state * e)
     }
 
 
-
     for(int i = 0 ; i< e->gps_recode_length - 1  ; i ++ )
     {
         ips200_draw_point((uint16)GD_Show[0][i],(uint16)GD_Show[1][i],RGB565_WHITE);
@@ -206,6 +295,15 @@ void GPS_Points_Show(guandao_state * e)
 
 }
 
+/**
+ * 函数说明：GPS_Work_SHOW()。负责屏幕显示或菜单跳转，不直接改变底层硬件接线。
+ * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
+ * 参数说明：
+ * - 无：该函数不需要外部输入参数。
+ * 返回值：无返回值；结果通过全局变量、结构体字段或硬件输出体现。
+ * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
+ * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
+ */
 void GPS_Work_SHOW(void)
 {
     double Max_R_Line = -10000.0f , Max_D_Line = -10000.0f , Min_L_Line = 10000.0f , Min_U_Line = 10000.0f;
@@ -230,7 +328,6 @@ void GPS_Work_SHOW(void)
         GD_Show[1][i] = 150.0f - (gps_work.points[i].lon - Center_H)*(280.0f/INDEX_H);
 
     }
-
 
 
     for(int i = 0 ; i<gps_work.work_gps_length - 1  ; i ++ )
