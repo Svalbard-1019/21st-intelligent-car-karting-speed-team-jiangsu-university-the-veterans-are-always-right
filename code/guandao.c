@@ -260,9 +260,9 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     while (angle_diff < -180.0f) angle_diff += 360.0f;
     guandao_debug_angle_diff = angle_diff;
 
-    if(distance_to_target <= persuit_threshold|| fabsf(angle_diff) > 90.0f )//  || fabsf(angle_diff) > 90.0f
+    if(distance_to_target <= persuit_threshold)
     {
-        guandao_debug_stop_reason = (distance_to_target <= persuit_threshold) ? 2 : 3;
+        guandao_debug_stop_reason = 2;
         state->current_point_index++;
         if(state->current_point_index >=state->length_index )
         {   state->current_point_index = state->length_index;
