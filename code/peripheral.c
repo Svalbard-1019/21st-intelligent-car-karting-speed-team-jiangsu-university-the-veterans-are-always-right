@@ -22,9 +22,9 @@ float rack_straight_yaw_error = 0.0f;
 float rack_straight_steer_target = 0.0f;
 static float rack_straight_last_yaw_error = 0.0f;
 
-#define RACK_STRAIGHT_KP        (1.0f)
-#define RACK_STRAIGHT_KD        (0.25f)
-#define RACK_STRAIGHT_LIMIT_DEG (12.0f)
+#define RACK_STRAIGHT_KP        (2.0f)
+#define RACK_STRAIGHT_KD        (0.45f)
+#define RACK_STRAIGHT_LIMIT_DEG (22.0f)
 void Init_All(void)
 {
 
