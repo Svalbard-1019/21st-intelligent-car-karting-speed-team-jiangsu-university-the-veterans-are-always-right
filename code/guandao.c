@@ -113,7 +113,7 @@ void portion_1_reset(void)
 {
     portion1_state_flag = 0;
     portion1_finally_length = 0;
-    INS.current_point_index = 0;
+    INS.current_point_index = (INS.length_index > 1) ? 1 : 0;
     daoche_flag = 0;
     out_v_l = 0;
     out_v_r = 0;
