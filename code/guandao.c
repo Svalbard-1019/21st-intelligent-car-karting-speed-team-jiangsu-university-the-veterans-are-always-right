@@ -120,43 +120,30 @@ void portion_1_reset(void)
 /*第一部分路径跟踪（带倒车功能）*/
 void portion_1(void)
 {
-//    static uint8 flag2 = 1;
-//    while(flag2){Guandao_Points_Show(&INS);ips200_clear();flag2 =0;}  //轨迹显示
-
     update_state(&INS,&guandao_ecd);                              // 更新当前车辆位姿（基于编码器航迹推算）
-    if(portion1_state_flag== 0)                                                             // 首次进入函数时执行，保存原始路径长度
+    if(portion1_state_flag == 0)                                   // 首次进入函数时确定本次停车点
     {
         portion1_finally_length = INS.length_index;
-        if(daoche_point_length <= 0 || daoche_point_length >= portion1_finally_length)
+        if(daoche_point_length > 0 && daoche_point_length < portion1_finally_length)
         {
-            portion1_state_flag = 2;        // 没有倒车点时直接跑完整INS路线
+            INS.length_index = daoche_point_length;                // KEY1记录的点作为科目一停车点
         }
         else
         {
-            portion1_state_flag ++;
+            INS.length_index = portion1_finally_length;            // 没有停车点时跑完整INS路线
         }
+        portion1_state_flag = 1;
     }
-    if(portion1_state_flag==1 )                                                            //行驶进倒车点
+
+    pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
+    if(INS.current_point_index >= INS.length_index)
     {
-        INS.length_index = daoche_point_length;
-        pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);       // 纯追踪控制
-        if(INS.current_point_index== INS.length_index )                     // 判断是否到达倒车执行点
-        {
-            conrtol_mode = DAOCHE;                                                  // 切换控制模式为倒车模式
-            daoche_flag = 1;                                                        // 设置倒车标志（影响update_state中的航向计算）
-//            Buzzer_check(50);
-            portion1_state_flag ++;
-        }
-    }
-    else if(portion1_state_flag ==2)                                                   //修复路径，开始倒车
-    {
-        INS.length_index =portion1_finally_length;
-        pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
-        if(INS.current_point_index== INS.length_index){daoche_speed =0;}
+        out_v_l = 0;
+        out_v_r = 0;
+        out_servo = 0;
+        conrtol_mode = GUANDAO;
     }
     follow_points_show(&INS);
-
-
 }
 /*记录路径点
 
