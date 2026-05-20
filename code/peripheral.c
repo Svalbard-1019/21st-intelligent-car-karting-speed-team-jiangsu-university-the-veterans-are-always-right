@@ -340,7 +340,7 @@ void Rack_Straight_Update(void)
 
     rack_straight_last_yaw_error = yaw_error;
     rack_straight_yaw_error = yaw_error;
-    rack_straight_steer_target = RACK_STRAIGHT_KP * yaw_error + RACK_STRAIGHT_KD * yaw_diff;
+    rack_straight_steer_target = -(RACK_STRAIGHT_KP * yaw_error + RACK_STRAIGHT_KD * yaw_diff);
     Value_Limit_float(&rack_straight_steer_target, -RACK_STRAIGHT_LIMIT_DEG, RACK_STRAIGHT_LIMIT_DEG);
 }
 
