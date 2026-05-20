@@ -47,6 +47,18 @@ extern int num;
 
 #define GUANDAO_SPEED_TO_MPS    (0.1f)
 
+static guandao_state *Get_Record_Display_State(void)
+{
+    switch(route_setting_choice)
+    {
+        case 0: return &INS;
+        case 1: return &passage;
+        case 2: return &portion_3;
+        case 3: return &portion_2;
+        default: return &INS;
+    }
+}
+
 static void Guandao_Rear_Motor_Update(void)
 {
     float target_mps = 0.0f;
@@ -161,7 +173,21 @@ int core0_main(void)
 //        ips200_show_float(X(11),  Y(10) ,INS.gps_recode_length, 3,6);
 //        ips200_show_float(X(1),  Y(10) ,gnss.satellite_used, 3,6);
 
-            if(main_mode != Rack_Test_Mode)
+            if(main_mode == Guandao_Recode_Mode)
+            {
+                guandao_state *record_state = Get_Record_Display_State();
+                ips200_show_string(X(1),  Y(8), "REC");      ips200_show_int(X(6),  Y(8), route_setting_choice, 2);
+                ips200_show_string(X(10), Y(8), "Len");      ips200_show_int(X(15), Y(8), record_state->length_index, 4);
+                ips200_show_string(X(1),  Y(9), "X");        ips200_show_float(X(4),  Y(9), record_state->current_state.x, 4, 2);
+                ips200_show_string(X(12), Y(9), "Y");        ips200_show_float(X(15), Y(9), record_state->current_state.y, 4, 2);
+                ips200_show_string(X(1),  Y(10), "Theta");   ips200_show_float(X(8),  Y(10), record_state->current_state.theta, 4, 1);
+                ips200_show_string(X(1),  Y(11), "Enc");     ips200_show_int(X(6),  Y(11), guandao_ecd.delta_l, 5); ips200_show_int(X(14), Y(11), guandao_ecd.delta_r, 5);
+                ips200_show_string(X(1),  Y(12), "KEY1");    ips200_show_int(X(7),  Y(12), gpio_get_level(KEY1), 1);
+                ips200_show_string(X(10), Y(12), "GPS");     ips200_show_int(X(15), Y(12), gnss.state, 1);
+                ips200_show_string(X(1),  Y(13), "Sat");     ips200_show_int(X(6),  Y(13), gnss.satellite_used, 3);
+                ips200_show_string(X(10), Y(13), "GFlag");   ips200_show_int(X(17), Y(13), gnss_flag, 1);
+            }
+            else if(main_mode != Rack_Test_Mode)
             {
                 ips200_show_string(X(1),  Y(8), "Idx");      ips200_show_int(X(6),  Y(8), INS.current_point_index, 4);
                 ips200_show_string(X(12), Y(8), "Len");      ips200_show_int(X(17), Y(8), INS.length_index, 4);
