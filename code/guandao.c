@@ -26,6 +26,8 @@ float final_dsts = 3.0f;                     // 终点距离减速阈值
 int16 daoche_point_length = 0;    // 倒车点长度
 uint8 daoche_flag =0;                    // 倒车标志
 uint8 daoche_flash_cheack =0;// 倒车Flash检查标志
+static uint8 portion1_state_flag = 0;
+static uint16 portion1_finally_length = 0;
 
 /*初始化管道状态数据结构*/
 void guandao_state_init(guandao_state * e)
@@ -102,22 +104,39 @@ void update_state(guandao_state * state , Encoder_t * ecd)
     state->current_state.y+=delta_real_center*cosf(state->current_state.theta/180.0f*M_PI);
 
 }
+void portion_1_reset(void)
+{
+    portion1_state_flag = 0;
+    portion1_finally_length = 0;
+    INS.current_point_index = 0;
+    daoche_flag = 0;
+    out_v_l = 0;
+    out_v_r = 0;
+    out_servo = 0;
+    INS.current_state.x = 0.0f;
+    INS.current_state.y = 0.0f;
+    INS.current_state.theta = 0.0f;
+}
 /*第一部分路径跟踪（带倒车功能）*/
 void portion_1(void)
 {
-    static uint8 state_flag = 0;                                                // 阶段状态标志（0=初始化，1=倒车阶段，2=前进阶段）
-    static uint16 finally_length = 0;                                      // 保存原始路径总长度，用于倒车后恢复
-
 //    static uint8 flag2 = 1;
 //    while(flag2){Guandao_Points_Show(&INS);ips200_clear();flag2 =0;}  //轨迹显示
 
     update_state(&INS,&guandao_ecd);                              // 更新当前车辆位姿（基于编码器航迹推算）
-    if(state_flag== 0)                                                             // 首次进入函数时执行，保存原始路径长度
+    if(portion1_state_flag== 0)                                                             // 首次进入函数时执行，保存原始路径长度
     {
-        finally_length = INS.length_index;
-        state_flag ++;
+        portion1_finally_length = INS.length_index;
+        if(daoche_point_length <= 0 || daoche_point_length >= portion1_finally_length)
+        {
+            portion1_state_flag = 2;        // 没有倒车点时直接跑完整INS路线
+        }
+        else
+        {
+            portion1_state_flag ++;
+        }
     }
-    if(state_flag==1 )                                                            //行驶进倒车点
+    if(portion1_state_flag==1 )                                                            //行驶进倒车点
     {
         INS.length_index = daoche_point_length;
         pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);       // 纯追踪控制
@@ -126,12 +145,12 @@ void portion_1(void)
             conrtol_mode = DAOCHE;                                                  // 切换控制模式为倒车模式
             daoche_flag = 1;                                                        // 设置倒车标志（影响update_state中的航向计算）
 //            Buzzer_check(50);
-            state_flag ++;
+            portion1_state_flag ++;
         }
     }
-    else if(state_flag ==2)                                                   //修复路径，开始倒车
+    else if(portion1_state_flag ==2)                                                   //修复路径，开始倒车
     {
-        INS.length_index =finally_length;
+        INS.length_index =portion1_finally_length;
         pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
         if(INS.current_point_index== INS.length_index){daoche_speed =0;}
     }

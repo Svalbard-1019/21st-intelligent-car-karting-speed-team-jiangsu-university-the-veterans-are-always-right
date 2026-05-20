@@ -98,6 +98,7 @@ void pursuit_midhandle(guandao_state * state ,state_t * current_state , int inde
 void guandao_recode(guandao_state * state);
 void guandao_trace(guandao_state * state);
 void portion_1(void);
+void portion_1_reset(void);
 uint8 portion3_points_switch(void);
 void Guandao_Points_Show(guandao_state * e);
 void Key_Recode_Point(guandao_state * e);
