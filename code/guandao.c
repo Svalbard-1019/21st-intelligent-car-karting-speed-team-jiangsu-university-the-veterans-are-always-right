@@ -6,6 +6,7 @@
  */
 
 #include "zf_common_headfile.h"
+#include "rear_motor/rear_motor.h"
 
 guandao_state INS;                               //0 = route_setting_choice
 guandao_state passage;                    //1 = route_setting_choice
@@ -116,6 +117,10 @@ void portion_1_reset(void)
     INS.current_state.x = 0.0f;
     INS.current_state.y = 0.0f;
     INS.current_state.theta = 0.0f;
+    Encoder_count_init(&guandao_ecd);
+    Encoder_count_init(&Speed_ecd);
+    encoder_clear_count(ENCODER_QUADDEC);
+    rear_motor_stop();
 }
 /*第一部分路径跟踪（带倒车功能）*/
 void portion_1(void)
