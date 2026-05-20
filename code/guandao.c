@@ -465,7 +465,7 @@ void guandao_recode(guandao_state * state)
     update_state(p  , &guandao_ecd);                        // 基于编码器数据更新当前车辆位姿（x, y, theta）
 
 
-    if(gpio_get_level(KEY1))
+    if(gpio_get_level(KEY1) == 0)
     {
         key1_flag = 0;
         now_ms = system_getval_ms();
