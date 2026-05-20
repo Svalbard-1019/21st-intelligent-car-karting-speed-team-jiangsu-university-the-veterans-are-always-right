@@ -121,10 +121,25 @@ void Buzzer_Init(void)
     gpio_init(BUZZER_PIN, GPO, 0, GPO_PUSH_PULL);
 }
 
+#define PASSIVE_BUZZER_HALF_PERIOD_US  (250u)   // 2kHz square wave for passive buzzer
+
 void Buzzer_check(int time2)//·äÃùÆ÷µÄ×Ô¼ìº¯Êý
 {
-    gpio_set_level(BUZZER_PIN,1);
-    system_delay_ms(time2);
+    uint32 toggle_count = 0;
+    uint32 i = 0;
+
+    if(time2 <= 0)
+    {
+        gpio_set_level(BUZZER_PIN,0);
+        return;
+    }
+
+    toggle_count = ((uint32)time2 * 1000u) / PASSIVE_BUZZER_HALF_PERIOD_US;
+    for(i = 0; i < toggle_count; i++)
+    {
+        gpio_toggle_level(BUZZER_PIN);
+        system_delay_us(PASSIVE_BUZZER_HALF_PERIOD_US);
+    }
     gpio_set_level(BUZZER_PIN,0);
 }
 
