@@ -425,6 +425,9 @@ void guandao_recode(guandao_state * state)
 {
     static uint8 flag0 = 1;                                                 // 首次调用标志（1=首次，0=已初始化），用于执行一次性初始化
     static uint8 flag1 = 1;                                                 // Flash存储标志（1=允许存储，0=已存储），防止重复保存
+    static uint32 key1_save_start_ms = 0;
+    static uint8 key1_save_wait_release = 0;
+    uint32 now_ms = 0;
     int choice_flag = 0;                                                    // 路径选择计数器，用于遍历链表找到目标路径
 
     guandao_state * p = state;                                          // 工作指针，指向当前路径节点，用于链表遍历
@@ -439,6 +442,36 @@ void guandao_recode(guandao_state * state)
     if(flag0){  guandao_state_init(p);   flag0 =0;}          // 清空路径点数组，重置索引和位姿
     update_state(p  , &guandao_ecd);                        // 基于编码器数据更新当前车辆位姿（x, y, theta）
 
+
+    if(key1_save_wait_release)
+    {
+        if(gpio_get_level(KEY1))
+        {
+            key1_flag = 0;
+            key1_save_wait_release = 0;
+        }
+        return;
+    }
+
+    if(!gpio_get_level(KEY1))
+    {
+        now_ms = system_getval_ms();
+        if(key1_save_start_ms == 0) key1_save_start_ms = now_ms;
+        if((uint32)(now_ms - key1_save_start_ms) > 1500 && flag1)
+        {
+            Flash_Store_Mode(route_setting_choice);
+            Buzzer_check(50);
+            flag1 = 0;
+            key1_flag = 0;
+            key1_save_wait_release = 1;
+            return;
+        }
+    }
+    else
+    {
+        key1_save_start_ms = 0;
+    }
+
     if( p == &passage)portion2_points_recode();     // passage路径：按键手动记录（适合构建复杂赛道）
     else recode_waypoint(p);                                         // 其他路径：自动等距记录（移动超过阈值自动记录）
 
@@ -448,7 +481,7 @@ void guandao_recode(guandao_state * state)
 
 
 
-    if((gpio_get_level(SWITCH1)||x6f_out[2] == 200)&&flag1){   Flash_Store_Mode(route_setting_choice);  Buzzer_check(50);  flag1 = 0; };    // Flash存储触发：检测物理开关1或遥控器通道2（值为200）
+    if((x6f_out[2] == 200)&&flag1){   Flash_Store_Mode(route_setting_choice);  Buzzer_check(50);  flag1 = 0; };    // Flash存储触发：长按KEY1或遥控器通道2（值为200）
     // flag1确保只存储一次，避免重复写入
 
 }

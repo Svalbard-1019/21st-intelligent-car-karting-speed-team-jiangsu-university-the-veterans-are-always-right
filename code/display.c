@@ -257,39 +257,58 @@ void Menu_PID_P(void)
 }
 void Menu_Control_P(void)
 {
+    static uint8 edit_flag = 0;
+    int16 *target;
+
     ips200_show_string( X(10) ,Y(0) ,"Control_P");
     ips200_show_string( X(3) ,Y(2) ,"Base_Speed");
     ips200_show_string( X(3) ,Y(3) ,"Daoche_Speed");
     ips200_show_string( X(3) ,Y(4) ,"Preview_Spets");
+    ips200_show_string( X(3) ,Y(5) ,"Run_Mps");
 
-    Menu_Control_Value();
-    prompt();
-
-    if(key_value == 1)key_mode1 ++;
-    else if(key_value == 2)key_mode1 --;
     key_mode1 =(key_mode1 > 4) ? 2  : key_mode1;
     key_mode1 =(key_mode1 < 2) ? 4  : key_mode1;
 
-    while (gpio_get_level(SWITCH1))
+    Menu_Control_Value();
+    prompt();
+    if(edit_flag) ips200_show_string(X(1), Y(7), "EDIT");
+
+    if(edit_flag == 0)
     {
+        if(key_value == 1)key_mode1 ++;
+        else if(key_value == 2)key_mode1 --;
+        key_mode1 =(key_mode1 > 4) ? 2  : key_mode1;
+        key_mode1 =(key_mode1 < 2) ? 4  : key_mode1;
 
-        Menu_Control_Value();
-        Key_Scan();
+        if(key_value == 3){edit_flag = 1; ips200_clear();}
+        if(key_value == 4){key_mode2 = 3;ips200_clear();}
+    }
+    else
+    {
+        target = &control[key_mode1 - 2];
 
-        for(uint8 i = 0 ; i < 8; i++ )
+        if(key_value == 1)*target += 1;
+        else if(key_value == 2)*target -= 1;
+        else if(key_value == 3)*target += 10;
+        else if(key_value == 4){edit_flag = 0; ips200_clear();}
+
+        if(key_mode1 == 2)
         {
-            if(i == key_mode1-2)
-            {
-                p1 =&control[i];
-                Menu_key_Operation_int16(p1);
-            }
+            if(control[0] < 0) control[0] = 0;
+            if(control[0] > 50) control[0] = 50;
+        }
+        else if(key_mode1 == 3)
+        {
+            if(control[1] > 0) control[1] = 0;
+            if(control[1] < -50) control[1] = -50;
+        }
+        else if(key_mode1 == 4)
+        {
+            if(control[2] < 1) control[2] = 1;
+            if(control[2] > 20) control[2] = 20;
         }
     }
-
-
-    if(key_value == 4){key_mode2 = 3;ips200_clear();}
 }
-
 
 //
 //if(key_value == 4){key_mode2 =1;ips200_clear();}
@@ -308,6 +327,7 @@ void Menu_Control_Value(void)
     ips200_show_int(X(16),Y(2),control[0],3);
     ips200_show_int(X(16),Y(3),control[1],3 );
     ips200_show_int(X(16),Y(4),control[2],3 );
+    ips200_show_float(X(16),Y(5),(float)control[0] * 0.1f,2,1);
 }
 /*                                                                                         ΩÁ√Ê…Ë÷√                                                                                                                       */
 uint8 Key_Get(void)
