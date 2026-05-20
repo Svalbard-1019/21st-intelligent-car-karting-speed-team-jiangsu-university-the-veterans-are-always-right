@@ -14,7 +14,8 @@ typedef enum{
     Guandao_Recode_Mode,
     Guandao_portion_1,
     Guandao_Voice,
-    Guandao_portion_3
+    Guandao_portion_3,
+    Rack_Test_Mode
 }Mode_Choice;
 
 extern Mode_Choice main_mode;

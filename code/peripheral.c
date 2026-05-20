@@ -6,6 +6,7 @@
  */
 
 #include "zf_common_headfile.h"
+#include "rear_motor/rear_motor.h"
 
 uint8 TIM_FLAG1 = 0;
 uint8 TIM_FLAG2 = 0;
@@ -13,6 +14,9 @@ uint8 TIM_FLAG3 = 0;
 Encoder_t Speed_ecd;
 Encoder_t guandao_ecd;
 Encoder_t Steer_ecd;
+uint8 rack_test_stage = 0;
+int16 rack_test_speed_target = 0;
+int32 rack_test_steer_target = 0;
 void Init_All(void)
 {
 
@@ -165,6 +169,8 @@ void Steer_text(void)//舵机测试
 
 int16 encoder_l = 0;
 int16 encoder_r = 0;
+int motor_pwm_l = 0;
+int motor_pwm_r = 0;
 
 
 
@@ -189,7 +195,8 @@ void Encoder_Get(Encoder_t *count)
 {
 
     count->left_counter = l_ecdcounter();                  // 获取左编码器计数
-    count->delta_l = calculate_delta(count->left_counter,count ->last_ecdcount_l);
+    int32 raw_delta = calculate_delta(count->left_counter,count ->last_ecdcount_l);
+    count->delta_l = (count->delta_l * 3 + raw_delta) / 4;
     count->right_counter  = count->left_counter;           // 当前只接左编码器，左右后轮共用速度反馈
     count->delta_r = count->delta_l;
 //    ips200_show_int(X(1),  Y(8),count->delta_l ,5);
@@ -216,10 +223,10 @@ void VeerMoter_Set(int moter )
 
 void Moter_Set(int moter_l , int moter_r)
 {
-    moter_l = -moter_l;
-    moter_r = -moter_r;
     moter_l =LimitMax(moter_l,MOTER_MAX);
     moter_r = LimitMax(moter_r,MOTER_MAX);
+    motor_pwm_l = moter_l;
+    motor_pwm_r = moter_r;
     if(moter_l>=0)
     {
         pwm_set_duty(PWM_L, moter_l);
@@ -295,6 +302,73 @@ void Control(void)
 
 
 }
+void Rack_Test_Run(void)
+{
+    if(key1_flag == 1)
+    {
+        key1_flag = 0;
+        rack_test_stage++;
+        if(rack_test_stage > 2) rack_test_stage = 0;
+        rack_test_speed_target = 0;
+        rack_test_steer_target = 0;
+        rear_motor_stop();
+    }
+    if(key2_flag == 1)
+    {
+        key2_flag = 0;
+        if(rack_test_stage == 0) rack_test_stage = 2;
+        else rack_test_stage--;
+        rack_test_speed_target = 0;
+        rack_test_steer_target = 0;
+        rear_motor_stop();
+    }
+    if(key3_flag == 1)
+    {
+        key3_flag = 0;
+        if(rack_test_stage == 1)
+            rack_test_steer_target += 10;
+        else if(rack_test_stage == 2)
+            rear_motor_set_target_mps(rear_motor_get_target_mps() + 0.5f);
+    }
+    if(key4_flag == 1)
+    {
+        key4_flag = 0;
+        if(rack_test_stage == 1)
+            rack_test_steer_target -= 10;
+        else if(rack_test_stage == 2)
+            rear_motor_set_target_mps(rear_motor_get_target_mps() - 0.5f);
+    }
+
+    if(rack_test_steer_target > 60)  rack_test_steer_target = 60;
+    if(rack_test_steer_target < -60) rack_test_steer_target = -60;
+
+    /* 通用显示 */
+    ips200_show_string(X(8), Y(0), "Rack_Test");
+    ips200_show_string(X(1), Y(2), "Stage");       ips200_show_int(X(10), Y(2), rack_test_stage, 3);
+
+    if(rack_test_stage <= 1)
+    {
+        /* Stage 0: 传感器显示, Stage 1: 前轮转向测试 */
+        ips200_show_string(X(1), Y(3), "Yaw");         ips200_show_float(X(10), Y(3), Yaw_1, 4, 2);
+        ips200_show_string(X(1), Y(4), "EncL");        ips200_show_int(X(10), Y(4), Speed_ecd.delta_l, 5);
+        ips200_show_string(X(1), Y(5), "EncR");        ips200_show_int(X(10), Y(5), Speed_ecd.delta_r, 5);
+        ips200_show_string(X(1), Y(6), "SteerT");      ips200_show_int(X(10), Y(6), rack_test_steer_target, 5);
+        ips200_show_string(X(1), Y(7), "SteerA");      ips200_show_int(X(10), Y(7), angle, 5);
+        ips200_show_string(X(1), Y(8), "SteerO");      ips200_show_int(X(10), Y(8), angle_speed, 5);
+    }
+    else
+    {
+        /* Stage 2: 后轮速度闭环测试 (m/s) */
+        rear_motor_pid_update_100ms();
+        ips200_show_string(X(1), Y(3), "TgtMps");     ips200_show_float(X(10), Y(3), rear_motor_get_target_mps(), 3, 2);
+        ips200_show_string(X(1), Y(4), "ActMps");     ips200_show_float(X(10), Y(4), rear_motor_get_speed_mps(), 3, 2);
+        ips200_show_string(X(1), Y(5), "PWM");        ips200_show_int(X(10), Y(5), rear_motor_get_pwm(), 5);
+        ips200_show_string(X(1), Y(6), "Enc10");      ips200_show_int(X(10), Y(6), rear_motor_get_encoder_10ms(), 5);
+        ips200_show_string(X(1), Y(7), "Enc100");     ips200_show_int(X(10), Y(7), rear_motor_get_encoder_100ms(), 5);
+        ips200_show_string(X(1), Y(8), "Yaw");        ips200_show_float(X(10), Y(8), Yaw_1, 4, 2);
+    }
+}
+
 void GPS_Init(void)
 {
     gnss_init(TAU1201);               // GN42A 为GPS模块 GN43RFA 为RTK模块

@@ -172,13 +172,14 @@ void Menu_Mode_Choice(void)
     ips200_show_string( X(3) ,Y(4) ,"Guandao_portion_1");
     ips200_show_string( X(3) ,Y(5) ,"Voice_Mode");
     ips200_show_string( X(3) ,Y(6) ,"Guandao_portion_3");
+    ips200_show_string( X(3) ,Y(7) ,"Rack_Test");
 
     prompt();
 
     if(key_value == 1)key_mode1 ++;
     else if(key_value == 2)key_mode1 --;
-    key_mode1 =(key_mode1 > 6) ? 2  : key_mode1;
-    key_mode1 =(key_mode1 < 2) ? 6  : key_mode1;
+    key_mode1 =(key_mode1 > 7) ? 2  : key_mode1;
+    key_mode1 =(key_mode1 < 2) ? 7  : key_mode1;
 
     if(key_value == 3)
     {
@@ -186,6 +187,7 @@ void Menu_Mode_Choice(void)
         else if (key_mode1 ==4){main_mode = Guandao_portion_1 ;  route_setting_choice = 0; conrtol_mode = GUANDAO ;Buzzer_check(50);}
         else if( key_mode1==5){main_mode = Guandao_Voice ; route_setting_choice = 3; conrtol_mode = GUANDAO ;Buzzer_check(50);}
         else if( key_mode1==6){main_mode = Guandao_portion_3 ; route_setting_choice = 2; conrtol_mode = GUANDAO ;Buzzer_check(50);}
+        else if( key_mode1==7){main_mode = Rack_Test_Mode ; conrtol_mode = RACK_TEST ; rack_test_stage = 0; rack_test_speed_target = 0; rack_test_steer_target = 0; MoterPID_L.Kp = 0.5f; MoterPID_R.Kp = 0.5f; MoterPID_L.Ki = 1.0f; MoterPID_R.Ki = 1.0f; MoterPID_L.Kd = 0.0f; MoterPID_R.Kd = 0.0f; CarGo_Flag = 1; ips200_clear(); Buzzer_check(50);}
 //        main_mode  = key_mode1 - 2;
 //        Buzzer_check(50);
     }

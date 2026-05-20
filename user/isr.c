@@ -35,6 +35,7 @@
 
 #include "isr_config.h"
 #include "isr.h"
+#include "rear_motor/rear_motor.h"
 
 // 对于TC系列默认是不支持中断嵌套的，希望支持中断嵌套需要在中断内使用 interrupt_global_enable(0); 来开启中断嵌套
 // 简单点说实际上进入中断后TC系列的硬件自动调用了 interrupt_global_disable(); 来拒绝响应任何的中断，因此需要我们自己手动调用 interrupt_global_enable(0); 来开启中断的响应。
@@ -48,7 +49,7 @@ IFX_INTERRUPT(cc60_pit_ch1_isr, 0, CCU6_0_CH1_ISR_PRIORITY)
 {
     interrupt_global_enable(0);                     // 开启中断嵌套
     pit_clear_flag(CCU60_CH1);
-    x6f_scan();
+//    x6f_scan();        // RackTest禁用遥控器扫描，释放P33_6/P33_7给TIM2编码器
 
 
 }
@@ -79,11 +80,27 @@ IFX_INTERRUPT(cc61_pit_ch0_isr, 0, CCU6_1_CH0_ISR_PRIORITY)
             case DAOCHE :
                 Steer_Moter_Contral(-out_servo);
                 break;
+            case RACK_TEST:
+                if(rack_test_stage == 1)Steer_Moter_Contral((float)rack_test_steer_target);
+                else VeerMoter_Set(0);
+                break;
 
             default : break;
         }
 
 
+    }
+
+    /* 后轮独立模块: ISR 只做10ms编码器采样, PID在主循环处理 */
+    if(conrtol_mode == RACK_TEST)
+    {
+        static uint8 rear_tick = 0;
+        rear_tick++;
+        if(rear_tick >= 10)
+        {
+            rear_tick = 0;
+            rear_motor_encoder_update_10ms();
+        }
     }
 
     if(GPS_WORK_FLAG)
@@ -135,6 +152,8 @@ IFX_INTERRUPT(cc61_pit_ch1_isr, 0, CCU6_1_CH1_ISR_PRIORITY)
                         break;
                     case DAOCHE:
                         Speed_Control(daoche_speed , daoche_speed);
+                        break;
+                    case RACK_TEST:
                         break;
                     default : break;
                 }

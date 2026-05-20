@@ -18,7 +18,8 @@ typedef  enum{
     YAOKONG,
     GUANDAO,
     GPS,
-    DAOCHE
+    DAOCHE,
+    RACK_TEST
 }MOTER_control_mode;
 
 extern MOTER_control_mode conrtol_mode;

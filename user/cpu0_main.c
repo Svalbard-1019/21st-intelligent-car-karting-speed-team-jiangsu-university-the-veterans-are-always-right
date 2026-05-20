@@ -33,6 +33,7 @@
 * 2022-09-15       pudding            first version
 ********************************************************************************************************************/
 #include "zf_common_headfile.h"
+#include "rear_motor/rear_motor.h"
 #pragma section all "cpu0_dsram"
 // 将本语句与#pragma section all restore语句之间的全局变量都放在CPU0的RAM中
 
@@ -58,8 +59,9 @@ int core0_main(void)
     // 此处编写用户代码 例如外设初始化代码等
 
     Init_All();
+    rear_motor_init();
     // 前轮转向改为 TIM4 磁编码器闭环，不再初始化 SPI 绝对值编码器
-    hotRc_Control_init();                                                              // 初始化遥控器控制功能，用于接收遥控器信号
+//    hotRc_Control_init();                                                              // RackTest禁用遥控器，避免占用P33_6/P33_7编码器
    pit_ms_init(CCU61_CH1, 1);
    pit_ms_init(CCU61_CH0, 1);
 
@@ -89,7 +91,7 @@ int core0_main(void)
                 break;
 
             case Guandao_Recode_Mode:                             // 惯导记录模式
-                hotRC_control();                                                // 执行遥控器控制
+//                hotRC_control();                                                // RackTest禁用遥控器
                 guandao_recode(&INS);                                   // 记录管道路径点
                 break;
 
@@ -110,6 +112,10 @@ int core0_main(void)
                 guandao_trace(&INS);                                      // 执行第三部分路径跟踪
                 break;
 
+            case Rack_Test_Mode:
+                Rack_Test_Run();
+                break;
+
             default : break;
 
         }
@@ -120,8 +126,10 @@ int core0_main(void)
 //        ips200_show_float(X(11),  Y(10) ,INS.gps_recode_length, 3,6);
 //        ips200_show_float(X(1),  Y(10) ,gnss.satellite_used, 3,6);
 
-            ips200_show_int(X(1),  Y(8),Speed_ecd.delta_l ,5);
-            ips200_show_int(X(10),  Y(8),Speed_ecd.delta_r ,5);
+            if(main_mode != Rack_Test_Mode)
+            {
+                ips200_show_int(X(1),  Y(8),Speed_ecd.delta_l ,5);
+                ips200_show_int(X(10),  Y(8),Speed_ecd.delta_r ,5);
 //                ips200_show_int(X(10),  Y(9),MoterPID_R.out ,5);
 //            Moter_Set(5000 ,5000  );
 //            Speed_Control(10 , 10);
@@ -131,12 +139,13 @@ int core0_main(void)
                     ips200_show_float(X(10),  Y(11),Yaw_1 ,5 ,5);
 //                    ips200_show_int(X(10),  Y(12),gpio_get_level(SWITCH2) ,5);
                     ips200_show_int(X(10),  Y(12),angle_speed ,5);
+            }
 //                    ips200_show_int(X(10),  Y(13),conrtol_mode ,5);
 //                    ips200_show_float(X(10),  Y(12),angle_speed ,5 ,5);
 //                    VeerMoter_Set(10000);
 
-        hotRc_Show();
-        if(x6f_out[4] ==200)                                                                            // 如果遥控器通道4输出值为200（急停信号）
+//        hotRc_Show();
+        if(0 && main_mode != Rack_Test_Mode && x6f_out[4] ==200)                                          // 禁用遥控急停，避免未接收机时清零输出
         {
             conrtol_mode =IDLE;
             Moter_Set(0 , 0 );
