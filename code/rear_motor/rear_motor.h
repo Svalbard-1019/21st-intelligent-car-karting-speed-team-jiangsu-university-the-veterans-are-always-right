@@ -17,23 +17,23 @@
 #define REAR_EFFECTIVE_PPR           ((float)REAR_ENCODER_PPR * REAR_GEAR_RATIO)
 #define REAR_WHEEL_CIRCUM_M          (3.14159265358979323846f * REAR_WHEEL_DIAMETER_M)
 
-/* PID 参数: 空载实测 (2026-05-13) */
-#define REAR_KP                 8.0f
-#define REAR_KI                 0.5f
-#define REAR_KD                 0.2f
-#define REAR_FF_GAIN            10.0f
+/* PID 参数: 载人旧工程参数 (当前科目一测试使用) */
+#define REAR_KP                 10.0f
+#define REAR_KI                 0.3f
+#define REAR_KD                 0.8f
+#define REAR_FF_GAIN            13.0f
+
+/* PID 参数: 空载实测 (2026-05-13), 架上测试需要时切回 */
+// #define REAR_KP              8.0f
+// #define REAR_KI              0.5f
+// #define REAR_KD              0.2f
+// #define REAR_FF_GAIN         10.0f
 
 /* PID 参数: 空载微调, 降低架空超调, 需要时切回 */
 // #define REAR_KP              6.5f
 // #define REAR_KI              0.25f
 // #define REAR_KD              0.3f
 // #define REAR_FF_GAIN         9.0f
-
-/* PID 参数: 载人旧工程参数, 需要时切回 */
-// #define REAR_KP              10.0f
-// #define REAR_KI              0.3f
-// #define REAR_KD              0.8f
-// #define REAR_FF_GAIN         13.0f
 #define REAR_PWM_HARD_LIMIT     9500
 #define REAR_PWM_RATE_LIMIT     1000
 #define REAR_INTEGRAL_LIMIT     2000.0f

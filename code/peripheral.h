@@ -27,6 +27,9 @@ extern int motor_pwm_r;
 extern uint8 rack_test_stage;
 extern int16 rack_test_speed_target;
 extern int32 rack_test_steer_target;
+extern float rack_straight_target_yaw;
+extern float rack_straight_yaw_error;
+extern float rack_straight_steer_target;
 
 typedef struct{
         int16 left_counter;
@@ -89,6 +92,8 @@ void Moter_Set(int moter_l , int moter_r);   //电机驱动
 int LimitMax(int input, int max);    //函数内限幅形参
 void Control(void);                          //电机&舵机按键调试
 void Rack_Test_Run(void);
+void Rack_Straight_Reset(void);
+void Rack_Straight_Update(void);
 void GPS_Init(void);
 void Encoder_count_init(Encoder_t *count);
 void VeerMoter_Set(int moter );

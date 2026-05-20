@@ -82,6 +82,11 @@ IFX_INTERRUPT(cc61_pit_ch0_isr, 0, CCU6_1_CH0_ISR_PRIORITY)
                 break;
             case RACK_TEST:
                 if(rack_test_stage == 1)Steer_Moter_Contral((float)rack_test_steer_target);
+                else if(rack_test_stage == 3)
+                {
+                    Rack_Straight_Update();
+                    Steer_Moter_Contral(rack_straight_steer_target);
+                }
                 else VeerMoter_Set(0);
                 break;
 

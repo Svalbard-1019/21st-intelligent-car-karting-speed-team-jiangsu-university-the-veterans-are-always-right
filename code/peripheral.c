@@ -17,6 +17,14 @@ Encoder_t Steer_ecd;
 uint8 rack_test_stage = 0;
 int16 rack_test_speed_target = 0;
 int32 rack_test_steer_target = 0;
+float rack_straight_target_yaw = 0.0f;
+float rack_straight_yaw_error = 0.0f;
+float rack_straight_steer_target = 0.0f;
+static float rack_straight_last_yaw_error = 0.0f;
+
+#define RACK_STRAIGHT_KP        (1.0f)
+#define RACK_STRAIGHT_KD        (0.25f)
+#define RACK_STRAIGHT_LIMIT_DEG (12.0f)
 void Init_All(void)
 {
 
@@ -302,32 +310,62 @@ void Control(void)
 
 
 }
+static void Rack_Test_Reset_Targets(void)
+{
+    rack_test_speed_target = 0;
+    rack_test_steer_target = 0;
+    rear_motor_stop();
+    if(rack_test_stage == 3)
+    {
+        Rack_Straight_Reset();
+    }
+}
+
+void Rack_Straight_Reset(void)
+{
+    rack_straight_target_yaw = Yaw_1;
+    rack_straight_yaw_error = 0.0f;
+    rack_straight_last_yaw_error = 0.0f;
+    rack_straight_steer_target = 0.0f;
+}
+
+void Rack_Straight_Update(void)
+{
+    float yaw_error = rack_straight_target_yaw - Yaw_1;
+    float yaw_diff;
+
+    angle_plan(&yaw_error);
+    yaw_diff = yaw_error - rack_straight_last_yaw_error;
+    angle_plan(&yaw_diff);
+
+    rack_straight_last_yaw_error = yaw_error;
+    rack_straight_yaw_error = yaw_error;
+    rack_straight_steer_target = RACK_STRAIGHT_KP * yaw_error + RACK_STRAIGHT_KD * yaw_diff;
+    Value_Limit_float(&rack_straight_steer_target, -RACK_STRAIGHT_LIMIT_DEG, RACK_STRAIGHT_LIMIT_DEG);
+}
+
 void Rack_Test_Run(void)
 {
     if(key1_flag == 1)
     {
         key1_flag = 0;
         rack_test_stage++;
-        if(rack_test_stage > 2) rack_test_stage = 0;
-        rack_test_speed_target = 0;
-        rack_test_steer_target = 0;
-        rear_motor_stop();
+        if(rack_test_stage > 3) rack_test_stage = 0;
+        Rack_Test_Reset_Targets();
     }
     if(key2_flag == 1)
     {
         key2_flag = 0;
-        if(rack_test_stage == 0) rack_test_stage = 2;
+        if(rack_test_stage == 0) rack_test_stage = 3;
         else rack_test_stage--;
-        rack_test_speed_target = 0;
-        rack_test_steer_target = 0;
-        rear_motor_stop();
+        Rack_Test_Reset_Targets();
     }
     if(key3_flag == 1)
     {
         key3_flag = 0;
         if(rack_test_stage == 1)
             rack_test_steer_target += 10;
-        else if(rack_test_stage == 2)
+        else if(rack_test_stage == 2 || rack_test_stage == 3)
             rear_motor_set_target_mps(rear_motor_get_target_mps() + 0.5f);
     }
     if(key4_flag == 1)
@@ -335,7 +373,7 @@ void Rack_Test_Run(void)
         key4_flag = 0;
         if(rack_test_stage == 1)
             rack_test_steer_target -= 10;
-        else if(rack_test_stage == 2)
+        else if(rack_test_stage == 2 || rack_test_stage == 3)
             rear_motor_set_target_mps(rear_motor_get_target_mps() - 0.5f);
     }
 
@@ -356,7 +394,7 @@ void Rack_Test_Run(void)
         ips200_show_string(X(1), Y(7), "SteerA");      ips200_show_int(X(10), Y(7), angle, 5);
         ips200_show_string(X(1), Y(8), "SteerO");      ips200_show_int(X(10), Y(8), angle_speed, 5);
     }
-    else
+    else if(rack_test_stage == 2)
     {
         /* Stage 2: 后轮速度闭环测试 (m/s) */
         rear_motor_pid_update_100ms();
@@ -367,8 +405,18 @@ void Rack_Test_Run(void)
         ips200_show_string(X(1), Y(7), "Enc100");     ips200_show_int(X(10), Y(7), rear_motor_get_encoder_100ms(), 5);
         ips200_show_string(X(1), Y(8), "Yaw");        ips200_show_float(X(10), Y(8), Yaw_1, 4, 2);
     }
+    else
+    {
+        /* Stage 3: 直线保持测试, 进入本阶段时锁定当前Yaw */
+        rear_motor_pid_update_100ms();
+        ips200_show_string(X(1), Y(3), "TgtMps");     ips200_show_float(X(10), Y(3), rear_motor_get_target_mps(), 3, 2);
+        ips200_show_string(X(1), Y(4), "ActMps");     ips200_show_float(X(10), Y(4), rear_motor_get_speed_mps(), 3, 2);
+        ips200_show_string(X(1), Y(5), "TgtYaw");     ips200_show_float(X(10), Y(5), rack_straight_target_yaw, 4, 2);
+        ips200_show_string(X(1), Y(6), "YawErr");     ips200_show_float(X(10), Y(6), rack_straight_yaw_error, 3, 2);
+        ips200_show_string(X(1), Y(7), "Steer");      ips200_show_float(X(10), Y(7), rack_straight_steer_target, 3, 2);
+        ips200_show_string(X(1), Y(8), "PWM");        ips200_show_int(X(10), Y(8), rear_motor_get_pwm(), 5);
+    }
 }
-
 void GPS_Init(void)
 {
     gnss_init(TAU1201);               // GN42A 为GPS模块 GN43RFA 为RTK模块
