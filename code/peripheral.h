@@ -1,7 +1,19 @@
 /*
+ * UTF-8 è¯¦ç»†æ³¨é‡Šè¯´æ˜ï¼šæ•´è½¦å¤–è®¾å¼•è„šã€å®å’Œåº•å±‚é©±åŠ¨æ¥å£ã€‚
+ *
+ * è¿™é‡Œæ˜¯æŸ¥æ¥çº¿æœ€é‡è¦çš„æ–‡ä»¶ä¹‹ä¸€ï¼š
+ * - KEY1~KEY4ã€SWITCH1/2ã€‚
+ * - åè½®ç¼–ç å™¨ TIM2 P33_7/P33_6ã€‚
+ * - åè½®ç”µæœº PWM/GPIOã€‚
+ * - èˆµæœº PWM å’Œèœ‚é¸£å™¨å¼•è„šã€‚
+ *
+ * æ”¹æ¥çº¿æ—¶åº”å…ˆæ”¹è¿™é‡Œçš„å®ï¼Œå†ç¡®è®¤å¯¹åº”åˆå§‹åŒ–å‡½æ•°æ˜¯å¦ä¹Ÿä½¿ç”¨åŒä¸€å®ã€‚
+ */
+
+/*
  * peripheral.h
  *
- *  Created on: 2025Äê11ÔÂ20ÈÕ
+ *  Created on: 2025å¹´11æœˆ20æ—¥
  *      Author: 18905
  */
 
@@ -9,7 +21,7 @@
 #define CODE_PERIPHERAL_H_
 
 
-//Íâ²¿±äÁ¿
+//å¤–éƒ¨å˜é‡
 extern uint8 TIM_FLAG1;
 extern uint8 TIM_FLAG2;
 extern uint8 TIM_FLAG3 ;
@@ -44,12 +56,12 @@ extern Encoder_t Speed_ecd;
 extern Encoder_t guandao_ecd;
 extern Encoder_t Steer_ecd;
 
-//ºê¶¨Òå
+//å®å®šä¹‰
 #define r_ecdcounter()    encoder_get_count(ENCODER_QUADDEC)
 #define l_ecdcounter()    encoder_get_count(ENCODER_QUADDEC)
-#define BUZZER_PIN  (P33_10)      //·äÃùÆ÷
+#define BUZZER_PIN  (P33_10)      //èœ‚é¸£å™¨
 
-#define KEY1                    (P20_6)    //°´¼üÒı½ÅÅäÖÃ   //P20_6  //P11_3
+#define KEY1                    (P20_6)    //æŒ‰é”®å¼•è„šé…ç½®   //P20_6  //P11_3
 #define KEY2                    (P20_7)                               //P20_7 //P11_2
 #define KEY3                    (P11_2)                                //P11_3 //P20_7
 #define KEY4                    (P11_3)                               //P11_2 //P20_6
@@ -59,9 +71,9 @@ extern Encoder_t Steer_ecd;
 #define SERVO_MOTOR_PWM             (ATOM1_CH1_P33_9)
 #define SERVO_MOTOR_FREQ            (50)
 #define SERVO_MOTOR_DUTY(x)         ((float)PWM_DUTY_MAX/(1000.0/(float)SERVO_MOTOR_FREQ)*(0.27+(float)(x)/90.0))
-#define SERVO_MOTOR_MID             (80)                                        //ÖĞÖµ80
-#define SERVO_MOTOR_LMAX            (65)                                        //×ó´òËÀ60
-#define SERVO_MOTOR_RMAX            (95)                                       //ÓÒ´òËÀ100
+#define SERVO_MOTOR_MID             (80)                                        //ä¸­å€¼80
+#define SERVO_MOTOR_LMAX            (65)                                        //å·¦æ‰“æ­»60
+#define SERVO_MOTOR_RMAX            (95)                                       //å³æ‰“æ­»100
 
 #define ENCODER_QUADDEC                 (TIM2_ENCODER)
 #define ENCODER_QUADDEC_A               (TIM2_ENCODER_CH1_P33_7)
@@ -75,22 +87,22 @@ extern Encoder_t Steer_ecd;
 #define MOTER_MIN       (-7000)
 #define S_MOTER_MAX       (5000)
 #define S_MOTER_MIN       (-5000)
-//º¯Êı
+//å‡½æ•°
 
 void Init_All(void);
-void Key_Init(void);   //°´¼ü
+void Key_Init(void);   //æŒ‰é”®
 void Key_Scan(void);
 void Buzzer_Init(void);
-void Buzzer_check(int time2); //·äÃùÆ÷µÄ×Ô¼ìº¯Êı
-void Steer_init(void);               //¶æ»ú³õÊ¼»¯
-void Steer_set(int angle);        //¶æ»úÇı¶¯
-void Steer_text(void);             //¶æ»ú²âÊÔ
-void Encoder_Init(void);             //±àÂëÆ÷³õÊ¼»¯
-void Encoder_Get(Encoder_t *count);             //±àÂëÆ÷¶ÁÈ¡
-void Motor_init(void);              //µç»ú³õÊ¼»¯
-void Moter_Set(int moter_l , int moter_r);   //µç»úÇı¶¯
-int LimitMax(int input, int max);    //º¯ÊıÄÚÏŞ·ùĞÎ²Î
-void Control(void);                          //µç»ú&¶æ»ú°´¼üµ÷ÊÔ
+void Buzzer_check(int time2); //èœ‚é¸£å™¨çš„è‡ªæ£€å‡½æ•°
+void Steer_init(void);               //èˆµæœºåˆå§‹åŒ–
+void Steer_set(int angle);        //èˆµæœºé©±åŠ¨
+void Steer_text(void);             //èˆµæœºæµ‹è¯•
+void Encoder_Init(void);             //ç¼–ç å™¨åˆå§‹åŒ–
+void Encoder_Get(Encoder_t *count);             //ç¼–ç å™¨è¯»å–
+void Motor_init(void);              //ç”µæœºåˆå§‹åŒ–
+void Moter_Set(int moter_l , int moter_r);   //ç”µæœºé©±åŠ¨
+int LimitMax(int input, int max);    //å‡½æ•°å†…é™å¹…å½¢å‚
+void Control(void);                          //ç”µæœº&èˆµæœºæŒ‰é”®è°ƒè¯•
 void Rack_Test_Run(void);
 void Rack_Straight_Reset(void);
 void Rack_Straight_Update(void);

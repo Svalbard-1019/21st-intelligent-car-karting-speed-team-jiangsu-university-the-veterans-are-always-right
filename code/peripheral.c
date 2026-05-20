@@ -1,7 +1,22 @@
 /*
+ * UTF-8 è¯¦ç»†æ³¨é‡Šè¯´æ˜ï¼šæ•´è½¦å¤–è®¾åˆå§‹åŒ–å’Œåº•å±‚ IO é©±åŠ¨é›†ä¸­å®ç°ã€‚
+ *
+ * æ¨¡å—èŒè´£ï¼š
+ * 1. Init_All() åˆå§‹åŒ–å±å¹•ã€æŒ‰é”®ã€èœ‚é¸£å™¨ã€ç¼–ç å™¨ã€ç”µæœºã€IMUã€GPSã€è·¯çº¿ç»“æ„ã€‚
+ * 2. Encoder_Get() è¯»å–åè½®ç¼–ç å™¨ï¼Œç›®å‰å·¦å³åé¦ˆå…±ç”¨å·¦ç¼–ç å™¨ã€‚
+ * 3. Moter_Set()/VeerMoter_Set() è¾“å‡ºæ—§ç”µæœº PWMã€‚
+ * 4. Rack_Test_Run() æä¾›æœºæ¶æµ‹è¯•é¡µé¢ã€‚
+ *
+ * ç¡¬ä»¶æ³¨æ„ï¼š
+ * - åè½®ç¼–ç å™¨å½“å‰ä½¿ç”¨ TIM2ï¼šP33_7/P33_6ã€‚
+ * - èœ‚é¸£å™¨ä¸ºæ— æºèœ‚é¸£å™¨ï¼ŒBuzzer_check() ä¼šè¾“å‡ºçº¦ 2kHz æ–¹æ³¢ã€‚
+ * - å¦‚æœ Enc æ²¡æ•°æ®ï¼Œä¼˜å…ˆæŸ¥ P33_7/P33_6 æ˜¯å¦è¢«é¥æ§/æ‘„åƒå¤´/å…¶ä»–å¤–è®¾å ç”¨ã€‚
+ */
+
+/*
  * peripheral.c
  *
- *  Created on: 2025Äê11ÔÂ20ÈÕ
+ *  Created on: 2025å¹´11æœˆ20æ—¥
  *      Author: 18905
  */
 
@@ -54,33 +69,33 @@ void Init_All(void)
 
 void Key_Init(void)
 {
-    gpio_init(KEY1, GPI, GPIO_LOW, GPI_PULL_UP);           // ³õÊ¼»¯ KEY1 ÊäÈë Ä¬ÈÏ¸ßµçÆ½ ÉÏÀ­ÊäÈë
-    gpio_init(KEY2, GPI, GPIO_HIGH, GPI_PULL_UP);           // ³õÊ¼»¯ KEY2 ÊäÈë Ä¬ÈÏ¸ßµçÆ½ ÉÏÀ­ÊäÈë
-    gpio_init(KEY3, GPI, GPIO_HIGH, GPI_PULL_UP);           // ³õÊ¼»¯ KEY3 ÊäÈë Ä¬ÈÏ¸ßµçÆ½ ÉÏÀ­ÊäÈë
-    gpio_init(KEY4, GPI, GPIO_HIGH, GPI_PULL_UP);           // ³õÊ¼»¯ KEY4 ÊäÈë Ä¬ÈÏ¸ßµçÆ½ ÉÏÀ­ÊäÈë
+    gpio_init(KEY1, GPI, GPIO_LOW, GPI_PULL_UP);           // åˆå§‹åŒ– KEY1 è¾“å…¥ é»˜è®¤é«˜ç”µå¹³ ä¸Šæ‹‰è¾“å…¥
+    gpio_init(KEY2, GPI, GPIO_HIGH, GPI_PULL_UP);           // åˆå§‹åŒ– KEY2 è¾“å…¥ é»˜è®¤é«˜ç”µå¹³ ä¸Šæ‹‰è¾“å…¥
+    gpio_init(KEY3, GPI, GPIO_HIGH, GPI_PULL_UP);           // åˆå§‹åŒ– KEY3 è¾“å…¥ é»˜è®¤é«˜ç”µå¹³ ä¸Šæ‹‰è¾“å…¥
+    gpio_init(KEY4, GPI, GPIO_HIGH, GPI_PULL_UP);           // åˆå§‹åŒ– KEY4 è¾“å…¥ é»˜è®¤é«˜ç”µå¹³ ä¸Šæ‹‰è¾“å…¥
 
-    gpio_init(SWITCH1, GPI, GPIO_HIGH, GPI_FLOATING_IN);    // ³õÊ¼»¯ SWITCH1 ÊäÈë Ä¬ÈÏ¸ßµçÆ½ ¸¡¿ÕÊäÈë
-    gpio_init(SWITCH2, GPI, GPIO_HIGH, GPI_FLOATING_IN);    // ³õÊ¼»¯ SWITCH2 ÊäÈë Ä¬ÈÏ¸ßµçÆ½ ¸¡¿ÕÊäÈë
+    gpio_init(SWITCH1, GPI, GPIO_HIGH, GPI_FLOATING_IN);    // åˆå§‹åŒ– SWITCH1 è¾“å…¥ é»˜è®¤é«˜ç”µå¹³ æµ®ç©ºè¾“å…¥
+    gpio_init(SWITCH2, GPI, GPIO_HIGH, GPI_FLOATING_IN);    // åˆå§‹åŒ– SWITCH2 è¾“å…¥ é»˜è®¤é«˜ç”µå¹³ æµ®ç©ºè¾“å…¥
 
 }
 
 
-// **************************** ±äÁ¿¶¨Òå ****************************
-uint8 key1_state = 1;                                                               // °´¼ü¶¯×÷×´Ì¬
-uint8 key2_state = 1;                                                               // °´¼ü¶¯×÷×´Ì¬
-uint8 key3_state = 1;                                                               // °´¼ü¶¯×÷×´Ì¬
-uint8 key4_state = 1;                                                               // °´¼ü¶¯×÷×´Ì¬
+// **************************** å˜é‡å®šä¹‰ ****************************
+uint8 key1_state = 1;                                                               // æŒ‰é”®åŠ¨ä½œçŠ¶æ€
+uint8 key2_state = 1;                                                               // æŒ‰é”®åŠ¨ä½œçŠ¶æ€
+uint8 key3_state = 1;                                                               // æŒ‰é”®åŠ¨ä½œçŠ¶æ€
+uint8 key4_state = 1;                                                               // æŒ‰é”®åŠ¨ä½œçŠ¶æ€
 
-uint8 switch1_state = 0;                                                            // ²¦Âë¿ª¹Ø¶¯×÷×´Ì¬
-uint8 switch2_state = 0;                                                            // ²¦Âë¿ª¹Ø¶¯×÷×´Ì¬
+uint8 switch1_state = 0;                                                            // æ‹¨ç å¼€å…³åŠ¨ä½œçŠ¶æ€
+uint8 switch2_state = 0;                                                            // æ‹¨ç å¼€å…³åŠ¨ä½œçŠ¶æ€
 
-uint8 key1_state_last = 0;                                                          // ÉÏÒ»´Î°´¼ü¶¯×÷×´Ì¬
-uint8 key2_state_last = 0;                                                          // ÉÏÒ»´Î°´¼ü¶¯×÷×´Ì¬
-uint8 key3_state_last = 0;                                                          // ÉÏÒ»´Î°´¼ü¶¯×÷×´Ì¬
-uint8 key4_state_last = 0;                                                          // ÉÏÒ»´Î°´¼ü¶¯×÷×´Ì¬
+uint8 key1_state_last = 0;                                                          // ä¸Šä¸€æ¬¡æŒ‰é”®åŠ¨ä½œçŠ¶æ€
+uint8 key2_state_last = 0;                                                          // ä¸Šä¸€æ¬¡æŒ‰é”®åŠ¨ä½œçŠ¶æ€
+uint8 key3_state_last = 0;                                                          // ä¸Šä¸€æ¬¡æŒ‰é”®åŠ¨ä½œçŠ¶æ€
+uint8 key4_state_last = 0;                                                          // ä¸Šä¸€æ¬¡æŒ‰é”®åŠ¨ä½œçŠ¶æ€
 
-uint8 switch1_state_last = 0;                                                       // ÉÏÒ»´Î²¦Âë¿ª¹Ø¶¯×÷×´Ì¬
-uint8 switch2_state_last = 0;                                                       // ÉÏÒ»´Î²¦Âë¿ª¹Ø¶¯×÷×´Ì¬
+uint8 switch1_state_last = 0;                                                       // ä¸Šä¸€æ¬¡æ‹¨ç å¼€å…³åŠ¨ä½œçŠ¶æ€
+uint8 switch2_state_last = 0;                                                       // ä¸Šä¸€æ¬¡æ‹¨ç å¼€å…³åŠ¨ä½œçŠ¶æ€
 
 uint8 key1_flag =0 ;
 uint8 key2_flag =0 ;
@@ -92,22 +107,22 @@ uint8 key_value;
 void Key_Scan(void)
 {
 
-    //Ê¹ÓÃ´Ë·½·¨ÓÅµãÔÚÓÚ£¬²»ĞèÒªÊ¹ÓÃwhile(1) µÈ´ı£¬±ÜÃâ´¦ÀíÆ÷×ÊÔ´ÀË·Ñ
+    //ä½¿ç”¨æ­¤æ–¹æ³•ä¼˜ç‚¹åœ¨äºï¼Œä¸éœ€è¦ä½¿ç”¨while(1) ç­‰å¾…ï¼Œé¿å…å¤„ç†å™¨èµ„æºæµªè´¹
 
-    //±£´æ°´¼ü×´Ì¬
+    //ä¿å­˜æŒ‰é”®çŠ¶æ€
     key1_state_last = key1_state;
     key2_state_last = key2_state;
     key3_state_last = key3_state;
     key4_state_last = key4_state;
 
-    //¶ÁÈ¡µ±Ç°°´¼ü×´Ì¬
+    //è¯»å–å½“å‰æŒ‰é”®çŠ¶æ€
     key1_state = gpio_get_level(KEY1);
     key2_state = gpio_get_level(KEY2);
     key3_state = gpio_get_level(KEY3);
     key4_state = gpio_get_level(KEY4);
 
 
-    //¼ì²âµ½°´¼ü°´ÏÂÖ®ºó  ²¢·Å¿ªÖÃÎ»±êÖ¾Î»
+    //æ£€æµ‹åˆ°æŒ‰é”®æŒ‰ä¸‹ä¹‹å  å¹¶æ”¾å¼€ç½®ä½æ ‡å¿—ä½
     if(key1_state && !key1_state_last)   {key1_flag = 1;}
     if(key2_state && !key2_state_last)   {key2_flag = 1;}
     if(key3_state && !key3_state_last)   {key3_flag = 1;}
@@ -123,7 +138,7 @@ void Buzzer_Init(void)
 
 #define PASSIVE_BUZZER_HALF_PERIOD_US  (250u)   // 2kHz square wave for passive buzzer
 
-void Buzzer_check(int time2)//·äÃùÆ÷µÄ×Ô¼ìº¯Êı
+void Buzzer_check(int time2)//èœ‚é¸£å™¨çš„è‡ªæ£€å‡½æ•°
 {
     uint32 toggle_count = 0;
     uint32 i = 0;
@@ -143,13 +158,13 @@ void Buzzer_check(int time2)//·äÃùÆ÷µÄ×Ô¼ìº¯Êı
     gpio_set_level(BUZZER_PIN,0);
 }
 
-void Steer_init(void)//¶æ»ú³õÊ¼»¯
+void Steer_init(void)//èˆµæœºåˆå§‹åŒ–
 {
     pwm_init(SERVO_MOTOR_PWM, SERVO_MOTOR_FREQ, (uint32)SERVO_MOTOR_DUTY(SERVO_MOTOR_MID));
 
 }
 
-void Steer_set(int angle)//¶æ»úÇı¶¯
+void Steer_set(int angle)//èˆµæœºé©±åŠ¨
 {
     if(angle<SERVO_MOTOR_LMAX){angle=SERVO_MOTOR_LMAX;}
     if(angle>SERVO_MOTOR_RMAX){angle=SERVO_MOTOR_RMAX;}
@@ -157,7 +172,7 @@ void Steer_set(int angle)//¶æ»úÇı¶¯
 
 }
 
-void Steer_text(void)//¶æ»ú²âÊÔ
+void Steer_text(void)//èˆµæœºæµ‹è¯•
 {
 
    static int32 angle=SERVO_MOTOR_MID;
@@ -177,13 +192,13 @@ void Steer_text(void)//¶æ»ú²âÊÔ
          {
              key3_flag=0;
              angle+=1;
-//             angle=55;//×ó´òËÀ
+//             angle=55;//å·¦æ‰“æ­»
          }
       if(key4_flag)
          {
              key4_flag=0;
             angle-=1;
-//             angle=85;//ÓÒ´òËÀ
+//             angle=85;//å³æ‰“æ­»
          }
       ips200_show_int(100,  16*3,angle, 5);
       Steer_set(angle);
@@ -217,25 +232,25 @@ void Encoder_Init(void)
 void Encoder_Get(Encoder_t *count)
 {
 
-    count->left_counter = l_ecdcounter();                  // »ñÈ¡×ó±àÂëÆ÷¼ÆÊı
+    count->left_counter = l_ecdcounter();                  // è·å–å·¦ç¼–ç å™¨è®¡æ•°
     int32 raw_delta = calculate_delta(count->left_counter,count ->last_ecdcount_l);
     count->delta_l = (count->delta_l * 3 + raw_delta) / 4;
-    count->right_counter  = count->left_counter;           // µ±Ç°Ö»½Ó×ó±àÂëÆ÷£¬×óÓÒºóÂÖ¹²ÓÃËÙ¶È·´À¡
+    count->right_counter  = count->left_counter;           // å½“å‰åªæ¥å·¦ç¼–ç å™¨ï¼Œå·¦å³åè½®å…±ç”¨é€Ÿåº¦åé¦ˆ
     count->delta_r = count->delta_l;
 //    ips200_show_int(X(1),  Y(8),count->delta_l ,5);
 //    ips200_show_int(X(10),  Y(8),count->delta_r ,5);
     count ->last_ecdcount_l = count->left_counter;
     count-> last_ecdcount_r = count->right_counter ;
-//    encoder_clear_count(ENCODER_QUADDEC);                                       // Çå¿Õ±àÂëÆ÷¼ÆÊı
+//    encoder_clear_count(ENCODER_QUADDEC);                                       // æ¸…ç©ºç¼–ç å™¨è®¡æ•°
 
 }
 
-void Motor_init(void)//µç»ú³õÊ¼»¯
+void Motor_init(void)//ç”µæœºåˆå§‹åŒ–
 {
-       pwm_init(PWM_L, 17000, 0);                                                 // PWM Í¨µÀ L1 ³õÊ¼»¯ÆµÂÊ 17KHz Õ¼¿Õ±È³õÊ¼Îª 0
-       pwm_init(PWM_R, 17000, 0);                                                // PWM Í¨µÀ L2 ³õÊ¼»¯ÆµÂÊ 17KHz Õ¼¿Õ±È³õÊ¼Îª 0
-       gpio_init(MOTOR_GPIO_L, GPO, 1, GPO_PUSH_PULL);       //×óµç»ú  1Õı×ª
-       gpio_init(MOTOR_GPIO_R, GPO, 1, GPO_PUSH_PULL);       //ÓÒµç»ú  1Õı×ª
+       pwm_init(PWM_L, 17000, 0);                                                 // PWM é€šé“ L1 åˆå§‹åŒ–é¢‘ç‡ 17KHz å ç©ºæ¯”åˆå§‹ä¸º 0
+       pwm_init(PWM_R, 17000, 0);                                                // PWM é€šé“ L2 åˆå§‹åŒ–é¢‘ç‡ 17KHz å ç©ºæ¯”åˆå§‹ä¸º 0
+       gpio_init(MOTOR_GPIO_L, GPO, 1, GPO_PUSH_PULL);       //å·¦ç”µæœº  1æ­£è½¬
+       gpio_init(MOTOR_GPIO_R, GPO, 1, GPO_PUSH_PULL);       //å³ç”µæœº  1æ­£è½¬
 }
 void VeerMoter_Set(int moter )
 {
@@ -395,13 +410,13 @@ void Rack_Test_Run(void)
     if(rack_test_steer_target > 60)  rack_test_steer_target = 60;
     if(rack_test_steer_target < -60) rack_test_steer_target = -60;
 
-    /* Í¨ÓÃÏÔÊ¾ */
+    /* é€šç”¨æ˜¾ç¤º */
     ips200_show_string(X(8), Y(0), "Rack_Test");
     ips200_show_string(X(1), Y(2), "Stage");       ips200_show_int(X(10), Y(2), rack_test_stage, 3);
 
     if(rack_test_stage <= 1)
     {
-        /* Stage 0: ´«¸ĞÆ÷ÏÔÊ¾, Stage 1: Ç°ÂÖ×ªÏò²âÊÔ */
+        /* Stage 0: ä¼ æ„Ÿå™¨æ˜¾ç¤º, Stage 1: å‰è½®è½¬å‘æµ‹è¯• */
         ips200_show_string(X(1), Y(3), "Yaw");         ips200_show_float(X(10), Y(3), Yaw_1, 4, 2);
         ips200_show_string(X(1), Y(4), "EncL");        ips200_show_int(X(10), Y(4), Speed_ecd.delta_l, 5);
         ips200_show_string(X(1), Y(5), "EncR");        ips200_show_int(X(10), Y(5), Speed_ecd.delta_r, 5);
@@ -411,7 +426,7 @@ void Rack_Test_Run(void)
     }
     else if(rack_test_stage == 2)
     {
-        /* Stage 2: ºóÂÖËÙ¶È±Õ»·²âÊÔ (m/s) */
+        /* Stage 2: åè½®é€Ÿåº¦é—­ç¯æµ‹è¯• (m/s) */
         rear_motor_pid_update_100ms();
         ips200_show_string(X(1), Y(3), "TgtMps");     ips200_show_float(X(10), Y(3), rear_motor_get_target_mps(), 3, 2);
         ips200_show_string(X(1), Y(4), "ActMps");     ips200_show_float(X(10), Y(4), rear_motor_get_speed_mps(), 3, 2);
@@ -422,7 +437,7 @@ void Rack_Test_Run(void)
     }
     else
     {
-        /* Stage 3: Ö±Ïß±£³Ö²âÊÔ, ½øÈë±¾½×¶ÎÊ±Ëø¶¨µ±Ç°Yaw */
+        /* Stage 3: ç›´çº¿ä¿æŒæµ‹è¯•, è¿›å…¥æœ¬é˜¶æ®µæ—¶é”å®šå½“å‰Yaw */
         rear_motor_pid_update_100ms();
         ips200_show_string(X(1), Y(3), "TgtMps");     ips200_show_float(X(10), Y(3), rear_motor_get_target_mps(), 3, 2);
         ips200_show_string(X(1), Y(4), "ActMps");     ips200_show_float(X(10), Y(4), rear_motor_get_speed_mps(), 3, 2);
@@ -434,6 +449,6 @@ void Rack_Test_Run(void)
 }
 void GPS_Init(void)
 {
-    gnss_init(TAU1201);               // GN42A ÎªGPSÄ£¿é GN43RFA ÎªRTKÄ£¿é
+    gnss_init(TAU1201);               // GN42A ä¸ºGPSæ¨¡å— GN43RFA ä¸ºRTKæ¨¡å—
 
 }

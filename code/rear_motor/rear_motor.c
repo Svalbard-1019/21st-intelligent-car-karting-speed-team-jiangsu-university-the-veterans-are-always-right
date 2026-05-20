@@ -1,15 +1,32 @@
 /*
+ * UTF-8 è¯¦ç»†æ³¨é‡Šè¯´æ˜ï¼šåè½® m/s é€Ÿåº¦é—­ç¯æ¨¡å—ã€‚
+ *
+ * æ¨¡å—èŒè´£ï¼š
+ * 1. rear_motor_encoder_update_10ms() è¯»å– TIM2 ç¼–ç å™¨ï¼Œè®¡ç®— 10ms é€Ÿåº¦åé¦ˆã€‚
+ * 2. rear_motor_pid_update_100ms() æŒ‰ç›®æ ‡ m/s åšå‰é¦ˆ + PID ä¿®æ­£ï¼Œè¾“å‡ºå·¦å³åè½® PWMã€‚
+ * 3. rear_motor_set_target_mps() ç»™ç§‘ç›®ä¸€ã€ç›´çº¿æµ‹è¯•ç­‰ä¸Šå±‚æ¨¡å¼è®¾ç½®ç›®æ ‡é€Ÿåº¦ã€‚
+ *
+ * å½“å‰ç¡¬ä»¶ï¼š
+ * - åªæ¥å·¦åè½®ç¼–ç å™¨ï¼Œå·¦å³åè½®å…±ç”¨åŒä¸€é€Ÿåº¦åé¦ˆã€‚
+ * - PWM/GPIO ä»ä½¿ç”¨ peripheral.h é‡Œçš„ PWM_L/PWM_R/MOTOR_GPIO_L/MOTOR_GPIO_Rã€‚
+ *
+ * è°ƒè¯•é‡ç‚¹ï¼š
+ * - TgtAct ä¸­ç›®æ ‡æœ‰å€¼ä½† PWM=0ï¼ŒæŸ¥æœ¬æ¨¡å—é™å¹…/stop æ¡ä»¶ã€‚
+ * - PWM æœ‰å€¼ä½† Act ä¸å˜ï¼ŒæŸ¥ç¼–ç å™¨æ¥çº¿æˆ–ç”µæœºé©±åŠ¨ã€‚
+ */
+
+/*
  * rear_motor.c
  *
- * ºóÂÖ¶ÀÁ¢Çı¶¯Ä£¿éÊµÏÖ
- * ¼Ü¹¹: Ä¿±ê m/s -> 100msÂö³åÄ¿±ê -> Ç°À¡ + PIDĞŞÕı -> PWM -> DIR+PWMÇı¶¯
- * ±àÂëÆ÷: ¹Ì¶¨ÖÜÆÚ 10ms ¶ÁÈ¡ÀÛ¼Æ²îÖµ, ÀÛ¼ÓÖÁ 100ms ¹© PID Ê¹ÓÃ
+ * åè½®ç‹¬ç«‹é©±åŠ¨æ¨¡å—å®ç°
+ * æ¶æ„: ç›®æ ‡ m/s -> 100msè„‰å†²ç›®æ ‡ -> å‰é¦ˆ + PIDä¿®æ­£ -> PWM -> DIR+PWMé©±åŠ¨
+ * ç¼–ç å™¨: å›ºå®šå‘¨æœŸ 10ms è¯»å–ç´¯è®¡å·®å€¼, ç´¯åŠ è‡³ 100ms ä¾› PID ä½¿ç”¨
  */
 
 #include "zf_common_headfile.h"
 #include "rear_motor/rear_motor.h"
 
-/* ---- Ä£¿éÄÚ²¿×´Ì¬ ---- */
+/* ---- æ¨¡å—å†…éƒ¨çŠ¶æ€ ---- */
 static float  target_mps      = 0.0f;
 static float  actual_mps      = 0.0f;
 static int16  current_pwm     = 0;
@@ -22,12 +39,12 @@ static uint8  encoder_div = 0;
 static int16  last_encoder_count = 0;
 static uint8  encoder_first_read = 1;
 
-/* PID ×´Ì¬ */
+/* PID çŠ¶æ€ */
 static float  integral    = 0.0f;
 static float  last_error  = 0.0f;
 static int    last_pwm    = 0;
 
-/* ---- µç»úÇı¶¯ (DIR + PWM, ¾É¹¤³Ì·½Ê½) ---- */
+/* ---- ç”µæœºé©±åŠ¨ (DIR + PWM, æ—§å·¥ç¨‹æ–¹å¼) ---- */
 static void rear_motor_set_pwm(int16 pwm)
 {
     int diff = pwm - last_pwm;
@@ -56,7 +73,7 @@ static void rear_motor_set_pwm(int16 pwm)
     }
 }
 
-/* ---- ¹«¿ª½Ó¿Ú ---- */
+/* ---- å…¬å¼€æ¥å£ ---- */
 void rear_motor_init(void)
 {
     pwm_init(PWM_L, 17000, 0);
@@ -114,7 +131,7 @@ void rear_motor_set_target_mps(float mps)
     }
 }
 
-/* Ã¿ 10ms µ÷ÓÃ: ¶Á±àÂëÆ÷ÀÛ¼Æ²îÖµ, ²»ÇåÁã, ±ÜÃâºÍ¹ßµ¼¹²ÓÃTIM2Ê±»¥ÏàÇÀÊı¾İ */
+/* æ¯ 10ms è°ƒç”¨: è¯»ç¼–ç å™¨ç´¯è®¡å·®å€¼, ä¸æ¸…é›¶, é¿å…å’Œæƒ¯å¯¼å…±ç”¨TIM2æ—¶äº’ç›¸æŠ¢æ•°æ® */
 void rear_motor_encoder_update_10ms(void)
 {
     int16 current_count = encoder_get_count(TIM2_ENCODER);
@@ -134,7 +151,7 @@ void rear_motor_encoder_update_10ms(void)
     encoder_sample_count++;
 }
 
-/* Ö÷Ñ­»·µ÷ÓÃ: ÓĞĞÂ10ms±àÂëÆ÷Ñù±¾²Å´¦Àí, Ã¿100ms¸üĞÂÒ»´ÎPID */
+/* ä¸»å¾ªç¯è°ƒç”¨: æœ‰æ–°10msç¼–ç å™¨æ ·æœ¬æ‰å¤„ç†, æ¯100msæ›´æ–°ä¸€æ¬¡PID */
 void rear_motor_pid_update_100ms(void)
 {
     if(last_encoder_sample_count == encoder_sample_count)

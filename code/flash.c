@@ -1,7 +1,25 @@
 /*
+ * UTF-8 详细注释说明：Flash 参数与路线存取模块。
+ *
+ * 模块职责：
+ * 1. 保存/读取 PID 参数、记录路线点、GPS 辅助点和停车点标记。
+ * 2. 把 guandao_state 中的浮点/整数数据打包到 flash_union_buffer。
+ * 3. 上电时通过 Flash_Main_Read() 恢复路线和参数。
+ *
+ * 科目一相关：
+ * - INS 路线点存在 RECODE_MAP_POINTS_INDEX 页。
+ * - daoche_point_length 用作科目一停车点，不设置时跑完整 INS 路线。
+ * - GPS 辅助点只在 GPS_WORK_FLAG 打开时参与读写。
+ *
+ * 调试重点：
+ * - 烧录程序通常不会清 Flash 路线，除非芯片擦除策略包含数据 Flash。
+ * - 如果 Len 上电后为 0，优先查保存是否触发、Flash 页号是否冲突。
+ */
+
+/*
  * flash.c
  *
- *  Created on: 2025��11��23��
+ *  Created on: 2025年11月23日
  *      Author: 18905
  */
 #include "zf_common_headfile.h"

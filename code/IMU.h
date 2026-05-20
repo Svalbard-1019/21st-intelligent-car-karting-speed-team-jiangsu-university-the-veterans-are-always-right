@@ -1,28 +1,35 @@
 /*
+ * UTF-8 è¯¦ç»†æ³¨é‡Šè¯´æ˜ï¼šIMU963RA å¯¹å¤–æ¥å£å’Œå§¿æ€å˜é‡å£°æ˜ã€‚
+ *
+ * ä¸»å¾ªç¯å’Œä¸­æ–­åªé€šè¿‡ IMU_init()/IMU_GetValues() ä½¿ç”¨æœ¬æ¨¡å—ã€‚
+ * Yaw_1 æ˜¯ç§‘ç›®ä¸€æƒ¯å¯¼ä½¿ç”¨çš„æ ¸å¿ƒèˆªå‘è§’ã€‚
+ */
+
+/*
  * IMU.h
  *
- *  Created on: 2025Äê1ÔÂ21ÈÕ
+ *  Created on: 2025å¹´1æœˆ21æ—¥
  *      Author: ORRN
  */
 
 #ifndef CODE_IMU_H_
 #define CODE_IMU_H_
 
-//½á¹¹ÌåÉùÃ÷
+//ç»“æ„ä½“å£°æ˜
 typedef struct{
-    float Xdata;   //ÁãÆ®²ÎÊıX
-    float Ydata;   //ÁãÆ®²ÎÊıY
-    float Zdata;   //ÁãÆ®²ÎÊıZ
+    float Xdata;   //é›¶é£˜å‚æ•°X
+    float Ydata;   //é›¶é£˜å‚æ•°Y
+    float Zdata;   //é›¶é£˜å‚æ•°Z
 }gyro_param_t ;
 
 typedef struct{
-    float acc_x;   //xÖá¼ÓËÙ¶È
-    float acc_y;   //yÖá¼ÓËÙ¶È
-    float acc_z;   //zÖá¼ÓËÙ¶È
+    float acc_x;   //xè½´åŠ é€Ÿåº¦
+    float acc_y;   //yè½´åŠ é€Ÿåº¦
+    float acc_z;   //zè½´åŠ é€Ÿåº¦
 
-    float gyro_x;  //xÖá½ÇËÙ¶È
-    float gyro_y;  //yÖá½ÇËÙ¶È
-    float gyro_z;  //zÖá½ÇËÙ¶È
+    float gyro_x;  //xè½´è§’é€Ÿåº¦
+    float gyro_y;  //yè½´è§’é€Ÿåº¦
+    float gyro_z;  //zè½´è§’é€Ÿåº¦
 }IMU_param_t ;
 
 extern int IMU_1_Open_flag;

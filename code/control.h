@@ -1,14 +1,27 @@
 /*
+ * UTF-8 详细注释说明：车辆控制模式枚举与旧后轮 PID 接口。
+ *
+ * conrtol_mode 是主循环和中断之间共享的控制状态：
+ * - IDLE：停止输出。
+ * - YAOKONG：遥控模式，旧 Speed_Control 控制后轮。
+ * - GUANDAO：惯导/科目一自动驾驶模式。
+ * - DAOCHE：倒车模式。
+ * - RACK_TEST：架子测试模式。
+ *
+ * 调试时先确认 main_mode 和 conrtol_mode 是否匹配，否则可能出现屏幕在某个模式但中断输出走另一套逻辑。
+ */
+
+/*
  * control.h
  *
- *  Created on: 2025��11��21��
+ *  Created on: 2025年11月21日
  *      Author: 18905
  */
 
 #ifndef CODE_CONTROL_H_
 #define CODE_CONTROL_H_
 
-//�ⲿ���� extern
+//外部变量 extern
 #define VEER_MOTOR_MID         180
 #define VEER_MOTOR_MAX         280
 #define VEER_MOTOR_MIN         92
@@ -39,9 +52,9 @@ extern float C;
 extern uint8 Main_Key_Flag;
 
 extern int16 Steer_Mid_Value;
-//�궨��
+//宏定义
 
-//����
+//函数
 
 void Speed_Control( float tar_l, float tar_r);
 void Steer_Control(int tar);

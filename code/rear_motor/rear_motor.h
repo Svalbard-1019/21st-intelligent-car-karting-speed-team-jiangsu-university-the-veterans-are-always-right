@@ -1,8 +1,15 @@
 /*
+ * UTF-8 详细注释说明：后轮 m/s 闭环模块接口和参数。
+ *
+ * 这里集中定义轮径、减速比、编码器 PPR、速度上限、PID 参数和前馈系数。
+ * 空载/载人参数建议都保留注释，现场测试时只切换一组，避免不知道当前跑的是哪套参数。
+ */
+
+/*
  * rear_motor.h
  *
- * ���ֶ�������ģ��
- * Ŀ���ٶ� m/s -> ������Ŀ������ -> ǰ�� + PID ���� -> PWM ���
+ * 后轮独立驱动模块
+ * 目标速度 m/s -> 编码器目标脉冲 -> 前馈 + PID 修正 -> PWM 输出
  */
 
 #ifndef CODE_REAR_MOTOR_H_
@@ -10,26 +17,26 @@
 
 #include "zf_common_headfile.h"
 
-/* ��������������� */
+/* 车轮与编码器参数 */
 #define REAR_WHEEL_DIAMETER_M        0.24f
 #define REAR_GEAR_RATIO              1.6f
 #define REAR_ENCODER_PPR             1024
 #define REAR_EFFECTIVE_PPR           ((float)REAR_ENCODER_PPR * REAR_GEAR_RATIO)
 #define REAR_WHEEL_CIRCUM_M          (3.14159265358979323846f * REAR_WHEEL_DIAMETER_M)
 
-/* PID ����: ���˾ɹ��̲��� (��ǰ��Ŀһ����ʹ��) */
+/* PID 参数: 载人旧工程参数 (当前科目一测试使用) */
 #define REAR_KP                 10.0f
 #define REAR_KI                 0.3f
 #define REAR_KD                 0.8f
 #define REAR_FF_GAIN            13.0f
 
-/* PID ����: ����ʵ�� (2026-05-13), ���ϲ�����Ҫʱ�л� */
+/* PID 参数: 空载实测 (2026-05-13), 架上测试需要时切回 */
 // #define REAR_KP              8.0f
 // #define REAR_KI              0.5f
 // #define REAR_KD              0.2f
 // #define REAR_FF_GAIN         10.0f
 
-/* PID ����: ����΢��, ���ͼܿճ���, ��Ҫʱ�л� */
+/* PID 参数: 空载微调, 降低架空超调, 需要时切回 */
 // #define REAR_KP              6.5f
 // #define REAR_KI              0.25f
 // #define REAR_KD              0.3f
@@ -39,11 +46,11 @@
 #define REAR_INTEGRAL_LIMIT     2000.0f
 #define REAR_INTEGRAL_THRESHOLD 60.0f
 
-/* �ٶ��޷� (���ϲ���) */
+/* 速度限幅 (架上测试) */
 #define REAR_SPEED_MAX_MPS      5.0f
 #define REAR_SPEED_MIN_MPS      -5.0f
 
-/* �����ӿ� */
+/* 公开接口 */
 void rear_motor_init(void);
 void rear_motor_stop(void);
 

@@ -1,19 +1,26 @@
 /*
+ * UTF-8 详细注释说明：GPS 辅助路线结构体和接口。
+ *
+ * GPS_work 保存自动驾驶阶段正在使用的 GPS 辅助点。
+ * GPS_SWITCH_DISTANCE 决定接近辅助点多少米时切换到下一 GPS 点。
+ */
+
+/*
  * gps.h
  *
- *  Created on: 2026��4��23��
+ *  Created on: 2026年4月23日
  *      Author: 18905
  */
 
 #ifndef CODE_GPS_H_
 #define CODE_GPS_H_
 
-// �궨��
+// 宏定义
 
 #define GPS_WORK_NUM                            30
 #define GPS_WORK_FLAG                            1
 #define GPS_SWITCH_DISTANCE                  2.0f
-//�ⲿ����
+//外部变量
 
 typedef struct
 {
@@ -41,7 +48,7 @@ typedef enum{
     FIND,
     LOST,
 }Lost_Point;
-//��������
+//函数声明
 void gps_work_init(void);
 void angle_plan(float * angle);
 void recode_gps(guandao_state * state);

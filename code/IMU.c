@@ -1,7 +1,20 @@
 /*
+ * UTF-8 è¯¦ç»†æ³¨é‡Šè¯´æ˜ï¼šå½“å‰ä½¿ç”¨çš„ IMU963RA åˆå§‹åŒ–å’Œå§¿æ€è¯»å–å…¥å£ã€‚
+ *
+ * æ¨¡å—èŒè´£ï¼š
+ * 1. åˆå§‹åŒ– IMU963RAã€‚
+ * 2. å‘¨æœŸè¯»å–é™€èºä»ª/åŠ é€Ÿåº¦æ•°æ®ã€‚
+ * 3. æ›´æ–° Yaw_1 ç­‰å…¨å±€å§¿æ€é‡ï¼Œä¾›æƒ¯å¯¼ update_state() ä½¿ç”¨ã€‚
+ *
+ * è°ƒè¯•é‡ç‚¹ï¼š
+ * - ç§‘ç›®ä¸€æ–¹å‘ä¸ç¨³æ—¶å…ˆçœ‹ Yaw_1 æ˜¯å¦è¿ç»­ã€æ˜¯å¦é™æ­¢æ¼‚ç§»è¿‡å¤§ã€‚
+ * - å¦‚æœèˆªå‘åå‘ï¼Œè‡ªåŠ¨é©¾é©¶ A è§’ä¼šé•¿æœŸæ¥è¿‘ Â±180Â°ã€‚
+ */
+
+/*
  * IMU.c
  *
- *  Created on: 2025Äê1ÔÂ21ÈÕ
+ *  Created on: 2025å¹´1æœˆ21æ—¥
  *      Author: ORRN
  */
 #include "zf_common_headfile.h"
@@ -13,12 +26,12 @@ float Yaw_1 = 0;
 float Roll_1 = 0;
 float Picth_1 = 0;
 
-int IMU_1_Open_flag = 0;//¿ªÆôIMU±êÖ¾Î»
+int IMU_1_Open_flag = 0;//å¼€å¯IMUæ ‡å¿—ä½
 
-void IMU_init(void)//IMU³õÊ¼»¯
+void IMU_init(void)//IMUåˆå§‹åŒ–
 {
-    imu963ra_init();  //IMU963RA¹ßµ¼³õÊ¼»¯
-    IMU_gyro_Offset_Init();// ÍÓÂİÒÇÁãÆ¯³õÊ¼»¯
+    imu963ra_init();  //IMU963RAæƒ¯å¯¼åˆå§‹åŒ–
+    IMU_gyro_Offset_Init();// é™€èºä»ªé›¶æ¼‚åˆå§‹åŒ–
 }
 
 void IMU_gyro_Offset_Init(void)
@@ -29,18 +42,18 @@ void IMU_gyro_Offset_Init(void)
     {
         imu963ra_get_gyro();
         Gyro_Offset.Zdata += imu963ra_gyro_z;
-        system_delay_ms(5);   // ×î´ó 1Khz
+        system_delay_ms(5);   // æœ€å¤§ 1Khz
     }
 
     Gyro_Offset.Zdata /= 1000.0;
 }
 
-void IMU_GetValues(void)//½«²É¼¯µÄÊıÖµ×ª»¯ÎªÊµ¼ÊÎïÀíÖµ, ²¢¶ÔÍÓÂİÒÇ½øĞĞÈ¥ÁãÆ¯´¦Àí
+void IMU_GetValues(void)//å°†é‡‡é›†çš„æ•°å€¼è½¬åŒ–ä¸ºå®é™…ç‰©ç†å€¼, å¹¶å¯¹é™€èºä»ªè¿›è¡Œå»é›¶æ¼‚å¤„ç†
 {
 
     IMU_Data.gyro_z = ((float) imu963ra_gyro_z - Gyro_Offset.Zdata)* PI / 180.0f/ 16.384f;
 
-    if(IMU_Data.gyro_z<0.025&&IMU_Data.gyro_z>-0.025)//ÂË²¨
+    if(IMU_Data.gyro_z<0.025&&IMU_Data.gyro_z>-0.025)//æ»¤æ³¢
     {
         Yaw_1-=0;
     }
@@ -54,7 +67,7 @@ void IMU_GetValues(void)//½«²É¼¯µÄÊıÖµ×ª»¯ÎªÊµ¼ÊÎïÀíÖµ, ²¢¶ÔÍÓÂİÒÇ½øĞĞÈ¥ÁãÆ¯´¦Àí
 void IMU_Handle_180(void)
 {
 
-    Yaw_1-=RAD_TO_ANGLE(IMU_Data.gyro_z*0.00916  );//(»ı·Ö¹ı³Ì)±¾À´ÊÇÄæÊ±ÕëÎªÕı,ÏÖÔÚ¸ÄÎªË³Ê±ÕëÎªÕı
+    Yaw_1-=RAD_TO_ANGLE(IMU_Data.gyro_z*0.00916  );//(ç§¯åˆ†è¿‡ç¨‹)æœ¬æ¥æ˜¯é€†æ—¶é’ˆä¸ºæ­£,ç°åœ¨æ”¹ä¸ºé¡ºæ—¶é’ˆä¸ºæ­£
 
    if(Yaw_1>180 && Yaw_1<=360)
     {

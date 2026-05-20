@@ -1,26 +1,33 @@
 /*
+ * UTF-8 è¯¦ç»†æ³¨é‡Šè¯´æ˜ï¼šå¤‡ç”¨/æ—§ç‰ˆ IMU è§£ç®—æ¨¡å—ã€‚
+ *
+ * å½“å‰ä¸»æµç¨‹ä¼˜å…ˆä½¿ç”¨ IMU.c çš„ IMU963RA æ–¹æ¡ˆï¼Œæœ¬æ–‡ä»¶ä¿ç•™æ—§å§¿æ€æ»¤æ³¢ã€è§’åº¦æ¢ç®—æˆ–å®éªŒé€»è¾‘ã€‚
+ * å¦‚æœåç»­åˆ‡æ¢ IMU ç®—æ³•ï¼Œéœ€è¦ç¡®è®¤ Yaw_1 çš„å•ä½ã€æ­£æ–¹å‘å’Œæ›´æ–°å‘¨æœŸä¸ guandao.c ä¸€è‡´ã€‚
+ */
+
+/*
  * IMU_2.c
  *
- *  Created on: 2025Äê2ÔÂ18ÈÕ
+ *  Created on: 2025å¹´2æœˆ18æ—¥
  *      Author: ORRN
  */
 
 #include "zf_common_headfile.h"
 
-float param_kp = 2.12;          // ¼ÓËÙ¶È¼ÆÊÕÁ²ËÙÂÊµÄ±ÈÀıÔöÒæ,ÓÃÓÚµ÷Õû¼ÓËÙ¶È¼ÆÊı¾İµÄÊÕÁ²ËÙ¶È
-float i_error_x, i_error_y, i_error_z;// Îó²î»ı·Ö
-float param_ki = 0.0028;        // ÍÓÂİÒÇÊÕÁ²ËÙÂÊµÄ»ı·ÖÔöÒæ,ÓÃÓÚµ÷ÕûÍÓÂİÒÇÊı¾İµÄ»ı·ÖÊÕÁ²Ğ§¹û
+float param_kp = 2.12;          // åŠ é€Ÿåº¦è®¡æ”¶æ•›é€Ÿç‡çš„æ¯”ä¾‹å¢ç›Š,ç”¨äºè°ƒæ•´åŠ é€Ÿåº¦è®¡æ•°æ®çš„æ”¶æ•›é€Ÿåº¦
+float i_error_x, i_error_y, i_error_z;// è¯¯å·®ç§¯åˆ†
+float param_ki = 0.0028;        // é™€èºä»ªæ”¶æ•›é€Ÿç‡çš„ç§¯åˆ†å¢ç›Š,ç”¨äºè°ƒæ•´é™€èºä»ªæ•°æ®çš„ç§¯åˆ†æ”¶æ•›æ•ˆæœ
 
 
 Imu_gyro_param_t gyro_offset;
 Imu_data_param_t imu_data;
-euler_param_t    euler_angle;          // ¶¨ÒåÈ«¾ÖÅ·À­½Ç½á¹¹Ìå±äÁ¿
-quater_param_t   q_info = {1, 0, 0};  // ¶¨ÒåÈ«¾ÖËÄÔªÊı½á¹¹Ìå±äÁ¿
+euler_param_t    euler_angle;          // å®šä¹‰å…¨å±€æ¬§æ‹‰è§’ç»“æ„ä½“å˜é‡
+quater_param_t   q_info = {1, 0, 0};  // å®šä¹‰å…¨å±€å››å…ƒæ•°ç»“æ„ä½“å˜é‡
 
-//void IMU_init(void)//IMU³õÊ¼»¯
+//void IMU_init(void)//IMUåˆå§‹åŒ–
 //{
-//    imu660ra_init();   //IMU660¹ßµ¼³õÊ¼»¯
-//    Init_Gyro_Offset();// ÍÓÂİÒÇÁãÆ¯³õÊ¼»¯
+//    imu660ra_init();   //IMU660æƒ¯å¯¼åˆå§‹åŒ–
+//    Init_Gyro_Offset();// é™€èºä»ªé›¶æ¼‚åˆå§‹åŒ–
 //}
 float Sqrt_Fast(float x)
 {
@@ -32,7 +39,7 @@ float Sqrt_Fast(float x)
     y = y * (1.5f - (halfx * y * y));
     return y;
 }
-//È¥gyroµÄÁãµãÆ¯ÒÆ
+//å»gyroçš„é›¶ç‚¹æ¼‚ç§»
 void Init_Gyro_Offset(void)
 {
       unsigned int i;
@@ -44,9 +51,9 @@ void Init_Gyro_Offset(void)
     for (i = 0; i < 100;)
     {
 
-        imu660ra_get_gyro();// »ñÈ¡ÍÓÂİÒÇGYROÊı¾İ
+        imu660ra_get_gyro();// è·å–é™€èºä»ªGYROæ•°æ®
 
-        // ÉáÆúÔÓ²¨Êı¾İ
+        // èˆå¼ƒæ‚æ³¢æ•°æ®
       if(imu660ra_gyro_x > -10 && imu660ra_gyro_x < 10&& imu660ra_gyro_y > -10 && imu660ra_gyro_y < 10&& imu660ra_gyro_z > -10 && imu660ra_gyro_z < 10)
                 {
                      i++;
@@ -67,17 +74,17 @@ static void Get_Values_ICM(void)
 {
     static double last_acc[3] = { 0,0,0 };
 
-    // Ò»½×µÍÍ¨ÂË²¨
+    // ä¸€é˜¶ä½é€šæ»¤æ³¢
     imu_data.acc_x = (((float) imu660ra_acc_x) * alpha)  + last_acc[0] * (1 - alpha);
     imu_data.acc_y = (((float) imu660ra_acc_y) * alpha)  + last_acc[1] * (1 - alpha);
     imu_data.acc_z = (((float) imu660ra_acc_z) * alpha)  + last_acc[2] * (1 - alpha);
 
-        // ¸üĞÂÉÏÒ»´ÎaccÊı¾İ
+        // æ›´æ–°ä¸Šä¸€æ¬¡accæ•°æ®
     last_acc[0] = imu_data.acc_x;
     last_acc[1] = imu_data.acc_y;
     last_acc[2] = imu_data.acc_z;
 
-    // ÍÓÂİÒÇ½Ç¶È×ª»¡¶È
+    // é™€èºä»ªè§’åº¦è½¬å¼§åº¦
     imu_data.gyro_x = ((float) imu660ra_gyro_x - gyro_offset.x_data) * PI / 180 / 16.4f;
     imu_data.gyro_y = ((float) imu660ra_gyro_y - gyro_offset.y_data) * PI / 180 / 16.4f;
     imu_data.gyro_z = ((float) imu660ra_gyro_z - gyro_offset.z_data) * PI / 180 / 16.4f;
@@ -85,18 +92,18 @@ static void Get_Values_ICM(void)
 
 static void Update_AHRS_ICM(float gx, float gy, float gz, float ax, float ay, float az)
 {
-      // ²âÁ¿ÖÜÆÚµÄÒ»°ë£¬ÓÃÓÚËÄÔªÊıÎ¢·Ö·½³Ì
+      // æµ‹é‡å‘¨æœŸçš„ä¸€åŠï¼Œç”¨äºå››å…ƒæ•°å¾®åˆ†æ–¹ç¨‹
     float half_t = 0.5 * DELTA_T;
-        // µ±Ç°µÄ»úÌå×ø±êÏµÉÏµÄÖØÁ¦µ¥Î»ÏòÁ¿,Í¨¹ıËÄÔªÊı¼ÆËãµÃµ½
+        // å½“å‰çš„æœºä½“åæ ‡ç³»ä¸Šçš„é‡åŠ›å•ä½å‘é‡,é€šè¿‡å››å…ƒæ•°è®¡ç®—å¾—åˆ°
     float vx, vy, vz;
-        // ËÄÔªÊı¼ÆËãÖµÓë¼ÓËÙ¶È¼Æ²âÁ¿ÖµµÄÎó²î
+        // å››å…ƒæ•°è®¡ç®—å€¼ä¸åŠ é€Ÿåº¦è®¡æµ‹é‡å€¼çš„è¯¯å·®
     float ex, ey, ez;
-      // ´ÓËÄÔªÊı½á¹¹ÌåÖĞ»ñÈ¡µ±Ç°µÄËÄÔªÊı·ÖÁ¿
+      // ä»å››å…ƒæ•°ç»“æ„ä½“ä¸­è·å–å½“å‰çš„å››å…ƒæ•°åˆ†é‡
     float q0 = q_info.q0;
     float q1 = q_info.q1;
     float q2 = q_info.q2;
     float q3 = q_info.q3;
-      // ¼ÆËãËÄÔªÊı·ÖÁ¿µÄÆ½·½ºÍÁ½Á½³Ë»ı
+      // è®¡ç®—å››å…ƒæ•°åˆ†é‡çš„å¹³æ–¹å’Œä¸¤ä¸¤ä¹˜ç§¯
     float q0q0 = q0 * q0;
     float q0q1 = q0 * q1;
     float q0q2 = q0 * q2;
@@ -107,23 +114,23 @@ static void Update_AHRS_ICM(float gx, float gy, float gz, float ax, float ay, fl
     float q2q3 = q2 * q3;
     float q3q3 = q3 * q3;
 
-    // ¹éÒ»»¯¼ÓËÙ¶ÈÊı¾İµÃµ½µ¥Î»ÏòÁ¿
+    // å½’ä¸€åŒ–åŠ é€Ÿåº¦æ•°æ®å¾—åˆ°å•ä½å‘é‡
     float norm = Sqrt_Fast(ax * ax + ay * ay + az * az);
     ax = ax * norm;
     ay = ay * norm;
     az = az * norm;
 
-    // ¸ù¾İµ±Ç°ËÄÔªÊı×ËÌ¬¹ÀËãÖØÁ¦·ÖÁ¿ÓëÊµ¼Ê²âÁ¿µÄÖØÁ¦·ÖÁ¿¶Ô±È
+    // æ ¹æ®å½“å‰å››å…ƒæ•°å§¿æ€ä¼°ç®—é‡åŠ›åˆ†é‡ä¸å®é™…æµ‹é‡çš„é‡åŠ›åˆ†é‡å¯¹æ¯”
     vx = 2 * (q1q3 - q0q2);
     vy = 2 * (q0q1 + q2q3);
     vz = q0q0 - q1q1 - q2q2 + q3q3;
 
-    // ¼ÆËãÎó²îÏòÁ¿ÓÃÓÚĞŞÕıÍÓÂİÒÇÊı¾İ
+    // è®¡ç®—è¯¯å·®å‘é‡ç”¨äºä¿®æ­£é™€èºä»ªæ•°æ®
     ex = ay * vz - az * vy;
     ey = az * vx - ax * vz;
     ez = ax * vy - ay * vx;
 
-    // Ê¹ÓÃPI¿ØÖÆÆ÷ĞŞÕıÍÓÂİÒÇÊı¾İ¼õÉÙ»ı·ÖÎó²î
+    // ä½¿ç”¨PIæ§åˆ¶å™¨ä¿®æ­£é™€èºä»ªæ•°æ®å‡å°‘ç§¯åˆ†è¯¯å·®
     i_error_x += half_t * ex;
     i_error_y += half_t * ey;
     i_error_z += half_t * ez;
@@ -131,13 +138,13 @@ static void Update_AHRS_ICM(float gx, float gy, float gz, float ax, float ay, fl
     gy = gy + param_kp * ey + param_ki * i_error_y;
     gz = gz + param_kp * ez + param_ki * i_error_z;
 
-    // Ê¹ÓÃÒ»½×Áú¸ñ¿âËş·¨Çó½âËÄÔªÊıÎ¢·Ö·½³Ì¸üĞÂËÄÔªÊı
+    // ä½¿ç”¨ä¸€é˜¶é¾™æ ¼åº“å¡”æ³•æ±‚è§£å››å…ƒæ•°å¾®åˆ†æ–¹ç¨‹æ›´æ–°å››å…ƒæ•°
     q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * half_t;
     q1 = q1 + (q0 * gx + q2 * gz - q3 * gy) * half_t;
     q2 = q2 + (q0 * gy - q1 * gz + q3 * gx) * half_t;
     q3 = q3 + (q0 * gz + q1 * gy - q2 * gx) * half_t;
 
-    // ¹éÒ»»¯ËÄÔªÊı
+    // å½’ä¸€åŒ–å››å…ƒæ•°
     norm = Sqrt_Fast(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
     q_info.q0 = q0 * norm;
     q_info.q1 = q1 * norm;
@@ -148,28 +155,28 @@ static void Update_AHRS_ICM(float gx, float gy, float gz, float ax, float ay, fl
 void Get_Angles_ICM(void)
 {
 
-    float q0,q1,q2,q3;  // ´æ´¢ËÄÔªÊıµÄËÄ¸ö·ÖÁ¿
+    float q0,q1,q2,q3;  // å­˜å‚¨å››å…ƒæ•°çš„å››ä¸ªåˆ†é‡
 
-    imu660ra_get_acc(); // »ñÈ¡imu660raÍÓÂİÒÇ¼ÓËÙ¶ÈÊı¾İ
+    imu660ra_get_acc(); // è·å–imu660raé™€èºä»ªåŠ é€Ÿåº¦æ•°æ®
 
-    imu660ra_get_gyro();// »ñÈ¡imu660raÍÓÂİÒÇ½Ç¼ÓËÙ¶ÈÊı¾İ
+    imu660ra_get_gyro();// è·å–imu660raé™€èºä»ªè§’åŠ é€Ÿåº¦æ•°æ®
 
-    Get_Values_ICM();   // ÍÓÂİÒÇÊı¾İÂË²¨ºÍ×ª»¯ÎªÊµ¼ÊÎïÀíÖµ
+    Get_Values_ICM();   // é™€èºä»ªæ•°æ®æ»¤æ³¢å’Œè½¬åŒ–ä¸ºå®é™…ç‰©ç†å€¼
 
-      // Ê¹ÓÃÍÓÂİÒÇºÍ¼ÓËÙ¶È¼ÆµÄÊı¾İ¸üĞÂAHRS£¨×ËÌ¬ºÍº½Ïò²Î¿¼ÏµÍ³£©Ëã·¨µÃµ½µ±Ç°µÄËÄÔªÊı
+      // ä½¿ç”¨é™€èºä»ªå’ŒåŠ é€Ÿåº¦è®¡çš„æ•°æ®æ›´æ–°AHRSï¼ˆå§¿æ€å’Œèˆªå‘å‚è€ƒç³»ç»Ÿï¼‰ç®—æ³•å¾—åˆ°å½“å‰çš„å››å…ƒæ•°
     Update_AHRS_ICM(imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z, imu_data.acc_x, imu_data.acc_y, imu_data.acc_z);
-      // ´Ó¸üĞÂºóµÄ×ËÌ¬ĞÅÏ¢ÖĞ»ñÈ¡ËÄÔªÊıµÄËÄ¸ö·ÖÁ¿
+      // ä»æ›´æ–°åçš„å§¿æ€ä¿¡æ¯ä¸­è·å–å››å…ƒæ•°çš„å››ä¸ªåˆ†é‡
     q0 = q_info.q0;
     q1 = q_info.q1;
     q2 = q_info.q2;
     q3 = q_info.q3;
 
-    // ËÄÔªÊı¼ÆËãÅ·À­½Ç
+    // å››å…ƒæ•°è®¡ç®—æ¬§æ‹‰è§’
     euler_angle.pitch = asin(-2 * q1 * q3 + 2 * q0 * q2) * 180 / PI - 180;
     euler_angle.roll = atan2(2 * q2 * q3 + 2 * q0 * q1, -2 * q1 * q1 - 2 * q2 * q2 + 1) * 180 / PI;
     euler_angle.yaw = atan2(2 * q1 * q2 + 2 * q0 * q3, -2 * q2 * q2 - 2 * q3 * q3 + 1) * 180 / PI;
 
-    // ×ËÌ¬ÏŞÖÆ
+    // å§¿æ€é™åˆ¶
     if (euler_angle.pitch > 0)
     {
         euler_angle.pitch = 180 - euler_angle.pitch;

@@ -1,7 +1,25 @@
 /*
+ * UTF-8 详细注释说明：IPS200 屏幕菜单和模式选择实现。
+ *
+ * 模块职责：
+ * 1. 读取按键结果，绘制菜单页面。
+ * 2. 设置 main_mode、conrtol_mode、route_setting_choice 等全局状态。
+ * 3. 进入科目一、记录模式、Rack_Test 等功能前做必要状态初始化。
+ *
+ * 操作关系：
+ * - 记录菜单会设置 Guandao_Recode_Mode，并选择写入 INS/passage/portion_3。
+ * - 科目一菜单会设置 Guandao_portion_1，同时调用 portion_1_reset()。
+ * - Rack_Test 会进入机架测试，不参与科目一自动驾驶路线追踪。
+ *
+ * 调试重点：
+ * - 屏幕只负责切模式，不直接长期控制电机。
+ * - 如果按键进入了错误模式，优先看这里的 key_mode1/key_mode2 变化。
+ */
+
+/*
  * display.c
  *
- *  Created on: 2025��11��20��
+ *  Created on: 2025年11月20日
  *      Author: 18905
  */
 #include "zf_common_headfile.h"
@@ -21,15 +39,15 @@ void Display_Init(void)
 
 
 
-/*                                                                          �˵��������                                                                                  */
+/*                                                                          菜单界面设计                                                                                  */
 void Menu_Contral(void)
 {
     while(1)
     {
 
 
-        key_value = Key_Get();                                          //�����ɼ�
-        if(key_mode2 == 1)          Menu_Main();              //����ѡ������
+        key_value = Key_Get();                                          //按键采集
+        if(key_mode2 == 1)          Menu_Main();              //界面选择配置
         else if(key_mode2 == 2)  Menu_1();
         else if(key_mode2 == 3)  Menu_Parameter();
         else if(key_mode2 == 4)  Menu_Mode_Choice();
@@ -39,7 +57,7 @@ void Menu_Contral(void)
         else if(key_mode2 == 8) Menu_PID_P();
         else if(key_mode2 == 9) Menu_Control_P();
 
-        if(CarGo_Flag == 1){ips200_clear();break;}         //����ָ��
+        if(CarGo_Flag == 1){ips200_clear();break;}         //发车指令
 
     }
 
@@ -53,13 +71,13 @@ void Menu_Main(void)
     ips200_show_string( X(3) ,Y(4) ,"Mode_Choice");
     ips200_show_string( X(3) ,Y(5) ,"Show_Route");
 
-    prompt();                                                                                  //��ʾ��ʶ
-    if(key_value == 1)key_mode1 ++;                                          //��������+�޷�
+    prompt();                                                                                  //提示标识
+    if(key_value == 1)key_mode1 ++;                                          //按键控制+限幅
     else if(key_value == 2)key_mode1 --;
     key_mode1 =(key_mode1 > 5) ? 2  : key_mode1;
     key_mode1 =(key_mode1 < 2) ? 5  : key_mode1;
 
-    if(key_value == 3)                                                                  //ȷ����ִ��
+    if(key_value == 3)                                                                  //确定键执行
     {
         ips200_clear();
         if(key_mode1 == 5 ){ key_mode2 = 6; }
@@ -75,8 +93,8 @@ void Menu_Show_Route(void)
     ips200_show_string( X(3) ,Y(3) ,"passage");
     ips200_show_string( X(3) ,Y(4) ,"portion_3");
 
-    prompt();                                                                                  //��ʾ��ʶ
-    if(key_value == 1)key_mode1 ++;                                          //��������+�޷�
+    prompt();                                                                                  //提示标识
+    if(key_value == 1)key_mode1 ++;                                          //按键控制+限幅
     else if(key_value == 2)key_mode1 --;
     key_mode1 =(key_mode1 > 4) ? 2  : key_mode1;
     key_mode1 =(key_mode1 < 2) ? 4  : key_mode1;
@@ -107,7 +125,7 @@ void Show_Route(void)
 
     Guandao_Points_Show(&INS);
     while(1){
-        key_value = Key_Get();   //�����ɼ�
+        key_value = Key_Get();   //按键采集
         if(key_value == 4){key_mode2 =6;ips200_clear();break;}
     }
 
@@ -119,8 +137,8 @@ void Menu_Recode_Points(void)
     ips200_show_string( X(3) ,Y(3) ,"passage");
     ips200_show_string( X(3) ,Y(4) ,"portion_3");
 
-    prompt();                                                                                  //��ʾ��ʶ
-    if(key_value == 1)key_mode1 ++;                                          //��������+�޷�
+    prompt();                                                                                  //提示标识
+    if(key_value == 1)key_mode1 ++;                                          //按键控制+限幅
     else if(key_value == 2)key_mode1 --;
     key_mode1 =(key_mode1 > 4) ? 2  : key_mode1;
     key_mode1 =(key_mode1 < 2) ? 4  : key_mode1;
@@ -329,7 +347,7 @@ void Menu_Control_Value(void)
     ips200_show_int(X(16),Y(4),control[2],3 );
     ips200_show_float(X(16),Y(5),(float)control[0] * 0.1f,2,1);
 }
-/*                                                                                         ��������                                                                                                                       */
+/*                                                                                         界面设置                                                                                                                       */
 uint8 Key_Get(void)
 {
     uint8 value = 0 ;
@@ -357,7 +375,7 @@ uint8 Key_Get(void)
     return value;
 }
 
-int16 Menu_key_Operation_int16(int16 *param_t )//�������ڽ����������//ָ�������Ϊ�βΣ��Ǻ����ڵ��β�ҲҪΪָ����ʽ
+int16 Menu_key_Operation_int16(int16 *param_t )//按键调节界面操作函数//指针变量作为形参，那函数内的形参也要为指针形式
 {
 
      if(key1_flag){key1_flag=0;key_val=1;}

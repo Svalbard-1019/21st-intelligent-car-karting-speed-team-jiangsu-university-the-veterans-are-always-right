@@ -1,7 +1,21 @@
 /*
+ * UTF-8 详细注释说明：旧后轮速度 PID 控制模块。
+ *
+ * 模块职责：
+ * 1. 保存旧工程使用的左右后轮 PID 参数 MoterPID_L / MoterPID_R。
+ * 2. 读取 Encoder_Get() 的 delta_l / delta_r 作为速度反馈。
+ * 3. 调用 PID_Up() 后通过 Moter_Set() 输出左右电机 PWM。
+ *
+ * 当前工程注意：
+ * - 科目一后轮主要使用 code/rear_motor/rear_motor.c 的新 m/s 闭环。
+ * - 本文件仍被遥控/旧测试模式使用，不能删除。
+ * - Flash_Main_Read() 可能覆盖 PID 参数，所以源码初始化值不一定等于实际上车参数。
+ */
+
+/*
  * control.c
  *
- *  Created on: 2025��11��21��
+ *  Created on: 2025年11月21日
  *      Author: 18905
  */
 #include "zf_common_headfile.h"

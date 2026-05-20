@@ -1,63 +1,70 @@
 /*
+ * UTF-8 è¯¦ç»†æ³¨é‡Šè¯´æ˜ï¼šé€šç”¨å…¬å¼å‡½æ•°å£°æ˜ã€‚
+ *
+ * è¿™äº›å‡½æ•°è¢«ç”µæœºã€æƒ¯å¯¼ã€PID ç­‰å¤šä¸ªæ¨¡å—å¤ç”¨ï¼Œå±äºåº•å±‚å·¥å…·ã€‚
+ * æ”¹åŠ¨æ—¶è¦è€ƒè™‘æ‰€æœ‰è°ƒç”¨æ–¹ï¼Œå°¤å…¶æ˜¯ calculate_delta() ä¼šå½±å“è®°å½•é‡Œç¨‹å’Œåè½®é€Ÿåº¦åé¦ˆã€‚
+ */
+
+/*
  * formula.h
  *
- *  Created on: 2025Äê11ÔÂ21ÈÕ
+ *  Created on: 2025å¹´11æœˆ21æ—¥
  *      Author: 18905
  */
 
 #ifndef CODE_FORMULA_H_
 #define CODE_FORMULA_H_
 
-//Íâ²¿±äÁ¿ extern
+//å¤–éƒ¨å˜é‡ extern
 
 
-//ºê¶¨Òå
+//å®å®šä¹‰
 typedef struct
 {
-    float target_val;               //Ä¿±êÖµ
-    float actual_val;               //Êµ¼ÊÖµ
-//    float integral;                 //¶¨Òå»ı·ÖÖµ
+    float target_val;               //ç›®æ ‡å€¼
+    float actual_val;               //å®é™…å€¼
+//    float integral;                 //å®šä¹‰ç§¯åˆ†å€¼
 
-    float err;                      //¶¨ÒåÆ«²îÖµ
+    float err;                      //å®šä¹‰åå·®å€¼
     float err_last;                 //  e(k-1)
     float err_previous;             //  e(k-2)
 
-    float Kp;               //¶¨Òå±ÈÀı¡¢»ı·Ö¡¢Î¢·ÖÏµÊı
-    float Ki;               //¶¨Òå±ÈÀı¡¢»ı·Ö¡¢Î¢·ÖÏµÊı
-    float Kd;               //¶¨Òå±ÈÀı¡¢»ı·Ö¡¢Î¢·ÖÏµÊı
-    float limit;            //»ı·ÖÏŞ·ù
-    float p_result;         //±ÈÀı¡¢»ı·Ö¡¢Î¢·ÖÔËËã½á¹û
-    float i_result;         //±ÈÀı¡¢»ı·Ö¡¢Î¢·ÖÔËËã½á¹û
-    float d_result;         //±ÈÀı¡¢»ı·Ö¡¢Î¢·ÖÔËËã½á¹û
-//    float inte_exce;        //»ı·Ö¹ı¶È
+    float Kp;               //å®šä¹‰æ¯”ä¾‹ã€ç§¯åˆ†ã€å¾®åˆ†ç³»æ•°
+    float Ki;               //å®šä¹‰æ¯”ä¾‹ã€ç§¯åˆ†ã€å¾®åˆ†ç³»æ•°
+    float Kd;               //å®šä¹‰æ¯”ä¾‹ã€ç§¯åˆ†ã€å¾®åˆ†ç³»æ•°
+    float limit;            //ç§¯åˆ†é™å¹…
+    float p_result;         //æ¯”ä¾‹ã€ç§¯åˆ†ã€å¾®åˆ†è¿ç®—ç»“æœ
+    float i_result;         //æ¯”ä¾‹ã€ç§¯åˆ†ã€å¾®åˆ†è¿ç®—ç»“æœ
+    float d_result;         //æ¯”ä¾‹ã€ç§¯åˆ†ã€å¾®åˆ†è¿ç®—ç»“æœ
+//    float inte_exce;        //ç§¯åˆ†è¿‡åº¦
 
-    float out;                 //Êä³ö
-    float out_max;                 //Êä³öÏŞ·ù
-    float out_min;                 //Êä³öÏŞ·ù
+    float out;                 //è¾“å‡º
+    float out_max;                 //è¾“å‡ºé™å¹…
+    float out_min;                 //è¾“å‡ºé™å¹…
 } _pid;
 
 typedef struct {
-    // ¿¨¶ûÂüºËĞÄ
-    double x;      // ÂË²¨ºóµÄÎ»ÖÃ
-    double P;      // Îó²î·½²î
+    // å¡å°”æ›¼æ ¸å¿ƒ
+    double x;      // æ»¤æ³¢åçš„ä½ç½®
+    double P;      // è¯¯å·®æ–¹å·®
 
-    // ²ÎÊı
-    double Q;      // ¹ı³ÌÔëÉù
-    double R;      // ²âÁ¿ÔëÉù
+    // å‚æ•°
+    double Q;      // è¿‡ç¨‹å™ªå£°
+    double R;      // æµ‹é‡å™ªå£°
 
-    // ÖÍºó²¹³¥
-    double last_x;     // ÉÏÒ»´ÎÂË²¨Öµ
-    double velocity;   // ¹À¼ÆËÙ¶È£¨m/s£©
-    double dt;         // ²ÉÑùÖÜÆÚ£¨Ãë£©
+    // æ»åè¡¥å¿
+    double last_x;     // ä¸Šä¸€æ¬¡æ»¤æ³¢å€¼
+    double velocity;   // ä¼°è®¡é€Ÿåº¦ï¼ˆm/sï¼‰
+    double dt;         // é‡‡æ ·å‘¨æœŸï¼ˆç§’ï¼‰
 
-    // ÅäÖÃ
-    double comp_ratio; // ²¹³¥ÏµÊı£¨0~1£©
+    // é…ç½®
+    double comp_ratio; // è¡¥å¿ç³»æ•°ï¼ˆ0~1ï¼‰
 } KalmanWithComp;
 
 extern KalmanWithComp klm_lat;
 extern KalmanWithComp klm_lon;
 
-//º¯Êı
+//å‡½æ•°
 
 void PID_Place(_pid*p,float now);
 void PID_Up(_pid*p,float now);

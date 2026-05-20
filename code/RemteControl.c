@@ -1,31 +1,38 @@
 /*
+ * UTF-8 详细注释说明：遥控器输入读取和通道映射模块。
+ *
+ * 当前科目一调试中遥控器扫描多处被禁用，主要是为了释放 P33_6/P33_7 给后轮编码器。
+ * 如果重新启用遥控器，一定要确认 X6F 通道引脚没有和编码器、GPS、屏幕或转向编码器冲突。
+ */
+
+/*
  * RemteControl.c
  *
- *  Created on: 2025��2��6��
+ *  Created on: 2025年2月6日
  *      Author: FELMLY
  */
 
-#include "zf_common_headfile.h"     //����һ�����е�ͷ�ļ�
+#include "zf_common_headfile.h"     //声明一下所有的头文件
 
-////��ͨ������
+////各通道引脚
 int16 x6f_pin_map[6] = {X6F_CH1, X6F_CH2, X6F_CH3, X6F_CH4, X6F_CH5, X6F_CH6};
-////��ͨ���ߵ�ƽ��������
+////各通道高电平计数变量
 int16 x6f_count[6];
-////��ͨ���ߵ�ƽ�������
+////各通道高电平计数输出
 int16 x6f_out[6];
 //
-int   HotRC_GO_FLAG=0;//ң�ط�����־λ
-////===================================================���ң��===================================================
+int   HotRC_GO_FLAG=0;//遥控发车标志位
+////===================================================逐飞遥控===================================================
 //
 
  float hot_rc_speed = 0;
  float hot_rc_steer = 0;
  float hot_rc_delta = 0;
-void hotRc_Control_init(void)//ң�������ų�ʼ��
+void hotRc_Control_init(void)//遥控器引脚初始化
 {
 
 //    pit_ms_init(CCU60_CH1, 1);
-   //��ʼ�����ջ�����
+   //初始化接收机引脚
    gpio_init(X6F_CH1, GPI, GPIO_LOW, GPI_PULL_UP);
    gpio_init(X6F_CH2, GPI, GPIO_LOW, GPI_PULL_UP);
    gpio_init(X6F_CH3, GPI, GPIO_LOW, GPI_PULL_UP);
@@ -33,7 +40,7 @@ void hotRc_Control_init(void)//ң�������ų�ʼ��
 //   gpio_init(X6F_CH5, GPI, GPIO_LOW, GPI_PULL_UP);
 //   gpio_init(X6F_CH6, GPI, GPIO_LOW, GPI_PULL_UP);
 
-   // ��ʱ���ж�10us������ң����ɨ��
+   // 定时器中断10us，用于遥控器扫描
    pit_us_init(CCU60_CH1, 10);
 
 
@@ -58,7 +65,7 @@ void hotRc_Show(void)
 
 }
 
-void  x6f_scan(void)//ң����ͨ��ɨ��,��Ҫ�ŵ�10us���ж���
+void  x6f_scan(void)//遥控器通道扫描,需要放到10us的中断里
 {
     for(int i = 0; i < 6; i ++)
     {
@@ -76,7 +83,7 @@ void  x6f_scan(void)//ң����ͨ��ɨ��,��Ҫ�ŵ�10us���ж���
 
 }
 
-//void HotRC_GO_Flag(void) //ң�ر�־λ����,ѡ��ʱң�ػ��Զ�ģʽ��������ѭ�����߶�ʱ���ж���
+//void HotRC_GO_Flag(void) //遥控标志位函数,选择时遥控或自动模式，放在主循环或者定时器中断里
 //{
 //    if(x6f_out[2]>=150)
 //    {
@@ -88,15 +95,15 @@ void  x6f_scan(void)//ң����ͨ��ɨ��,��Ҫ�ŵ�10us���ж���
 //    }
 //}
 /*****************************************
-�������ܣ�ң�ع��ֿ��ƶ��Ŀ��Ƕ�
-�������ƣ�uint16_t map_x6f_to_SE_Target(int16_t x6f_out_0)
-���������
-�������
-��ע��
+函数功能；遥控滚轮控制舵机目标角度
+函数名称；uint16_t map_x6f_to_SE_Target(int16_t x6f_out_0)
+输入参数；
+输出参数
+备注；
 *****************************************/
 //void map_x6f_to_SE_Target(int16_t x6f_out_0)
 //{
-//    // ���뷶Χ����
+//    // 输入范围限制
 //    if (x6f_out_0 < 100)
 //    {
 ////        SE_Target = 150;
@@ -104,20 +111,20 @@ void  x6f_scan(void)//ң����ͨ��ɨ��,��Ҫ�ŵ�10us���ж���
 //    {
 //        x6f_out_0 = 150;
 //    }
-//    // ����ӳ�����
+//    // 线性映射计算
 ////    SE_Target = 150 - x6f_out_0;
 //}
 
 /*****************************************
-�������ܣ�ң�ع��ֿ��ƶ��PWM
-�������ƣ�uint16_t map_x6f_to_pwm(int16_t x6f_out_0)
-���������
-�������
-��ע��
+函数功能；遥控滚轮控制舵机PWM
+函数名称；uint16_t map_x6f_to_pwm(int16_t x6f_out_0)
+输入参数；
+输出参数
+备注；
 *****************************************/
 //uint16_t map_x6f_to_pwm(int16_t x6f_out_0)
 //{
-//    // ���뷶Χ����
+//    // 输入范围限制
 //    if (x6f_out_0 < 100)
 //    {
 //        x6f_out_0 = 150;
@@ -125,14 +132,14 @@ void  x6f_scan(void)//ң����ͨ��ɨ��,��Ҫ�ŵ�10us���ж���
 //    {
 //        x6f_out_0 = 150;
 //    }
-//    // ����ӳ�����
+//    // 线性映射计算
 //    uint16_t pwm = (uint16_t)(3 * x6f_out_0 + 300);
 //    return pwm;
 //}
 //
 //int16_t motor_map_x6f_to_pwm(int16_t x6f_out_0)
 //{
-//    // ���뷶Χ����
+//    // 输入范围限制
 //    if (x6f_out_0 < 100)
 //    {
 //        x6f_out_0 = 150;
@@ -140,12 +147,12 @@ void  x6f_scan(void)//ң����ͨ��ɨ��,��Ҫ�ŵ�10us���ж���
 //    {
 //        x6f_out_0 = 150;
 //    }
-//    // ����ӳ�����
+//    // 线性映射计算
 //    int16_t pwm = (uint16_t)(198 * (x6f_out_0 - 150));
 //    return pwm;
 //}
 
-void hotRC_control(void)    //������ѭ���������ж���
+void hotRC_control(void)    //放入主循环，或者中断里
 {
 
     hot_rc_steer = -2.125*x6f_out[0] +318.75;

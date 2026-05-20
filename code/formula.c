@@ -1,7 +1,18 @@
 /*
+ * UTF-8 详细注释说明：通用数学和限幅工具函数。
+ *
+ * 模块职责：
+ * - 对 int/float 做上下限限制，保护 PID 输出和目标速度。
+ * - 处理编码器计数溢出，calculate_delta() 用于从当前计数和上次计数得到增量。
+ *
+ * 调试重点：
+ * - 编码器 delta 不对时，不要只看 Encoder_Get()，也要看 calculate_delta() 的溢出阈值是否匹配编码器计数范围。
+ */
+
+/*
  * formula.c
  *
- *  Created on: 2025��11��21��
+ *  Created on: 2025年11月21日
  *      Author: 18905
  */
 
@@ -12,32 +23,32 @@ KalmanWithComp klm_lon;
 
 void KWC_Init(KalmanWithComp *kf, double Q, double R, double dt, double comp_ratio) {
     kf->x = 0.0f;
-    kf->P = 1.0;      // ��ʼ��ȷ���ȴ� 1e-9f
+    kf->P = 1.0;      // 初始不确定度大 1e-9f
     kf->Q = Q;
     kf->R = R;
 
     kf->last_x = 0.0f;
     kf->velocity = 0.0f;
     kf->dt = dt;
-    kf->comp_ratio = comp_ratio;  // �Ƽ� 0.3~0.5
+    kf->comp_ratio = comp_ratio;  // 推荐 0.3~0.5
 }
 
 double KWC_UpdateFast(KalmanWithComp *kf, double z) {
-    // �������˲�
-        // �������˲�
+    // 卡尔曼滤波
+        // 卡尔曼滤波
         float P_pred = kf->P + kf->Q;
         float K = P_pred / (P_pred + kf->R);
         float filtered = kf->x + K * (z - kf->x);
         kf->P = (1.0f - K) * P_pred;
 
-        // �ٶȹ���
+        // 速度估计
         float raw_vel = (filtered - kf->last_x) / kf->dt;
         kf->velocity = 0.7f * kf->velocity + 0.3f * raw_vel;
 
-        // �ͺ󲹳�
+        // 滞后补偿
         float output = filtered + kf->velocity * kf->dt * kf->comp_ratio;
 
-        // ����״̬
+        // 更新状态
         kf->last_x = filtered;
         kf->x = filtered;
 

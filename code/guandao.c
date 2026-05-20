@@ -1,4 +1,24 @@
 /*
+ * UTF-8 详细注释说明：科目一惯导记录、路线追踪和纯追踪控制核心。
+ *
+ * 主数据：
+ * - INS：科目一主路线，记录模式写入，自动驾驶模式读取。
+ * - passage / portion_3 / portion_2：其他路线链表节点。
+ * - out_v_l / out_v_r / out_servo：纯追踪输出，后轮速度由 cpu0_main.c 换算为 m/s。
+ *
+ * 运行流程：
+ * 1. 记录模式 guandao_recode()：推车时 update_state() 积分位姿，recode_waypoint() 自动存点。
+ * 2. 保存路线 Flash_Store_Mode()：KEY1 长按触发，保存路线和停车点。
+ * 3. 科目一 portion_1()：读取 INS 路线，从 current_point_index 开始追踪。
+ * 4. pursuit_contral_mode()：计算 D/A、切点、转向角、左右轮速度。
+ *
+ * 调试屏对应：
+ * - Idx/Len：当前追踪点/路线总点数。
+ * - D/A：到目标点距离/方向角误差。
+ * - Reason：0正常，1空路线或到末尾，2距离到点切换，4到终点。
+ */
+
+/*
  * guandao.c
  *
  *  Created on: 2026年3月16日

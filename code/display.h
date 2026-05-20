@@ -1,14 +1,21 @@
 /*
+ * UTF-8 è¯¦ç»†æ³¨é‡Šè¯´æ˜ï¼šèœå•æ˜¾ç¤ºå‡½æ•°å£°æ˜ã€‚
+ *
+ * è¿™äº›å‡½æ•°ç”± Menu_Contral() ä¸²èµ·æ¥å½¢æˆä¸Šç”µèœå•ã€‚
+ * èœå•æ‰§è¡Œç»“æŸåï¼Œä¸»å¾ªç¯ä¼šæ ¹æ® main_mode è¿›å…¥è®°å½•ã€è‡ªåŠ¨é©¾é©¶æˆ–æµ‹è¯•ã€‚
+ */
+
+/*
  * display.h
  *
- *  Created on: 2025Äê11ÔÂ20ÈÕ
+ *  Created on: 2025å¹´11æœˆ20æ—¥
  *      Author: 18905
  */
 
 #ifndef CODE_DISPLAY_H_
 #define CODE_DISPLAY_H_
 
-//Íâ²¿±äÁ¿
+//å¤–éƒ¨å˜é‡
 typedef enum{
     Mode_IDLE,
     Guandao_Recode_Mode,
@@ -24,18 +31,18 @@ extern uint8 key_mode1;
 extern uint8 key_mode2;
 extern uint8 CarGo_Flag;
 extern float *p;
-//ºê¶¨Òå
-#define IPS200_TYPE     (IPS200_TYPE_SPI)    //ÆÁÄ»³õÊ¼»¯ºê¶¨Òå
+//å®å®šä¹‰
+#define IPS200_TYPE     (IPS200_TYPE_SPI)    //å±å¹•åˆå§‹åŒ–å®å®šä¹‰
 #define X(x)                    8*(x)
 #define Y(y)                    16*(y)
-//º¯Êı¶¨Òå
+//å‡½æ•°å®šä¹‰
 
 void Display_Init(void);
-uint8 Key_Get(void);                                                    //½çÃæÇĞ»»°´¼üÉ¨Ãè
-void prompt(void);                                                     //ÌáÊ¾ĞÅÏ¢Ñ²»Ø
-void Menu_Contral(void);                                            //Ö÷Ñ­»·¿ØÖÆ
-int16 Menu_key_Operation_int16(int16 *param_t );//²ÎÊıÉèÖÃÄ£Ê½ Í¨¹ıÖ¸ÕëÖ±½Ó·ÃÎÊ±äÁ¿µØÖ· º¯ÊıÊı¾İÀàĞÍÓë²ÎÊıÀàĞÍÒ»Ò»¶ÔÓ¦
-float Menu_key_Operation_float(float *param_t );//²ÎÊıÉèÖÃÄ£Ê½ Í¨¹ıÖ¸ÕëÖ±½Ó·ÃÎÊ±äÁ¿µØÖ· º¯ÊıÊı¾İÀàĞÍÓë²ÎÊıÀàĞÍÒ»Ò»¶ÔÓ¦
+uint8 Key_Get(void);                                                    //ç•Œé¢åˆ‡æ¢æŒ‰é”®æ‰«æ
+void prompt(void);                                                     //æç¤ºä¿¡æ¯å·¡å›
+void Menu_Contral(void);                                            //ä¸»å¾ªç¯æ§åˆ¶
+int16 Menu_key_Operation_int16(int16 *param_t );//å‚æ•°è®¾ç½®æ¨¡å¼ é€šè¿‡æŒ‡é’ˆç›´æ¥è®¿é—®å˜é‡åœ°å€ å‡½æ•°æ•°æ®ç±»å‹ä¸å‚æ•°ç±»å‹ä¸€ä¸€å¯¹åº”
+float Menu_key_Operation_float(float *param_t );//å‚æ•°è®¾ç½®æ¨¡å¼ é€šè¿‡æŒ‡é’ˆç›´æ¥è®¿é—®å˜é‡åœ°å€ å‡½æ•°æ•°æ®ç±»å‹ä¸å‚æ•°ç±»å‹ä¸€ä¸€å¯¹åº”
 void Menu_Main(void);
 void Menu_1(void);
 void Menu_Parameter(void);

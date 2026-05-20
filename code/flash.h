@@ -1,14 +1,21 @@
 /*
+ * UTF-8 详细注释说明：Flash 页号和存取接口。
+ *
+ * 所有 Flash 页号在这里集中定义，避免不同数据写到同一页互相覆盖。
+ * 修改页号前要确认旧数据是否需要迁移，否则上电读取会读到旧格式数据。
+ */
+
+/*
  * flash.h
  *
- *  Created on: 2025��11��23��
+ *  Created on: 2025年11月23日
  *      Author: 18905
  */
 
 #ifndef CODE_FLASH_H_
 #define CODE_FLASH_H_
 
-//�ⲿ����
+//外部变量
 
 extern float speed_pid[6];
 extern int16 control[5];
@@ -16,18 +23,18 @@ extern float kp ;
 extern float ki ;
 extern float kd ;
 
-//�궨��
-#define FLASH_SECTION_INDEX             (0)    //�洢�����õĺ�����
-#define SPEED_PID_PAGE_INDEX            (11)   //����ҳ
-#define RECODE_MAP_POINTS_INDEX   (10)   //��¼��ͼ��λ
-#define RECODE_PASSAGE                  (9)   //��¼��ͼ��λ
-#define RECODE_PASSAGE_TWO                  (8)   //��¼��ͼ��λ
-#define RECODE_PASSAGE_THREE                  (7)   //��¼��ͼ��λ
-#define RECODE_PASSAGE_FOUR                  (6)   //��¼��ͼ��λ
-#define RECODE_PASSAGE_FIF                  (5)   //��¼��ͼ��λ
-#define RECODE_PORTION_THREE                  (4)   //��¼��ͼ��λ
-#define GPS_CHEAK_FLAG                            (3)   //��¼��ͼ��λ
-//����
+//宏定义
+#define FLASH_SECTION_INDEX             (0)    //存储数据用的和扇区
+#define SPEED_PID_PAGE_INDEX            (11)   //储存页
+#define RECODE_MAP_POINTS_INDEX   (10)   //记录地图点位
+#define RECODE_PASSAGE                  (9)   //记录地图点位
+#define RECODE_PASSAGE_TWO                  (8)   //记录地图点位
+#define RECODE_PASSAGE_THREE                  (7)   //记录地图点位
+#define RECODE_PASSAGE_FOUR                  (6)   //记录地图点位
+#define RECODE_PASSAGE_FIF                  (5)   //记录地图点位
+#define RECODE_PORTION_THREE                  (4)   //记录地图点位
+#define GPS_CHEAK_FLAG                            (3)   //记录地图点位
+//函数
 void Flash_Read_gpscheak(void);
 void Flash_Write_gpscheak(void);
 void Flash_Read_pid(void);

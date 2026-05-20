@@ -1,7 +1,19 @@
 /*
+ * UTF-8 è¯¦ç»†æ³¨é‡Šè¯´æ˜ï¼šå‰è½®è½¬å‘ç”µæœºé—­ç¯æ§åˆ¶æ¥å£ä¸ç¡¬ä»¶å®ã€‚
+ *
+ * æœ¬å¤´æ–‡ä»¶é›†ä¸­å®šä¹‰è½¬å‘ç”µæœºçš„ PWMã€ç¼–ç å™¨ã€æœºæ¢°é›¶ç‚¹å’Œ PID æ§åˆ¶æ¥å£ã€‚
+ * ä¸»æµç¨‹åªéœ€è¦è°ƒç”¨ Steer_Moter_Init() åˆå§‹åŒ–ï¼Œå†å‘¨æœŸæ€§è°ƒç”¨ Steer_Moter_Contral(target_deg)ã€‚
+ *
+ * å•ä½çº¦å®šï¼š
+ * - å¯¹å¤–ç›®æ ‡è§’åº¦ä½¿ç”¨â€œåº¦â€ã€‚
+ * - ç¼–ç å™¨åŸå§‹è®¡æ•°ä¼šåœ¨ angle_control.c å†…éƒ¨æ¢ç®—åˆ°è§’åº¦ã€‚
+ * - PWM é™å¹…ç”¨äºä¿æŠ¤ç”µæœºå’Œé©±åŠ¨ï¼Œä¸å»ºè®®åœ¨æœªæ¶ç©ºæµ‹è¯•æ—¶ç›´æ¥è°ƒå¤§ã€‚
+ */
+
+/*
  * angle_control.h
  *
- * Description: ×ªÏòµç»ú½Ç¶È¿ØÖÆÄ£¿é
+ * Description: è½¬å‘ç”µæœºè§’åº¦æ§åˆ¶æ¨¡å—
  */
 
 #ifndef CODE_ANGLE_CONTROL_H_
@@ -9,20 +21,20 @@
 #include "zf_common_headfile.h"
 #include "PID.h"
 
-// ½Ç¶Èµç»ú PWM Òı½Å¶¨Òå
-#define ANGLE_PWM_IN1       ATOM0_CH7_P02_7        // Õı×ª PWM
-#define ANGLE_PWM_IN2       ATOM0_CH6_P02_6        // ·´×ª PWM
+// è§’åº¦ç”µæœº PWM å¼•è„šå®šä¹‰
+#define ANGLE_PWM_IN1       ATOM0_CH7_P02_7        // æ­£è½¬ PWM
+#define ANGLE_PWM_IN2       ATOM0_CH6_P02_6        // åè½¬ PWM
 
-// ±àÂëÆ÷¶¨Òå
+// ç¼–ç å™¨å®šä¹‰
 #define ANGLE_ENCODER       TIM4_ENCODER
-#define ANGLE_ENCODER_A_PIN TIM4_ENCODER_CH1_P02_8 // ±àÂëÆ÷ A Ïà
-#define ANGLE_ENCODER_B_PIN TIM4_ENCODER_CH2_P00_9 // ±àÂëÆ÷ B Ïà
+#define ANGLE_ENCODER_A_PIN TIM4_ENCODER_CH1_P02_8 // ç¼–ç å™¨ A ç›¸
+#define ANGLE_ENCODER_B_PIN TIM4_ENCODER_CH2_P00_9 // ç¼–ç å™¨ B ç›¸
 
-// µç»ú²ÎÊı¶¨Òå
-#define ANGLE_PPR           1024                   // quadÄ£Ê½ÏÂÃ¿×ªÂö³åÊı(Ó²¼ş1024/4)
-#define ANGLE_GEAR_RATIO    300                    // ¼õËÙ±È
-#define ANGLE_MAX_DEGREE    60                     // ×î´óÄ¿±ê½Ç¶È
-#define ANGLE_MIN_DEGREE    -60                    // ×îĞ¡Ä¿±ê½Ç¶È
+// ç”µæœºå‚æ•°å®šä¹‰
+#define ANGLE_PPR           1024                   // quadæ¨¡å¼ä¸‹æ¯è½¬è„‰å†²æ•°(ç¡¬ä»¶1024/4)
+#define ANGLE_GEAR_RATIO    300                    // å‡é€Ÿæ¯”
+#define ANGLE_MAX_DEGREE    60                     // æœ€å¤§ç›®æ ‡è§’åº¦
+#define ANGLE_MIN_DEGREE    -60                    // æœ€å°ç›®æ ‡è§’åº¦
 #define ANGLE_DEFAULT_KP    200.0f
 #define ANGLE_DEFAULT_KI    4.0f
 #define ANGLE_DEFAULT_KD    10.0f
@@ -30,35 +42,35 @@
 #define ANGLE_DEAD_BAND     0.1f
 
 typedef struct {
-    PID_TypeDef pid;          // ½Ç¶È»· PID ¿ØÖÆÆ÷×´Ì¬
-    float target_angle;       // Ä¿±ê½Ç¶È
-    float current_angle;      // µ±Ç°½Ç¶È
-    int32 encoder_zero_count; // ÁãÎ»¶ÔÓ¦µÄ±àÂëÆ÷¼ÆÊı
-    uint32 control_count;     // ¿ØÖÆÑ­»·Ö´ĞĞ´ÎÊı
+    PID_TypeDef pid;          // è§’åº¦ç¯ PID æ§åˆ¶å™¨çŠ¶æ€
+    float target_angle;       // ç›®æ ‡è§’åº¦
+    float current_angle;      // å½“å‰è§’åº¦
+    int32 encoder_zero_count; // é›¶ä½å¯¹åº”çš„ç¼–ç å™¨è®¡æ•°
+    uint32 control_count;     // æ§åˆ¶å¾ªç¯æ‰§è¡Œæ¬¡æ•°
 } AngleControl_TypeDef;
 
 extern AngleControl_TypeDef angle_ctrl;
 extern int32 accumulated_encoder_count;
 
-// ³õÊ¼»¯½Ç¶È¿ØÖÆÄ£¿é£¬ÅäÖÃ PWM¡¢±àÂëÆ÷¡¢PID ¿ØÖÆÆ÷
+// åˆå§‹åŒ–è§’åº¦æ§åˆ¶æ¨¡å—ï¼Œé…ç½® PWMã€ç¼–ç å™¨ã€PID æ§åˆ¶å™¨
 void angle_control_init(void);
 
-// ¶ÁÈ¡µ±Ç°½Ç¶È²¢Ö´ĞĞÒ»´ÎÎ»ÖÃÊ½ PID ¼ÆËã
+// è¯»å–å½“å‰è§’åº¦å¹¶æ‰§è¡Œä¸€æ¬¡ä½ç½®å¼ PID è®¡ç®—
 void angle_control_update(void);
 
-// ÉèÖÃÄ¿±ê½Ç¶È£¬×Ô¶¯ÏŞÖÆ·¶Î§
+// è®¾ç½®ç›®æ ‡è§’åº¦ï¼Œè‡ªåŠ¨é™åˆ¶èŒƒå›´
 void angle_control_set_target(int32 target_angle);
 
-// ÔÚµ±Ç°½Ç¶È»ù´¡ÉÏĞı×ªÖ¸¶¨½Ç¶È
+// åœ¨å½“å‰è§’åº¦åŸºç¡€ä¸Šæ—‹è½¬æŒ‡å®šè§’åº¦
 void angle_control_rotate_relative(int32 delta_angle);
 
-// ¸ù¾İ¿ØÖÆÆ÷Êä³öÉèÖÃµç»ú PWM Õ¼¿Õ±È
+// æ ¹æ®æ§åˆ¶å™¨è¾“å‡ºè®¾ç½®ç”µæœº PWM å ç©ºæ¯”
 void angle_motor_set_pwm(int32 pwm_value);
 
-// »ñÈ¡µ±Ç°½Ç¶È
+// è·å–å½“å‰è§’åº¦
 int32 angle_control_get_current_angle(void);
 
-// ÖØÖÃ PID ×´Ì¬£¬ÖØĞÂ¼ÇÂ¼ÁãÎ»£¬¹Ø±Õµç»ú
+// é‡ç½® PID çŠ¶æ€ï¼Œé‡æ–°è®°å½•é›¶ä½ï¼Œå…³é—­ç”µæœº
 void angle_control_reset(void);
 
 #endif /* CODE_ANGLE_CONTROL_H_ */

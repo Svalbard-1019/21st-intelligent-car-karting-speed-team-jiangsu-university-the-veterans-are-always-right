@@ -1,7 +1,13 @@
 /*
+ * UTF-8 è¯¦ç»†æ³¨é‡Šè¯´æ˜ï¼šå¤‡ç”¨ IMU è§£ç®—æ¥å£å£°æ˜ã€‚
+ *
+ * ä¸å»ºè®®åœ¨ç§‘ç›®ä¸€è°ƒè¯•ä¸­åŒæ—¶æ··ç”¨ IMU.c å’Œ IMU_2.c çš„è¾“å‡ºï¼Œé¿å…èˆªå‘è§’æ¥æºä¸ä¸€è‡´ã€‚
+ */
+
+/*
  * IMU_2.h
  *
- *  Created on: 2025Äê2ÔÂ18ÈÕ
+ *  Created on: 2025å¹´2æœˆ18æ—¥
  *      Author: ORRN
  */
 
@@ -9,19 +15,19 @@
 #define CODE_IMU_2_H_
 
 
-#define DELTA_T     0.0051f     // ¶¨Òå¼ÆËãÖÜÆÚ,5ms
-#define alpha           0.3f    // ¶¨ÒåÒ»½×µÍÍ¨ÂË²¨Æ÷µÄalphaÖµ,ÓÃÓÚÆ½»¬¼ÓËÙ¶ÈÊı¾İ
+#define DELTA_T     0.0051f     // å®šä¹‰è®¡ç®—å‘¨æœŸ,5ms
+#define alpha           0.3f    // å®šä¹‰ä¸€é˜¶ä½é€šæ»¤æ³¢å™¨çš„alphaå€¼,ç”¨äºå¹³æ»‘åŠ é€Ÿåº¦æ•°æ®
 
 
 
-// ´æ´¢ÍÓÂİÒÇµÄÁãµãÆ«ÒÆÊı¾İ
+// å­˜å‚¨é™€èºä»ªçš„é›¶ç‚¹åç§»æ•°æ®
 typedef struct {
     float x_data;
     float y_data;
     float z_data;
 } Imu_gyro_param_t;
 
-// ´æ´¢ÍÓÂİÒÇºÍ¼ÓËÙ¶È¼ÆµÄÊı¾İ
+// å­˜å‚¨é™€èºä»ªå’ŒåŠ é€Ÿåº¦è®¡çš„æ•°æ®
 typedef struct {
     float gyro_x;
     float gyro_y;
@@ -31,7 +37,7 @@ typedef struct {
     float acc_z;
 } Imu_data_param_t;
 
-// ´æ´¢ËÄÔªÊı²ÎÊı,ËÄÔªÊıÓÃÓÚ±íÊ¾Ğı×ª
+// å­˜å‚¨å››å…ƒæ•°å‚æ•°,å››å…ƒæ•°ç”¨äºè¡¨ç¤ºæ—‹è½¬
 typedef struct {
     float q0;
     float q1;
@@ -39,7 +45,7 @@ typedef struct {
     float q3;
 } quater_param_t;
 
-// ´æ´¢Å·À­½Ç²ÎÊı,Å·À­½ÇÓÃÓÚ±íÊ¾ÈıÎ¬¿Õ¼äÖĞµÄĞı×ª
+// å­˜å‚¨æ¬§æ‹‰è§’å‚æ•°,æ¬§æ‹‰è§’ç”¨äºè¡¨ç¤ºä¸‰ç»´ç©ºé—´ä¸­çš„æ—‹è½¬
 typedef struct {
         float pitch;
         float roll;
@@ -48,6 +54,6 @@ typedef struct {
 extern  euler_param_t    euler_angle ;
 void Init_Gyro_Offset(void);
 void Get_Angles_ICM(void);
-void IMU_init(void);//IMU³õÊ¼»¯
+void IMU_init(void);//IMUåˆå§‹åŒ–
 
 #endif /* CODE_IMU_2_H_ */
