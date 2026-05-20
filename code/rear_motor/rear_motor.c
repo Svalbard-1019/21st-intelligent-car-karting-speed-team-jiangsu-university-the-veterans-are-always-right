@@ -3,7 +3,7 @@
  *
  * 后轮独立驱动模块实现
  * 架构: 目标 m/s -> 100ms脉冲目标 -> 前馈 + PID修正 -> PWM -> DIR+PWM驱动
- * 编码器: 固定周期 10ms 读取+清零, 累加至 100ms 供 PID 使用
+ * 编码器: 固定周期 10ms 读取累计差值, 累加至 100ms 供 PID 使用
  */
 
 #include "zf_common_headfile.h"
@@ -19,6 +19,8 @@ static int32  encoder_100ms_last = 0;
 static volatile uint32 encoder_sample_count = 0;
 static uint32 last_encoder_sample_count = 0;
 static uint8  encoder_div = 0;
+static int16  last_encoder_count = 0;
+static uint8  encoder_first_read = 1;
 
 /* PID 状态 */
 static float  integral    = 0.0f;
@@ -71,6 +73,8 @@ void rear_motor_init(void)
     encoder_sample_count = 0;
     last_encoder_sample_count = 0;
     encoder_div = 0;
+    last_encoder_count = encoder_get_count(TIM2_ENCODER);
+    encoder_first_read = 0;
     integral    = 0.0f;
     last_error  = 0.0f;
     last_pwm    = 0;
@@ -85,6 +89,9 @@ void rear_motor_stop(void)
     encoder_100ms = 0;
     encoder_100ms_last = 0;
     encoder_div = 0;
+    encoder_10ms = 0;
+    last_encoder_count = encoder_get_count(TIM2_ENCODER);
+    encoder_first_read = 0;
 
     pwm_set_duty(PWM_L, 0);
     pwm_set_duty(PWM_R, 0);
@@ -107,11 +114,23 @@ void rear_motor_set_target_mps(float mps)
     }
 }
 
-/* 每 10ms 调用: 读编码器 + 清零 + 累加到 100ms */
+/* 每 10ms 调用: 读编码器累计差值, 不清零, 避免和惯导共用TIM2时互相抢数据 */
 void rear_motor_encoder_update_10ms(void)
 {
-    encoder_10ms = encoder_get_count(TIM2_ENCODER);
-    encoder_clear_count(TIM2_ENCODER);
+    int16 current_count = encoder_get_count(TIM2_ENCODER);
+
+    if(encoder_first_read)
+    {
+        last_encoder_count = current_count;
+        encoder_10ms = 0;
+        encoder_first_read = 0;
+    }
+    else
+    {
+        encoder_10ms = (int16)calculate_delta(current_count, last_encoder_count);
+        last_encoder_count = current_count;
+    }
+
     encoder_sample_count++;
 }
 

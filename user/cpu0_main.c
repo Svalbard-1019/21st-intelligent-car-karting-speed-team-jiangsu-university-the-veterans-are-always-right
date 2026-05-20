@@ -45,6 +45,40 @@
 
 extern int num;
 
+#define GUANDAO_SPEED_TO_MPS    (0.1f)
+
+static void Guandao_Rear_Motor_Update(void)
+{
+    float target_mps = 0.0f;
+
+    if(conrtol_mode == GUANDAO)
+    {
+        target_mps = (out_v_l + out_v_r) * 0.5f * GUANDAO_SPEED_TO_MPS;
+    }
+    else if(conrtol_mode == DAOCHE)
+    {
+        target_mps = daoche_speed * GUANDAO_SPEED_TO_MPS;
+    }
+    else if(main_mode != Rack_Test_Mode)
+    {
+        rear_motor_stop();
+        return;
+    }
+    else
+    {
+        return;
+    }
+
+    if(target_mps == 0.0f)
+    {
+        rear_motor_stop();
+    }
+    else
+    {
+        rear_motor_set_target_mps(target_mps);
+        rear_motor_pid_update_100ms();
+    }
+}
 double gk_d = 0;
 double gk_a = 0;
 uint8 port2_flag = 0;
@@ -119,6 +153,7 @@ int core0_main(void)
             default : break;
 
         }
+        Guandao_Rear_Motor_Update();
 //        ips200_show_float(X(1),  Y(8) ,INS.recode_gpsmap[INS.gps_recode_length -1].lat, 3,6);
 //        ips200_show_float(X(11),  Y(8) ,INS.recode_gpsmap[INS.gps_recode_length -1].lon, 3,6);
 //        ips200_show_float(X(1),  Y(9) ,INS.recode_gpsmap[INS.gps_recode_length -1].cheak_flag, 3,6);
