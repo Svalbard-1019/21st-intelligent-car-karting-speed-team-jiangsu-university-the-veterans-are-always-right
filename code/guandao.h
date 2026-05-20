@@ -82,6 +82,10 @@ extern float persuit_threshold ;  //PURSUIT_THRESHOLD
 extern float recode_threshold ;//RECORD_THRESHOLD
 extern int16 preview_spets ;       //PREVIEW_SPETS
 extern float final_dsts ;
+extern float guandao_debug_distance;
+extern float guandao_debug_angle_diff;
+extern float guandao_debug_dist_final;
+extern uint8 guandao_debug_stop_reason;
 //º¯Êý
 void guandao_state_init(guandao_state * e);
 void guandao_chain_init(void);

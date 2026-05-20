@@ -23,6 +23,10 @@ float recode_threshold = 0.4f;         // 路径记录阈值
 int16 preview_spets = 2;                  // 预瞄步数
 float daoche_speed = -10.0;           //倒车速度
 float final_dsts = 3.0f;                     // 终点距离减速阈值
+float guandao_debug_distance = 0.0f;
+float guandao_debug_angle_diff = 0.0f;
+float guandao_debug_dist_final = 0.0f;
+uint8 guandao_debug_stop_reason = 0;
 
 int16 daoche_point_length = 0;    // 倒车点长度
 uint8 daoche_flag =0;                    // 倒车标志
@@ -231,8 +235,10 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float actual_ld2 = 0 , preview_alpha2 =0;
     float target_steering = 0;
 
+    guandao_debug_stop_reason = 0;
     if(state->length_index == 0 || state->current_point_index ==state->length_index)
     {
+        guandao_debug_stop_reason = 1;
         * out_v_l = 0;
         * out_v_r = 0;
         *out_servo = 0;
@@ -246,17 +252,21 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float dx = target_point.x - current_point.x;
     float dy = target_point.y - current_point.y;
     float distance_to_target = hypotf(dx, dy);
+    guandao_debug_distance = distance_to_target;
     float angle_to_target = atan2f(dx,dy)/M_PI*180.0f;
     float angle_diff = angle_to_target - state->current_state.theta;
 
     while (angle_diff > 180.0f) angle_diff -= 360.0f;
     while (angle_diff < -180.0f) angle_diff += 360.0f;
+    guandao_debug_angle_diff = angle_diff;
 
     if(distance_to_target <= persuit_threshold|| fabsf(angle_diff) > 90.0f )//  || fabsf(angle_diff) > 90.0f
     {
+        guandao_debug_stop_reason = (distance_to_target <= persuit_threshold) ? 2 : 3;
         state->current_point_index++;
         if(state->current_point_index >=state->length_index )
         {   state->current_point_index = state->length_index;
+            guandao_debug_stop_reason = 4;
             * out_v_l = 0;
             * out_v_r = 0;
             *out_servo = 0;
@@ -293,6 +303,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
 //   slip_cheak(&guandao_ecd,target_steering);
 
    float dist_to_final = get_distance(state->current_state, state->recode_map[state->length_index -1]);
+   guandao_debug_dist_final = dist_to_final;
    float v_center = base_speed;
 
 

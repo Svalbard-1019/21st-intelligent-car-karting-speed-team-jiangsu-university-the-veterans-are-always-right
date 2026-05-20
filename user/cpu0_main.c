@@ -163,17 +163,15 @@ int core0_main(void)
 
             if(main_mode != Rack_Test_Mode)
             {
-                ips200_show_int(X(1),  Y(8),Speed_ecd.delta_l ,5);
-                ips200_show_int(X(10),  Y(8),Speed_ecd.delta_r ,5);
-//                ips200_show_int(X(10),  Y(9),MoterPID_R.out ,5);
-//            Moter_Set(5000 ,5000  );
-//            Speed_Control(10 , 10);
-
-
-//                    ips200_show_int(X(10),  Y(10),angle ,5);
-                    ips200_show_float(X(10),  Y(11),Yaw_1 ,5 ,5);
-//                    ips200_show_int(X(10),  Y(12),gpio_get_level(SWITCH2) ,5);
-                    ips200_show_int(X(10),  Y(12),angle_speed ,5);
+                ips200_show_string(X(1),  Y(8), "Idx");      ips200_show_int(X(6),  Y(8), INS.current_point_index, 4);
+                ips200_show_string(X(12), Y(8), "Len");      ips200_show_int(X(17), Y(8), INS.length_index, 4);
+                ips200_show_string(X(1),  Y(9), "D");        ips200_show_float(X(6),  Y(9), guandao_debug_distance, 3, 2);
+                ips200_show_string(X(12), Y(9), "A");        ips200_show_float(X(16), Y(9), guandao_debug_angle_diff, 3, 1);
+                ips200_show_string(X(1),  Y(10), "Reason");  ips200_show_int(X(10), Y(10), guandao_debug_stop_reason, 2);
+                ips200_show_string(X(1),  Y(11), "VlVr");    ips200_show_float(X(7),  Y(11), out_v_l, 3, 1); ips200_show_float(X(15), Y(11), out_v_r, 3, 1);
+                ips200_show_string(X(1),  Y(12), "TgtAct");  ips200_show_float(X(9),  Y(12), rear_motor_get_target_mps(), 2, 1); ips200_show_float(X(16), Y(12), rear_motor_get_speed_mps(), 2, 1);
+                ips200_show_string(X(1),  Y(13), "PWM");     ips200_show_int(X(7),  Y(13), rear_motor_get_pwm(), 5);
+                ips200_show_string(X(1),  Y(14), "Yaw");     ips200_show_float(X(7),  Y(14), Yaw_1, 4, 1);
             }
 //                    ips200_show_int(X(10),  Y(13),conrtol_mode ,5);
 //                    ips200_show_float(X(10),  Y(12),angle_speed ,5 ,5);
