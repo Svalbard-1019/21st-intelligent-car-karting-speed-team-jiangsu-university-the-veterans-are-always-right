@@ -445,22 +445,13 @@ void guandao_recode(guandao_state * state)
         choice_flag++;                                                  // 空指针保护：若链表提前结束则退出函数
     }
 
-    if(flag0){  guandao_state_init(p);   flag0 =0;}          // 清空路径点数组，重置索引和位姿
+    if(flag0){  guandao_state_init(p); daoche_point_length = 0; daoche_flash_cheack = 0;  flag0 =0;}          // 清空路径点数组，重置索引和位姿
     update_state(p  , &guandao_ecd);                        // 基于编码器数据更新当前车辆位姿（x, y, theta）
 
 
-    if(key1_save_wait_release)
+    if(gpio_get_level(KEY1))
     {
-        if(gpio_get_level(KEY1))
-        {
-            key1_flag = 0;
-            key1_save_wait_release = 0;
-        }
-        return;
-    }
-
-    if(!gpio_get_level(KEY1))
-    {
+        key1_flag = 0;
         now_ms = system_getval_ms();
         if(key1_save_start_ms == 0) key1_save_start_ms = now_ms;
         if((uint32)(now_ms - key1_save_start_ms) > 1500 && flag1)
@@ -468,16 +459,23 @@ void guandao_recode(guandao_state * state)
             Flash_Store_Mode(route_setting_choice);
             Buzzer_check(50);
             flag1 = 0;
-            key1_flag = 0;
             key1_save_wait_release = 1;
-            return;
         }
+        return;
     }
     else
     {
+        if(key1_save_start_ms != 0 && key1_save_wait_release == 0)
+        {
+            key1_flag = 1;                 // 短按松开后才记录停车点
+        }
         key1_save_start_ms = 0;
+        if(key1_save_wait_release)
+        {
+            key1_save_wait_release = 0;
+            return;
+        }
     }
-
     if( p == &passage)portion2_points_recode();     // passage路径：按键手动记录（适合构建复杂赛道）
     else recode_waypoint(p);                                         // 其他路径：自动等距记录（移动超过阈值自动记录）
 
