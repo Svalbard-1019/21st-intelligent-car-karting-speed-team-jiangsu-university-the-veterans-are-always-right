@@ -45,6 +45,15 @@
  *
  */
 
+/*
+ * 本工程的业务主流程在 user/cpu0_main.c：
+ * 1. 初始化逐飞库、IMU963RA、GPS、编码器、电机和屏幕；
+ * 2. 进入菜单选择记录/科目一/测试模式；
+ * 3. 主循环根据 main_mode 调用记录、自动驾驶或机架测试；
+ * 4. 科目一后轮速度统一通过 rear_motor 模块转换为 m/s 后闭环输出。
+ * 这个头文件保留英飞凌模板类型定义，业务接口主要由 zf_common_headfile.h 汇总包含。
+ */
+
 #ifndef CPU0_MAIN_H
 #define CPU0_MAIN_H
 

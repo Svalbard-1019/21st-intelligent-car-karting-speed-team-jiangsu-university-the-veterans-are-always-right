@@ -1,52 +1,56 @@
 /*********************************************************************************************************************
-* TC264 Opensourec Library ����TC264 ��Դ�⣩��һ�����ڹٷ� SDK �ӿڵĵ�������Դ��
-* Copyright (c) 2022 SEEKFREE ��ɿƼ�
+* TC264 Opensourec Library 即（TC264 开源库）是一个基于官方 SDK 接口的第三方开源库
+* Copyright (c) 2022 SEEKFREE 逐飞科技
 *
-* ���ļ��� TC264 ��Դ���һ����
+* 本文件是 TC264 开源库的一部分
 *
-* TC264 ��Դ�� ���������
-* �����Ը���������������ᷢ���� GPL��GNU General Public License���� GNUͨ�ù�������֤��������
-* �� GPL �ĵ�3�棨�� GPL3.0������ѡ��ģ��κκ����İ汾�����·�����/���޸���
+* TC264 开源库 是免费软件
+* 您可以根据自由软件基金会发布的 GPL（GNU General Public License，即 GNU通用公共许可证）的条款
+* 即 GPL 的第3版（即 GPL3.0）或（您选择的）任何后来的版本，重新发布和/或修改它
 *
-* ����Դ��ķ�����ϣ�����ܷ������ã�����δ�������κεı�֤
-* ����û�������������Ի��ʺ��ض���;�ı�֤
-* ����ϸ����μ� GPL
+* 本开源库的发布是希望它能发挥作用，但并未对其作任何的保证
+* 甚至没有隐含的适销性或适合特定用途的保证
+* 更多细节请参见 GPL
 *
-* ��Ӧ�����յ�����Դ���ͬʱ�յ�һ�� GPL �ĸ���
-* ���û�У������<https://www.gnu.org/licenses/>
+* 您应该在收到本开源库的同时收到一份 GPL 的副本
+* 如果没有，请参阅<https://www.gnu.org/licenses/>
 *
-* ����ע����
-* ����Դ��ʹ�� GPL3.0 ��Դ����֤Э�� ������������Ϊ���İ汾
-* ��������Ӣ�İ��� libraries/doc �ļ����µ� GPL3_permission_statement.txt �ļ���
-* ����֤������ libraries �ļ����� �����ļ����µ� LICENSE �ļ�
-* ��ӭ��λʹ�ò����������� ���޸�����ʱ���뱣����ɿƼ��İ�Ȩ����������������
+* 额外注明：
+* 本开源库使用 GPL3.0 开源许可证协议 以上许可申明为译文版本
+* 许可申明英文版在 libraries/doc 文件夹下的 GPL3_permission_statement.txt 文件中
+* 许可证副本在 libraries 文件夹下 即该文件夹下的 LICENSE 文件
+* 欢迎各位使用并传播本程序 但修改内容时必须保留逐飞科技的版权声明（即本声明）
 *
-* �ļ�����          cpu0_main
-* ��˾����          �ɶ���ɿƼ����޹�˾
-* �汾��Ϣ          �鿴 libraries/doc �ļ����� version �ļ� �汾˵��
-* ��������          ADS v1.10.2
-* ����ƽ̨          TC264D
-* ��������          https://seekfree.taobao.com/
+* 文件名称          cpu0_main
+* 公司名称          成都逐飞科技有限公司
+* 版本信息          查看 libraries/doc 文件夹内 version 文件 版本说明
+* 开发环境          ADS v1.10.2
+* 适用平台          TC264D
+* 店铺链接          https://seekfree.taobao.com/
 *
-* �޸ļ�¼
-* ����              ����                ��ע
+* 修改记录
+* 日期              作者                备注
 * 2022-09-15       pudding            first version
 ********************************************************************************************************************/
 #include "zf_common_headfile.h"
 #include "rear_motor/rear_motor.h"
 #pragma section all "cpu0_dsram"
-// ���������#pragma section all restore���֮���ȫ�ֱ���������CPU0��RAM��
+// 将本语句与#pragma section all restore语句之间的全局变量都放在CPU0的RAM中
 
-// �������ǿ�Դ��չ��� ��������ֲ���߲��Ը���������
-// �������ǿ�Դ��չ��� ��������ֲ���߲��Ը���������
-// �������ǿ�Դ��չ��� ��������ֲ���߲��Ը���������
+// 本例程是开源库空工程 可用作移植或者测试各类内外设
+// 本例程是开源库空工程 可用作移植或者测试各类内外设
+// 本例程是开源库空工程 可用作移植或者测试各类内外设
 
-// **************************** �������� ****************************
+// **************************** 代码区域 ****************************
 
 extern int num;
 
+// guandao.c 输出的 out_v_l/out_v_r 仍沿用旧工程的速度单位。
+// 后轮新模块使用 m/s，所以这里集中做比例换算，方便后续统一调速度标定。
 #define GUANDAO_SPEED_TO_MPS    (0.1f)
 
+// 记录菜单可以选择 INS/passage/portion_3/portion_2。
+// 屏幕调试页必须显示当前正在记录的那条链路，否则会误以为 Len/X/Y 没变化。
 static guandao_state *Get_Record_Display_State(void)
 {
     switch(route_setting_choice)
@@ -59,6 +63,9 @@ static guandao_state *Get_Record_Display_State(void)
     }
 }
 
+// 科目一自动驾驶和倒车模式最终都通过 rear_motor 模块驱动后轮。
+// 这个函数只做一件事：把惯导规划速度换成 m/s，并调用后轮闭环。
+// 非自动驾驶/非倒车/非测试模式下主动停后轮，避免退出模式后残留 PWM。
 static void Guandao_Rear_Motor_Update(void)
 {
     float target_mps = 0.0f;
@@ -100,52 +107,52 @@ uint8 port2_flag = 0;
 
 int core0_main(void)
 {
-    clock_init();                   // ��ȡʱ��Ƶ��<��ر���>
-    debug_init();                   // ��ʼ��Ĭ�ϵ��Դ���
-    // �˴���д�û����� ���������ʼ�������
+    clock_init();                   // 获取时钟频率<务必保留>
+    debug_init();                   // 初始化默认调试串口
+    // 此处编写用户代码 例如外设初始化代码等
 
-    Init_All();
-    rear_motor_init();
-    // ǰ��ת���Ϊ TIM4 �ű������ջ������ٳ�ʼ�� SPI ����ֵ������
-//    hotRc_Control_init();                                                              // RackTest����ң����������ռ��P33_6/P33_7������
-   pit_ms_init(CCU61_CH1, 1);
-   pit_ms_init(CCU61_CH0, 1);
+    Init_All();                         // 初始化屏幕、按键、蜂鸣器、编码器、电机、IMU、GPS、路径结构等外设
+    rear_motor_init();                  // 初始化后轮独立速度闭环模块，后续科目一直接使用这一套 PID/PWM 输出
+    // 前轮转向改为 TIM4 磁编码器闭环，不再初始化 SPI 绝对值编码器
+//    hotRc_Control_init();                                                              // RackTest禁用遥控器，避免占用P33_6/P33_7编码器
+   pit_ms_init(CCU61_CH1, 1);           // 1ms 周期任务：按键扫描、IMU 解算、旧速度控制入口
+   pit_ms_init(CCU61_CH0, 1);           // 1ms 周期任务：转向电机控制、GPS 解析节拍、后轮编码器采样
 
 
 
-    cpu_wait_event_ready();                                                          // �ȴ����к��ĳ�ʼ�����
+    cpu_wait_event_ready();                                                          // 等待所有核心初始化完毕
 
-    Flash_Main_Read();                                                                  // ��Flash�洢���ж�ȡ��Ҫ���ò���
+    Flash_Main_Read();                                                                  // 上电后读取 PID、路线点、GPS 辅助点等 Flash 数据
 
-    Menu_Contral();                                                                  // ���ò˵����ƺ�������ʾ�Ͳ������ò˵�
+    Menu_Contral();                                                                      // 菜单结束后 main_mode/conrtol_mode 已确定，主循环按模式执行
 
-    Flash_Write_pid();                                                               //Flashд��
+    Flash_Write_pid();                                                               //Flash写入
 
-    if(GPS_WORK_FLAG){GPS_WorkMap_Copy(&INS);}       //���GPS������־Ϊ��  ��GPS·�������ݸ��Ƶ��������ݽṹ��
+    if(GPS_WORK_FLAG){GPS_WorkMap_Copy(&INS);}       //如果GPS工作标志为真  将GPS路径点数据复制到导航数据结构中
 //    Buzzer_check(500);
-    Main_Key_Flag = 1;                                                            // �жϿ��ƿ�ʼ��־Ϊ1����ѭ�����жϿ���ͬʱ����
+    Main_Key_Flag = 1;                                                            // 中断控制开始标志为1，主循环和中断控制同时启动
 //    build_map_text(&INS);
 //    while(Steer_Mid_Cheak());
     while (TRUE)
     {
-        // �˴���д��Ҫѭ��ִ�еĴ���
+        // 此处编写需要循环执行的代码
 
-        switch(main_mode)                                                    // ������ģʽѡ��ִ�в�ͬ����
+        switch(main_mode)                                                    // 根据主模式选择执行不同功能
         {
-            case Mode_IDLE:                                                   // ����ģʽ
+            case Mode_IDLE:                                                   // 空闲模式
 
                 break;
 
-            case Guandao_Recode_Mode:                             // �ߵ���¼ģʽ
-//                hotRC_control();                                                // RackTest����ң����
-                guandao_recode(&INS);                                   // ��¼�ܵ�·����
+            case Guandao_Recode_Mode:                             // 惯导记录模式：推车时按后轮编码器自动累计 X/Y/Theta 和路线点
+//                hotRC_control();                                                // RackTest禁用遥控器
+                guandao_recode(&INS);                                   // 记录管道路径点
                 break;
 
-            case Guandao_portion_1:                                     // �ܵ�����1ģʽ
-                portion_1();                                                        // ִ�е�һ����·������
+            case Guandao_portion_1:                                     // 科目一自动驾驶：读取已保存 INS 路线并追踪到停车点/终点
+                portion_1();                                                        // 执行第一部分路径跟踪
                 break;
 
-            case Guandao_Voice:                                             // �ܵ�����ģʽ    ������
+            case Guandao_Voice:                                             // 管道语音模式    待完善
                 if(key1_flag == 1)
                 {
                     key1_flag = 0;
@@ -154,8 +161,8 @@ int core0_main(void)
                 portion2_points_trace(0 , 0 ,port2_flag );
                 break;
 
-            case Guandao_portion_3:                                     // �ܵ�����1ģʽ
-                guandao_trace(&INS);                                      // ִ�е�������·������
+            case Guandao_portion_3:                                     // 管道部分1模式
+                guandao_trace(&INS);                                      // 执行第三部分路径跟踪
                 break;
 
             case Rack_Test_Mode:
@@ -173,6 +180,8 @@ int core0_main(void)
 //        ips200_show_float(X(11),  Y(10) ,INS.gps_recode_length, 3,6);
 //        ips200_show_float(X(1),  Y(10) ,gnss.satellite_used, 3,6);
 
+            // 记录模式单独显示“记录诊断页”：
+            // Enc 不变说明编码器没进来；Enc 变但 X/Y/Len 不变，才继续查里程积分和记录阈值。
             if(main_mode == Guandao_Recode_Mode)
             {
                 guandao_state *record_state = Get_Record_Display_State();
@@ -187,6 +196,8 @@ int core0_main(void)
                 ips200_show_string(X(1),  Y(13), "Sat");     ips200_show_int(X(6),  Y(13), gnss.satellite_used, 3);
                 ips200_show_string(X(10), Y(13), "GFlag");   ips200_show_int(X(17), Y(13), gnss_flag, 1);
             }
+            // 自动驾驶诊断页：用于判断停车原因。
+            // Idx 接近 Len 表示路线追完；TgtAct/PWM 为 0 表示后轮目标已被上层清掉。
             else if(main_mode != Rack_Test_Mode)
             {
                 ips200_show_string(X(1),  Y(8), "Idx");      ips200_show_int(X(6),  Y(8), INS.current_point_index, 4);
@@ -204,7 +215,7 @@ int core0_main(void)
 //                    VeerMoter_Set(10000);
 
 //        hotRc_Show();
-        if(0 && main_mode != Rack_Test_Mode && x6f_out[4] ==200)                                          // ����ң�ؼ�ͣ������δ���ջ�ʱ�������
+        if(0 && main_mode != Rack_Test_Mode && x6f_out[4] ==200)                                          // 禁用遥控急停，避免未接收机时清零输出
         {
             conrtol_mode =IDLE;
             Moter_Set(0 , 0 );
@@ -223,7 +234,7 @@ int core0_main(void)
 //        }
 
 
-        // �˴���д��Ҫѭ��ִ�еĴ���
+        // 此处编写需要循环执行的代码
     }
 }
 
@@ -231,4 +242,4 @@ int core0_main(void)
 
 
 #pragma section all restore
-// **************************** �������� ****************************
+// **************************** 代码区域 ****************************
