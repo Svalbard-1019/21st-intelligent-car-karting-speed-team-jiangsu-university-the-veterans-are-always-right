@@ -38,6 +38,7 @@ uint8 TIM_FLAG3 = 0;
 Encoder_t Speed_ecd;
 Encoder_t guandao_ecd;
 Encoder_t Steer_ecd;
+#define ENCODER_DELTA_ABS_MAX       (200)
 uint8 rack_test_stage = 0;
 int16 rack_test_speed_target = 0;
 int32 rack_test_steer_target = 0;
@@ -341,7 +342,15 @@ void Encoder_Get(Encoder_t *count)
 
     count->left_counter = l_ecdcounter();                  // 获取左编码器计数
     int32 raw_delta = calculate_delta(count->left_counter,count ->last_ecdcount_l);
-    count->delta_l = (count->delta_l * 3 + raw_delta) / 4;
+    if(raw_delta > ENCODER_DELTA_ABS_MAX || raw_delta < -ENCODER_DELTA_ABS_MAX)
+    {
+        raw_delta = 0;
+        count->delta_l = 0;
+    }
+    else
+    {
+        count->delta_l = (count->delta_l * 3 + raw_delta) / 4;
+    }
     count->right_counter  = count->left_counter;           // 当前只接左编码器，左右后轮共用速度反馈
     count->delta_r = count->delta_l;
 //    ips200_show_int(X(1),  Y(8),count->delta_l ,5);

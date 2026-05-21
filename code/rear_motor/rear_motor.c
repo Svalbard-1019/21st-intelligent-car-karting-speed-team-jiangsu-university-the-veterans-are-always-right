@@ -199,6 +199,10 @@ void rear_motor_encoder_update_10ms(void)
     else
     {
         encoder_10ms = (int16)calculate_delta(current_count, last_encoder_count);
+        if(encoder_10ms > REAR_ENCODER_DELTA_ABS_MAX || encoder_10ms < -REAR_ENCODER_DELTA_ABS_MAX)
+        {
+            encoder_10ms = 0;
+        }
         last_encoder_count = current_count;
     }
 

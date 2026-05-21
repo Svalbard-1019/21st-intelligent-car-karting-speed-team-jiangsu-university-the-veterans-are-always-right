@@ -54,6 +54,7 @@
 #define REAR_PWM_RATE_LIMIT     1000
 #define REAR_INTEGRAL_LIMIT     2000.0f
 #define REAR_INTEGRAL_THRESHOLD 60.0f
+#define REAR_ENCODER_DELTA_ABS_MAX 300
 
 /* 速度限幅 (架上测试) */
 #define REAR_SPEED_MAX_MPS      5.0f
