@@ -34,6 +34,7 @@
 ********************************************************************************************************************/
 #include "zf_common_headfile.h"
 #include "rear_motor/rear_motor.h"
+#include <stdio.h>
 #pragma section all "cpu0_dsram"
 // 将本语句与#pragma section all restore语句之间的全局变量都放在CPU0的RAM中
 
@@ -48,6 +49,7 @@ extern int num;
 // guandao.c 输出的 out_v_l/out_v_r 仍沿用旧工程的速度单位。
 // 后轮新模块使用 m/s，所以这里集中做比例换算，方便后续统一调速度标定。
 #define GUANDAO_SPEED_TO_MPS    (0.1f)
+#define SERIAL_DEBUG_PERIOD_MS  (200)
 
 // 记录菜单可以选择 INS/passage/portion_3/portion_2。
 // 屏幕调试页必须显示当前正在记录的那条链路，否则会误以为 Len/X/Y 没变化。
@@ -96,6 +98,87 @@ static void Guandao_Rear_Motor_Update(void)
     {
         rear_motor_set_target_mps(target_mps);
         rear_motor_pid_update_100ms();
+    }
+}
+
+// Convert float data to a scaled integer before printing.
+// This avoids relying on floating-point printf support in the embedded C library.
+static int32 Serial_Debug_Scale(float value, float scale)
+{
+    return (int32)(value * scale);
+}
+
+// Output one line through the downloader/debug UART.
+// Hardware path: TC264 UART0, TX=P14_0, RX=P14_1, 115200 baud, initialized by debug_init().
+static void Serial_Debug_Write(const char *line)
+{
+    uart_write_string(DEBUG_UART_INDEX, line);
+}
+
+// Periodic serial diagnostics for subject-one record and autonomous trace modes.
+// REC lines are used while pushing the car to record points.
+// AUTO lines are used while the car is tracking the saved INS route.
+static void Serial_Debug_Update(void)
+{
+    static uint32 last_ms = 0;
+    uint32 now_ms = system_getval_ms();
+    char line[220];
+    int len;
+
+    if(now_ms - last_ms < SERIAL_DEBUG_PERIOD_MS)
+    {
+        return;
+    }
+    last_ms = now_ms;
+
+    if(main_mode == Guandao_Recode_Mode)
+    {
+        guandao_state *record_state = Get_Record_Display_State();
+
+        len = sprintf(line,
+                      "REC,t=%lu,route=%d,len=%d,full=%d,x100=%ld,y100=%ld,th10=%ld,encL=%d,encR=%d,key1=%d,gps=%d,sat=%d,gflag=%d\r\n",
+                      (unsigned long)now_ms,
+                      route_setting_choice,
+                      record_state->length_index,
+                      (record_state->length_index >= MAX_LENGTH_INDEX),
+                      (long)Serial_Debug_Scale(record_state->current_state.x, 100.0f),
+                      (long)Serial_Debug_Scale(record_state->current_state.y, 100.0f),
+                      (long)Serial_Debug_Scale(record_state->current_state.theta, 10.0f),
+                      guandao_ecd.delta_l,
+                      guandao_ecd.delta_r,
+                      gpio_get_level(KEY1),
+                      gnss.state,
+                      gnss.satellite_used,
+                      gnss_flag);
+        if(len > 0)
+        {
+            Serial_Debug_Write(line);
+        }
+    }
+    else if(main_mode == Guandao_portion_1)
+    {
+        len = sprintf(line,
+                      "AUTO,t=%lu,idx=%d,len=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      (unsigned long)now_ms,
+                      INS.current_point_index,
+                      INS.length_index,
+                      (long)Serial_Debug_Scale(guandao_debug_distance, 100.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_angle_diff, 10.0f),
+                      guandao_debug_stop_reason,
+                      (long)Serial_Debug_Scale(INS.current_state.x, 100.0f),
+                      (long)Serial_Debug_Scale(INS.current_state.y, 100.0f),
+                      (long)Serial_Debug_Scale(Yaw_1, 10.0f),
+                      (long)Serial_Debug_Scale(out_v_l, 10.0f),
+                      (long)Serial_Debug_Scale(out_v_r, 10.0f),
+                      (long)Serial_Debug_Scale(rear_motor_get_target_mps(), 100.0f),
+                      (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
+                      rear_motor_get_pwm(),
+                      rear_motor_get_encoder_10ms(),
+                      (long)rear_motor_get_encoder_100ms());
+        if(len > 0)
+        {
+            Serial_Debug_Write(line);
+        }
     }
 }
 double gk_d = 0;
@@ -173,6 +256,7 @@ int core0_main(void)
 
         }
         Guandao_Rear_Motor_Update();
+        Serial_Debug_Update();
 //        ips200_show_float(X(1),  Y(8) ,INS.recode_gpsmap[INS.gps_recode_length -1].lat, 3,6);
 //        ips200_show_float(X(11),  Y(8) ,INS.recode_gpsmap[INS.gps_recode_length -1].lon, 3,6);
 //        ips200_show_float(X(1),  Y(9) ,INS.recode_gpsmap[INS.gps_recode_length -1].cheak_flag, 3,6);
