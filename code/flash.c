@@ -39,6 +39,13 @@ float kp;
 float ki;
 float kd;
 
+static int16 flash_clamp_route_length(int16 length)
+{
+    if(length < 0) return 0;
+    if(length > MAX_LENGTH_INDEX) return MAX_LENGTH_INDEX;
+    return length;
+}
+
 
 /**
  * 函数说明：Flash_Read_pid()。从 Flash、传感器或缓存中读取数据，并同步到全局运行变量。
@@ -304,15 +311,24 @@ void Flash_Read_portion_3points(void)
 void Flash_Write_INSpoints(void)
 {
 
-    int max_storage = 2 * INS.length_index +2 ;
-    if (max_storage >=MAX_LENGTH_INDEX*2) max_storage = MAX_LENGTH_INDEX*2;
-    int gps_max_storage = max_storage +INS.gps_recode_length*2 + 2 ;
-    if(gps_max_storage >= max_storage +MAX_GPS_RECODE*2 +2)gps_max_storage = max_storage +MAX_GPS_RECODE*2+2;
+    int16 route_length = flash_clamp_route_length(INS.length_index);
+    int16 stop_length = flash_clamp_route_length(daoche_point_length);
+    if(stop_length > route_length) stop_length = route_length;
+    int16 gps_length = INS.gps_recode_length;
+    if(gps_length < 0) gps_length = 0;
+    if(gps_length > MAX_GPS_RECODE) gps_length = MAX_GPS_RECODE;
+
+    INS.length_index = route_length;
+    daoche_point_length = stop_length;
+    INS.gps_recode_length = gps_length;
+
+    int max_storage = 2 * route_length +2 ;
+    int gps_max_storage = max_storage + gps_length*2 + 2 ;
     flash_buffer_clear();
 
-    flash_union_buffer[0].int16_type = INS.length_index;
-    if(daoche_flash_cheack)flash_union_buffer[1].int16_type = daoche_point_length;
-    else{flash_union_buffer[1].int16_type = INS.length_index;}
+    flash_union_buffer[0].int16_type = route_length;
+    if(daoche_flash_cheack)flash_union_buffer[1].int16_type = stop_length;
+    else{flash_union_buffer[1].int16_type = route_length;}
     for(int i = 2 , j = 0;i < max_storage ; i += 2 , j++)
     {
         flash_union_buffer[i].float_type = INS.recode_map[j].x;
@@ -321,7 +337,7 @@ void Flash_Write_INSpoints(void)
     {
         flash_union_buffer[i].float_type = INS.recode_map[j].y;
     }
-    flash_union_buffer[max_storage].int16_type = INS.gps_recode_length;
+    flash_union_buffer[max_storage].int16_type = gps_length;
     for(int i = max_storage+2 , j = 0; i < gps_max_storage ; i+=2 , j++)
     {
         flash_union_buffer[i].int32_type = double_to_int32(INS.recode_gpsmap[j].lat);
@@ -355,8 +371,9 @@ void Flash_Read_INSpoints(void)
     {
         flash_buffer_clear();
         flash_read_page_to_buffer(FLASH_SECTION_INDEX, RECODE_MAP_POINTS_INDEX);
-        INS.length_index = flash_union_buffer[0].int16_type;
-        daoche_point_length = flash_union_buffer[1].int16_type ;
+        INS.length_index = flash_clamp_route_length(flash_union_buffer[0].int16_type);
+        daoche_point_length = flash_clamp_route_length(flash_union_buffer[1].int16_type);
+        if(daoche_point_length > INS.length_index) daoche_point_length = INS.length_index;
         get_max_storage =2 * INS.length_index +2;
         for(int i = 2 , j = 0;i < get_max_storage ; i += 2 , j++)
         {

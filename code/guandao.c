@@ -63,6 +63,40 @@ uint8 daoche_flash_cheack =0;// 倒车Flash检查标志
 static uint8 portion1_state_flag = 0;
 static uint16 portion1_finally_length = 0;
 
+#define GUANDAO_START_SEARCH_POINTS    10
+#define GUANDAO_TRACE_SEARCH_POINTS    8
+
+static int16 guandao_clamp_length(int16 length)
+{
+    if(length < 0) return 0;
+    if(length > MAX_LENGTH_INDEX) return MAX_LENGTH_INDEX;
+    return length;
+}
+
+static int guandao_find_closest_index(guandao_state *state, int start_index, int end_index)
+{
+    int best_index = start_index;
+    float best_distance = 0.0f;
+
+    if(state->length_index <= 0) return 0;
+    if(start_index < 0) start_index = 0;
+    if(end_index >= state->length_index) end_index = state->length_index - 1;
+    if(start_index > end_index) return start_index;
+
+    best_distance = get_distance(state->current_state, state->recode_map[start_index]);
+    for(int i = start_index + 1; i <= end_index; i++)
+    {
+        float distance = get_distance(state->current_state, state->recode_map[i]);
+        if(distance + 0.05f < best_distance)
+        {
+            best_distance = distance;
+            best_index = i;
+        }
+    }
+
+    return best_index;
+}
+
 /*初始化管道状态数据结构*/
 /**
  * 函数说明：guandao_state_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
@@ -190,7 +224,8 @@ void portion_1_reset(void)
 {
     portion1_state_flag = 0;
     portion1_finally_length = 0;
-    INS.current_point_index = (INS.length_index > 1) ? 1 : 0;
+    INS.length_index = guandao_clamp_length(INS.length_index);
+    INS.current_point_index = 0;
     daoche_flag = 0;
     out_v_l = 0;
     out_v_r = 0;
@@ -202,6 +237,13 @@ void portion_1_reset(void)
     Encoder_count_init(&Speed_ecd);
     encoder_clear_count(ENCODER_QUADDEC);
     rear_motor_stop();
+
+    if(INS.length_index > 1)
+    {
+        int end_index = INS.length_index - 1;
+        if(end_index > GUANDAO_START_SEARCH_POINTS) end_index = GUANDAO_START_SEARCH_POINTS;
+        INS.current_point_index = guandao_find_closest_index(&INS, 1, end_index);
+    }
 }
 /*第一部分路径跟踪（带倒车功能）*/
 // 科目一主流程。
@@ -280,6 +322,7 @@ void recode_waypoint(guandao_state * state)
     }
 
     static uint8 dche_flag = 1;
+    if(state->length_index >= MAX_LENGTH_INDEX)return;
     if(state == &INS && (key1_flag == 1|| x6f_out[3] ==200) && dche_flag ==1)  //遥控器控制
     {
         key1_flag =0;
@@ -361,6 +404,18 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     }
 
     state_t current_point = state->current_state;
+    if(state->current_point_index < 0) state->current_point_index = 0;
+    if(state->current_point_index >= state->length_index) state->current_point_index = state->length_index - 1;
+
+    int search_end_index = state->current_point_index + GUANDAO_TRACE_SEARCH_POINTS;
+    if(search_end_index >= state->length_index) search_end_index = state->length_index - 1;
+    int closest_index = guandao_find_closest_index(state, state->current_point_index, search_end_index);
+    if(closest_index > state->current_point_index)
+    {
+        state->current_point_index = closest_index;
+        guandao_debug_stop_reason = 5;
+    }
+
     state_t target_point = state->recode_map[state->current_point_index];
 
     float dx = target_point.x - current_point.x;
@@ -378,7 +433,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     // 旧逻辑曾用 |angle_diff| > 90 直接跳点，车头方向一反就会瞬间跳到终点并停车。
     if(distance_to_target <= persuit_threshold)
     {
-        guandao_debug_stop_reason = 2;
+        if(guandao_debug_stop_reason == 0) guandao_debug_stop_reason = 2;
         state->current_point_index++;
         if(state->current_point_index >=state->length_index )
         {   state->current_point_index = state->length_index;
@@ -927,7 +982,7 @@ uint8 portion3_points_switch(void)
         portion_3.recode_map[portion_3.length_index].y = portion_3.recode_map[portion_3.length_index - 1].y - i*recode_threshold;
         portion_3.length_index ++;
 
-        if(portion_3.length_index >MAX_LENGTH_INDEX)return 0;
+        if(portion_3.length_index >=MAX_LENGTH_INDEX)return 0;
     }
 
     for(int i =cut_length ; i < portion_3.length_index ; i++)
@@ -1067,7 +1122,7 @@ void follow_points_show(guandao_state * p)
  */
 void Key_Recode_Point(guandao_state * e)
 {
-    if(e->length_index >MAX_LENGTH_INDEX) return;
+    if(e->length_index >=MAX_LENGTH_INDEX) return;
     e->recode_map[e->length_index] =e->current_state;
     e->length_index  ++;
 
