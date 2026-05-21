@@ -33,17 +33,52 @@
  */
 #include "zf_common_headfile.h"
 
-float speed_pid[6]={0};
-int16 control[5];
+float speed_pid[6]={0.5f, 1.0f, 0.0f, 0.4f, 0.4f, 3.0f};
+int16 control[5] = {10, -10, 2, 0, 0};
 float kp;
 float ki;
 float kd;
+
+#define FLASH_RECODE_THRESHOLD_DEFAULT   (0.4f)
+#define FLASH_RECODE_THRESHOLD_MIN       (0.05f)
+#define FLASH_RECODE_THRESHOLD_MAX       (2.0f)
+#define FLASH_PURSUIT_THRESHOLD_DEFAULT  (0.4f)
+#define FLASH_PURSUIT_THRESHOLD_MIN      (0.05f)
+#define FLASH_PURSUIT_THRESHOLD_MAX      (3.0f)
+#define FLASH_FINAL_DSTS_DEFAULT         (3.0f)
+#define FLASH_FINAL_DSTS_MIN             (0.3f)
+#define FLASH_FINAL_DSTS_MAX             (20.0f)
 
 static int16 flash_clamp_route_length(int16 length)
 {
     if(length < 0) return 0;
     if(length > MAX_LENGTH_INDEX) return MAX_LENGTH_INDEX;
     return length;
+}
+
+static float flash_sanitize_float(float value, float fallback, float min_value, float max_value)
+{
+    if(!(value >= min_value && value <= max_value))
+    {
+        return fallback;
+    }
+    return value;
+}
+
+static void flash_sanitize_runtime_params(void)
+{
+    speed_pid[3] = flash_sanitize_float(speed_pid[3],
+                                        FLASH_RECODE_THRESHOLD_DEFAULT,
+                                        FLASH_RECODE_THRESHOLD_MIN,
+                                        FLASH_RECODE_THRESHOLD_MAX);
+    speed_pid[4] = flash_sanitize_float(speed_pid[4],
+                                        FLASH_PURSUIT_THRESHOLD_DEFAULT,
+                                        FLASH_PURSUIT_THRESHOLD_MIN,
+                                        FLASH_PURSUIT_THRESHOLD_MAX);
+    speed_pid[5] = flash_sanitize_float(speed_pid[5],
+                                        FLASH_FINAL_DSTS_DEFAULT,
+                                        FLASH_FINAL_DSTS_MIN,
+                                        FLASH_FINAL_DSTS_MAX);
 }
 
 
@@ -66,6 +101,7 @@ void Flash_Read_pid(void)
         {
             speed_pid[i] = flash_union_buffer[i].float_type;
         }
+        flash_sanitize_runtime_params();
         MoterPID_L.Kp = speed_pid[0];
         MoterPID_R.Kp = speed_pid[0];
         MoterPID_L.Ki = speed_pid[1];
@@ -99,6 +135,7 @@ void Flash_Read_pid(void)
 void Flash_Write_pid(void)
 {
     flash_buffer_clear();
+    flash_sanitize_runtime_params();
 
     MoterPID_L.Kp = speed_pid[0];
     MoterPID_R.Kp = speed_pid[0];

@@ -136,11 +136,12 @@ static void Serial_Debug_Update(void)
         guandao_state *record_state = Get_Record_Display_State();
 
         len = sprintf(line,
-                      "REC,t=%lu,route=%d,len=%d,full=%d,x100=%ld,y100=%ld,th10=%ld,encL=%d,encR=%d,key1=%d,gps=%d,sat=%d,gflag=%d\r\n",
+                      "REC,t=%lu,route=%d,len=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,encL=%d,encR=%d,key1=%d,gps=%d,sat=%d,gflag=%d\r\n",
                       (unsigned long)now_ms,
                       route_setting_choice,
                       record_state->length_index,
                       (record_state->length_index >= MAX_LENGTH_INDEX),
+                      (long)Serial_Debug_Scale(recode_threshold, 100.0f),
                       (long)Serial_Debug_Scale(record_state->current_state.x, 100.0f),
                       (long)Serial_Debug_Scale(record_state->current_state.y, 100.0f),
                       (long)Serial_Debug_Scale(record_state->current_state.theta, 10.0f),
