@@ -508,7 +508,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    *out_v_l = v_center + (w * TRACK_WIDTH / 2.0f);
    *out_v_r = v_center - (w * TRACK_WIDTH / 2.0f);
 
-   *out_servo = target_steering;
+   *out_servo = -target_steering;
 
 
 }

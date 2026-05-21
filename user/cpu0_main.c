@@ -159,7 +159,7 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,idx=%d,len=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      "AUTO,t=%lu,idx=%d,len=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
                       (unsigned long)now_ms,
                       INS.current_point_index,
                       INS.length_index,
@@ -171,6 +171,7 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(Yaw_1, 10.0f),
                       (long)Serial_Debug_Scale(out_v_l, 10.0f),
                       (long)Serial_Debug_Scale(out_v_r, 10.0f),
+                      (long)Serial_Debug_Scale(out_servo, 10.0f),
                       (long)Serial_Debug_Scale(rear_motor_get_target_mps(), 100.0f),
                       (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
                       rear_motor_get_pwm(),
