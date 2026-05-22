@@ -139,8 +139,6 @@ extern float final_dsts ;
 extern float guandao_debug_distance;             // 自动驾驶调试：当前位置到当前目标点距离
 extern float guandao_debug_angle_diff;           // 自动驾驶调试：车头方向与目标点方向夹角
 extern float guandao_debug_dist_final;           // 自动驾驶调试：当前位置到终点距离
-extern float guandao_debug_base_speed;           // 自动驾驶调试：本轮纯追踪使用的 base_speed
-extern float guandao_debug_v_center;             // 自动驾驶调试：减速逻辑处理后的中心速度
 extern uint8 guandao_debug_stop_reason;          // 自动驾驶调试：0正常，1空路线，2到点切换，4到终点
 // ============================== 函数接口 ==============================
 // 记录流程：guandao_recode() -> update_state() -> recode_waypoint()。
