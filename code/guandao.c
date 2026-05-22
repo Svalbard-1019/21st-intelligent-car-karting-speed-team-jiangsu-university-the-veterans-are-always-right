@@ -48,7 +48,7 @@ uint8 route_setting_choice = 0;        // 路径选择标志（0-3）
 
 float base_speed = 10.0f;
 float persuit_threshold = 0.4f;         // 纯追踪阈值（到达目标点的距离容差）
-float recode_threshold = 0.4f;         // 路径记录阈值
+float recode_threshold = 0.2f;         // 路径记录阈值
 int16 preview_spets = 2;                  // 预瞄步数
 float daoche_speed = -10.0;           //倒车速度
 float final_dsts = 3.0f;                     // 终点距离减速阈值
