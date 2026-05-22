@@ -467,7 +467,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    }
    else if(fabsf(angle_diff) <=90)
    {
-       target_steering = 3.0f*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
+       target_steering = GUANDAO_STEERING_GAIN*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
    }
    ips200_show_float(X(10),  Y(9),target_steering ,5 ,5);
 
@@ -495,6 +495,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
            break;
        default : break;
    }
+   Value_Limit_float(&target_steering ,-MAX_STEERING_RAD,MAX_STEERING_RAD);
 
 
    if (dist_to_final < final_dsts && state->current_point_index >= state->length_index - 30)
@@ -507,6 +508,22 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    }
 
    // 差动驱动速度分配：这里仍是惯导旧速度单位，cpu0_main.c 会再换算为 m/s 给 rear_motor。
+   static float smoothed_steering = 0.0f;
+   static uint32 last_steer_ms = 0;
+   uint32 now_steer_ms = system_getval_ms();
+   uint32 steer_dt_ms = (last_steer_ms == 0) ? 10 : (uint32)(now_steer_ms - last_steer_ms);
+   float max_steer_step = 0.0f;
+   float steer_delta = 0.0f;
+
+   if(steer_dt_ms > 50) steer_dt_ms = 50;
+   max_steer_step = GUANDAO_STEERING_RATE_PER_10MS * ((float)steer_dt_ms / 10.0f);
+   if(max_steer_step < 0.5f) max_steer_step = 0.5f;
+   steer_delta = target_steering - smoothed_steering;
+   Value_Limit_float(&steer_delta, -max_steer_step, max_steer_step);
+   smoothed_steering += steer_delta;
+   target_steering = smoothed_steering;
+   last_steer_ms = now_steer_ms;
+
    guandao_debug_v_center = v_center;
    float w = (v_center * tanf(target_steering/3.0f/180.0f*M_PI)) / WHEEL_BASE;
    *out_v_l = v_center + (w * TRACK_WIDTH / 2.0f);

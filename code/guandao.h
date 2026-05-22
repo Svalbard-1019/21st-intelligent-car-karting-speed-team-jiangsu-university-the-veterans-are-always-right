@@ -41,8 +41,10 @@
 #define M_PI                                   3.14159265358979323846f
 #define WHEEL_BASE                             0.724f     // 前后轴距，单位 m，用于纯追踪转角计算
 #define TRACK_WIDTH                            0.594f     // 左右轮距，单位 m，用于差速速度分配
-#define MIN_SPEED                              10.0f      // 惯导旧速度单位下的最低速度，最终会在 cpu0_main.c 换算为 m/s
-#define MAX_STEERING_RAD                       90.0f      // 转向目标角限幅，单位 deg
+#define MIN_SPEED                              3.0f       // 惯导旧速度单位下的最低速度，最终会在 cpu0_main.c 换算为 m/s
+#define MAX_STEERING_RAD                       35.0f      // 转向目标角限幅，单位 deg
+#define GUANDAO_STEERING_GAIN                  1.8f       // 纯追踪转向增益，降低大角度猛修
+#define GUANDAO_STEERING_RATE_PER_10MS         3.0f       // 转向目标变化率限制，单位 deg/10ms
 #define SLIP_CHEAK_INDEX                       4.0f       // 打滑检测阈值，保留旧逻辑
 #define START_GPS_FLAG                         1          // GPS 辅助开关标志
 #define PORTION_TWO_INDEX                      3
