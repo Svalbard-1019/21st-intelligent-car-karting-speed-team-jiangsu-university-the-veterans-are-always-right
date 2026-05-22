@@ -122,7 +122,7 @@ static void Serial_Debug_Update(void)
 {
     static uint32 last_ms = 0;
     uint32 now_ms = system_getval_ms();
-    char line[384];
+    char line[220];
     int len;
 
     if(now_ms - last_ms < SERIAL_DEBUG_PERIOD_MS)
@@ -135,8 +135,7 @@ static void Serial_Debug_Update(void)
     {
         guandao_state *record_state = Get_Record_Display_State();
 
-        len = snprintf(line,
-                      sizeof(line),
+        len = sprintf(line,
                       "REC,t=%lu,route=%d,len=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,encL=%d,encR=%d,key1=%d,gps=%d,sat=%d,gflag=%d\r\n",
                       (unsigned long)now_ms,
                       route_setting_choice,
@@ -159,9 +158,8 @@ static void Serial_Debug_Update(void)
     }
     else if(main_mode == Guandao_portion_1)
     {
-        len = snprintf(line,
-                      sizeof(line),
-                      "AUTO,t=%lu,idx=%d,len=%d,D100=%ld,A10=%ld,DF100=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,off10=%ld,base10=%ld,vc10=%ld,avg10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,steerA10=%ld,steerOut=%d,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+        len = sprintf(line,
+                      "AUTO,t=%lu,idx=%d,len=%d,D100=%ld,A10=%ld,DF100=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,base10=%ld,vc10=%ld,avg10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
                       (unsigned long)now_ms,
                       INS.current_point_index,
                       INS.length_index,
@@ -172,15 +170,12 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(INS.current_state.x, 100.0f),
                       (long)Serial_Debug_Scale(INS.current_state.y, 100.0f),
                       (long)Serial_Debug_Scale(Yaw_1, 10.0f),
-                      (long)Serial_Debug_Scale(guandao_debug_yaw_offset, 10.0f),
                       (long)Serial_Debug_Scale(guandao_debug_base_speed, 10.0f),
                       (long)Serial_Debug_Scale(guandao_debug_v_center, 10.0f),
                       (long)Serial_Debug_Scale((out_v_l + out_v_r) * 0.5f, 10.0f),
                       (long)Serial_Debug_Scale(out_v_l, 10.0f),
                       (long)Serial_Debug_Scale(out_v_r, 10.0f),
                       (long)Serial_Debug_Scale(out_servo, 10.0f),
-                      (long)Serial_Debug_Scale((float)angle, 10.0f),
-                      angle_speed,
                       (long)Serial_Debug_Scale(rear_motor_get_target_mps(), 100.0f),
                       (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
                       rear_motor_get_pwm(),
@@ -308,7 +303,7 @@ int core0_main(void)
                 ips200_show_string(X(1),  Y(12), "TgtAct");  ips200_show_float(X(9),  Y(12), rear_motor_get_target_mps(), 2, 1); ips200_show_float(X(16), Y(12), rear_motor_get_speed_mps(), 2, 1);
                 ips200_show_string(X(1),  Y(13), "PWM");     ips200_show_int(X(7),  Y(13), rear_motor_get_pwm(), 5);
                 ips200_show_string(X(1),  Y(14), "Yaw");     ips200_show_float(X(7),  Y(14), Yaw_1, 4, 1);
-                ips200_show_string(X(1),  Y(15), "St");      ips200_show_float(X(5),  Y(15), out_servo, 3, 1); ips200_show_float(X(13), Y(15), (float)angle, 3, 1);
+                ips200_show_string(X(1),  Y(15), "XY");      ips200_show_float(X(5),  Y(15), INS.current_state.x, 3, 1); ips200_show_float(X(13), Y(15), INS.current_state.y, 3, 1);
             }
 //                    ips200_show_int(X(10),  Y(13),conrtol_mode ,5);
 //                    ips200_show_float(X(10),  Y(12),angle_speed ,5 ,5);

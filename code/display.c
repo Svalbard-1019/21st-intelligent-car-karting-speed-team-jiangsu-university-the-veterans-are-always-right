@@ -247,7 +247,7 @@ void Menu_1(void)
 
     key_mode1 =2;
     prompt();
-    if(key_value == 3&& key_mode1 ==2){CarGo_Flag =1; Buzzer_check(50);}
+    if(key_value == 3&& key_mode1 ==2){CarGo_Flag =1;}
 
     if(key_value == 4){key_mode2 =1;ips200_clear();}
 

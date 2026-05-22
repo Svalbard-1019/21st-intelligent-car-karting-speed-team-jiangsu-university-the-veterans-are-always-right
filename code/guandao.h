@@ -41,10 +41,8 @@
 #define M_PI                                   3.14159265358979323846f
 #define WHEEL_BASE                             0.724f     // 前后轴距，单位 m，用于纯追踪转角计算
 #define TRACK_WIDTH                            0.594f     // 左右轮距，单位 m，用于差速速度分配
-#define MIN_SPEED                              3.0f       // 惯导旧速度单位下的最低速度，最终会在 cpu0_main.c 换算为 m/s
-#define MAX_STEERING_RAD                       22.0f      // 转向目标角限幅，单位 deg
-#define GUANDAO_STEERING_GAIN                  1.0f       // 纯追踪转向增益，降低大角度猛修
-#define GUANDAO_STEERING_RATE_PER_10MS         1.2f       // 转向目标变化率限制，单位 deg/10ms
+#define MIN_SPEED                              10.0f      // 惯导旧速度单位下的最低速度，最终会在 cpu0_main.c 换算为 m/s
+#define MAX_STEERING_RAD                       90.0f      // 转向目标角限幅，单位 deg
 #define SLIP_CHEAK_INDEX                       4.0f       // 打滑检测阈值，保留旧逻辑
 #define START_GPS_FLAG                         1          // GPS 辅助开关标志
 #define PORTION_TWO_INDEX                      3
@@ -143,7 +141,6 @@ extern float guandao_debug_angle_diff;           // 自动驾驶调试：车头�
 extern float guandao_debug_dist_final;           // 自动驾驶调试：当前位置到终点距离
 extern float guandao_debug_base_speed;           // 自动驾驶调试：本轮纯追踪使用的 base_speed
 extern float guandao_debug_v_center;             // 自动驾驶调试：减速逻辑处理后的中心速度
-extern float guandao_debug_yaw_offset;           // 自动驾驶调试：路线起点航向和当前 IMU 航向的对齐偏移，单位 deg
 extern uint8 guandao_debug_stop_reason;          // 自动驾驶调试：0正常，1空路线，2到点切换，4到终点
 // ============================== 函数接口 ==============================
 // 记录流程：guandao_recode() -> update_state() -> recode_waypoint()。
