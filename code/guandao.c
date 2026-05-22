@@ -236,41 +236,17 @@ float get_distance(state_t p1, state_t p2)
 void update_state(guandao_state * state , Encoder_t * ecd)
 {
     float delta_real_center = 0;
-    float delta_real_l = 0;
-    float delta_real_r = 0;
     Encoder_Get(ecd);
-    switch(slip_state)
-    {
-        case NONE:
-            delta_real_l = (float)ecd->delta_l*ONE_TICK_DISTANCE;
-            delta_real_r = (float)ecd->delta_r*ONE_TICK_DISTANCE;
-
-            break;
-
-        case Left_Slip:
-            delta_real_r = (float)ecd->delta_r*ONE_TICK_DISTANCE;
-            delta_real_l = delta_real_r;
-
-            break;
-
-        case Right_Slip:
-            delta_real_l = (float)ecd->delta_l*ONE_TICK_DISTANCE;
-            delta_real_r = delta_real_l;
-
-            break;
-
-        default : break;
-    }
+    delta_real_center = (float)ecd->delta_l * ONE_TICK_DISTANCE;
 
     if(!daoche_flag)
     {
-        delta_real_center  = (delta_real_l+delta_real_r)/2.0f;
         state->current_state.theta =Yaw_1 + guandao_heading_offset;
         angle_plan(&state->current_state.theta);
     }
     else
     {
-        delta_real_center  = -(delta_real_l+delta_real_r)/2.0f;
+        delta_real_center = -delta_real_center;
         state->current_state.theta =Yaw_1 + guandao_heading_offset + 180.0f;
         angle_plan(&state->current_state.theta);
     }
