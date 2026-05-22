@@ -70,7 +70,7 @@ static float guandao_smoothed_steering = 0.0f;
 static uint32 guandao_last_steer_ms = 0;
 
 #define GUANDAO_START_SEARCH_POINTS    10
-#define GUANDAO_TRACE_SEARCH_POINTS    8
+#define GUANDAO_TRACE_SEARCH_POINTS    25
 #define GUANDAO_DEFAULT_PURSUIT_THRESHOLD 0.4f
 
 static int16 guandao_clamp_length(int16 length)
@@ -97,6 +97,44 @@ static int guandao_find_closest_index(guandao_state *state, int start_index, int
         if(distance + 0.05f < best_distance)
         {
             best_distance = distance;
+            best_index = i;
+        }
+    }
+
+    return best_index;
+}
+
+static int guandao_find_trace_index(guandao_state *state, int start_index, int end_index)
+{
+    int best_index = start_index;
+    float best_score = 1000000.0f;
+
+    if(state->length_index <= 0) return 0;
+    if(start_index < 0) start_index = 0;
+    if(end_index >= state->length_index) end_index = state->length_index - 1;
+    if(start_index > end_index) return start_index;
+
+    for(int i = start_index; i <= end_index; i++)
+    {
+        float dx = state->recode_map[i].x - state->current_state.x;
+        float dy = state->recode_map[i].y - state->current_state.y;
+        float distance = hypotf(dx, dy);
+        float angle_to_point = atan2f(dx, dy) / M_PI * 180.0f;
+        float angle_error = angle_to_point - state->current_state.theta;
+        float score = 0.0f;
+
+        while(angle_error > 180.0f) angle_error -= 360.0f;
+        while(angle_error < -180.0f) angle_error += 360.0f;
+
+        score = distance + fabsf(angle_error) * 0.01f;
+        if(fabsf(angle_error) > 120.0f)
+        {
+            score += 3.0f;
+        }
+
+        if(score < best_score)
+        {
+            best_score = score;
             best_index = i;
         }
     }
@@ -452,7 +490,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
 
     int search_end_index = state->current_point_index + GUANDAO_TRACE_SEARCH_POINTS;
     if(search_end_index >= state->length_index) search_end_index = state->length_index - 1;
-    int closest_index = guandao_find_closest_index(state, state->current_point_index, search_end_index);
+    int closest_index = guandao_find_trace_index(state, state->current_point_index, search_end_index);
     if(closest_index > state->current_point_index)
     {
         state->current_point_index = closest_index;
@@ -471,6 +509,22 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     while (angle_diff > 180.0f) angle_diff -= 360.0f;
     while (angle_diff < -180.0f) angle_diff += 360.0f;
     guandao_debug_angle_diff = angle_diff;
+
+    if(fabsf(angle_diff) > 110.0f && distance_to_target > persuit_threshold * 2.0f && state->current_point_index < state->length_index - 1)
+    {
+        state->current_point_index++;
+        target_point = state->recode_map[state->current_point_index];
+        dx = target_point.x - current_point.x;
+        dy = target_point.y - current_point.y;
+        distance_to_target = hypotf(dx, dy);
+        guandao_debug_distance = distance_to_target;
+        angle_to_target = atan2f(dx,dy)/M_PI*180.0f;
+        angle_diff = angle_to_target - state->current_state.theta;
+        while (angle_diff > 180.0f) angle_diff -= 360.0f;
+        while (angle_diff < -180.0f) angle_diff += 360.0f;
+        guandao_debug_angle_diff = angle_diff;
+        guandao_debug_stop_reason = 6;
+    }
 
     // 只允许“距离足够近”时切到下一个路线点。
     // 旧逻辑曾用 |angle_diff| > 90 直接跳点，车头方向一反就会瞬间跳到终点并停车。
