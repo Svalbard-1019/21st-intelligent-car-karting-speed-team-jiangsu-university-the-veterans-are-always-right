@@ -55,6 +55,8 @@ float final_dsts = 3.0f;                     // 终点距离减速阈值
 float guandao_debug_distance = 0.0f;
 float guandao_debug_angle_diff = 0.0f;
 float guandao_debug_dist_final = 0.0f;
+float guandao_debug_base_speed = 0.0f;
+float guandao_debug_v_center = 0.0f;
 uint8 guandao_debug_stop_reason = 0;
 
 int16 daoche_point_length = 0;    // 倒车点长度
@@ -477,6 +479,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    float dist_to_final = get_distance(state->current_state, state->recode_map[state->length_index -1]);
    guandao_debug_dist_final = dist_to_final;
    float v_center = base_speed;
+   guandao_debug_base_speed = base_speed;
 
 
    switch(route_setting_choice)
@@ -504,6 +507,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    }
 
    // 差动驱动速度分配：这里仍是惯导旧速度单位，cpu0_main.c 会再换算为 m/s 给 rear_motor。
+   guandao_debug_v_center = v_center;
    float w = (v_center * tanf(target_steering/3.0f/180.0f*M_PI)) / WHEEL_BASE;
    *out_v_l = v_center + (w * TRACK_WIDTH / 2.0f);
    *out_v_r = v_center - (w * TRACK_WIDTH / 2.0f);
