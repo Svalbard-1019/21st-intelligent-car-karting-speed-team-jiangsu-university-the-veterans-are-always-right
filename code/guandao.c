@@ -758,6 +758,8 @@ void guandao_recode(guandao_state * state)
     static uint8 flag1 = 1;                                                 // Flash存储标志（1=允许存储，0=已存储），防止重复保存
     static uint32 key1_save_start_ms = 0;
     static uint8 key1_save_wait_release = 0;
+    static uint32 rc_ch3_start_ms = 0;
+    static uint8 rc_ch3_wait_release = 0;
     uint32 now_ms = 0;
     int choice_flag = 0;                                                    // 路径选择计数器，用于遍历链表找到目标路径
 
@@ -803,16 +805,44 @@ void guandao_recode(guandao_state * state)
             return;
         }
     }
+    // SBUS CH3: short press records a GPS assist point, long press saves the route.
+    // SBUS CH4 is still handled by recode_waypoint() as the stop-point command.
+    if(x6f_out[2] == 200)
+    {
+        now_ms = system_getval_ms();
+        if(rc_ch3_start_ms == 0) rc_ch3_start_ms = now_ms;
+        if((uint32)(now_ms - rc_ch3_start_ms) > 1500 && flag1)
+        {
+            Flash_Store_Mode(route_setting_choice);
+            Buzzer_check(50);
+            flag1 = 0;
+            rc_ch3_wait_release = 1;
+        }
+        return;
+    }
+    else
+    {
+        if(rc_ch3_start_ms != 0 && rc_ch3_wait_release == 0)
+        {
+            if(GPS_WORK_FLAG)
+            {
+                recode_gps(p);
+                Buzzer_check(20);
+            }
+        }
+        rc_ch3_start_ms = 0;
+        if(rc_ch3_wait_release)
+        {
+            rc_ch3_wait_release = 0;
+            return;
+        }
+    }
     if( p == &passage)portion2_points_recode();     // passage路径：按键手动记录（适合构建复杂赛道）
     else recode_waypoint(p);                                         // 其他路径：自动等距记录（移动超过阈值自动记录）
 
 //    guandao_show(p);                                                // 在IPS200屏幕上显示路径信息（长度、位姿等）
     if(GPS_WORK_FLAG){if(key2_flag == 1){ key2_flag = 0 ; recode_gps(p);  }}        // GPS辅助记录（可选）：当GPS工作标志为真且按键2被按下时
 //     guandao_show();
-
-
-    if((x6f_out[2] == 200)&&flag1){   Flash_Store_Mode(route_setting_choice);  Buzzer_check(50);  flag1 = 0; };    // Flash存储触发：长按KEY1或遥控器通道2（值为200）
-    // flag1确保只存储一次，避免重复写入
 
 }
 /*这是一个路径生成器函数，
