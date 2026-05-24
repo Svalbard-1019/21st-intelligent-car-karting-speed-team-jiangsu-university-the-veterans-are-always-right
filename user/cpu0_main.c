@@ -122,7 +122,7 @@ static void Serial_Debug_Update(void)
 {
     static uint32 last_ms = 0;
     uint32 now_ms = system_getval_ms();
-    char line[220];
+    static char line[320];
     int len;
 
     if(now_ms - last_ms < SERIAL_DEBUG_PERIOD_MS)
@@ -159,13 +159,18 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,idx=%d,len=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
                       (unsigned long)now_ms,
                       INS.current_point_index,
                       INS.length_index,
+                      INS.planned_length,
+                      INS.plan_ready,
                       (long)Serial_Debug_Scale(guandao_debug_distance, 100.0f),
                       (long)Serial_Debug_Scale(guandao_debug_angle_diff, 10.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_dist_final, 100.0f),
                       guandao_debug_stop_reason,
+                      (long)Serial_Debug_Scale(persuit_threshold, 100.0f),
+                      preview_spets,
                       (long)Serial_Debug_Scale(INS.current_state.x, 100.0f),
                       (long)Serial_Debug_Scale(INS.current_state.y, 100.0f),
                       (long)Serial_Debug_Scale(Yaw_1, 10.0f),

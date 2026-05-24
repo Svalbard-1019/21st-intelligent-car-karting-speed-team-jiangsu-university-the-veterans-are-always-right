@@ -33,13 +33,13 @@
  */
 #include "zf_common_headfile.h"
 
-float speed_pid[6]={0.5f, 1.0f, 0.0f, 0.4f, 0.4f, 3.0f};
+float speed_pid[6]={0.5f, 1.0f, 0.0f, 0.2f, 0.4f, 3.0f};
 int16 control[5] = {10, -10, 2, 0, 0};
 float kp;
 float ki;
 float kd;
 
-#define FLASH_RECODE_THRESHOLD_DEFAULT   (0.4f)
+#define FLASH_RECODE_THRESHOLD_DEFAULT   (0.2f)
 #define FLASH_RECODE_THRESHOLD_MIN       (0.05f)
 #define FLASH_RECODE_THRESHOLD_MAX       (2.0f)
 #define FLASH_PURSUIT_THRESHOLD_DEFAULT  (0.4f)
@@ -404,6 +404,8 @@ void Flash_Write_INSpoints(void)
 void Flash_Read_INSpoints(void)
 {
     int get_max_storage = 0;
+    INS.planned_length = 0;
+    INS.plan_ready = 0;
     if(flash_check(FLASH_SECTION_INDEX,RECODE_MAP_POINTS_INDEX))
     {
         flash_buffer_clear();

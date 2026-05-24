@@ -95,10 +95,13 @@ typedef struct {
 typedef struct guandao{
         state_t current_state;              // 当前实时位姿，由 update_state() 按编码器和 IMU 更新
         state_t recode_map[MAX_LENGTH_INDEX]; // 推车记录得到的路线点数组
+        state_t planned_map[MAX_LENGTH_INDEX]; // 自动驾驶前由 recode_map 生成的平滑路线点数组
         GPS_state recode_gpsmap[MAX_GPS_RECODE]; // GPS 辅助点，按 KEY2 记录，用于远距离校验/修正
 
         int16 length_index;              // 已记录路线点数量，也是自动驾驶的目标路线长度
+        int16 planned_length;            // 平滑路线点数量，plan_ready 为 1 时供追踪使用
         int current_point_index;        // 自动驾驶当前正在追踪的点索引
+        uint8 plan_ready;                // 平滑路线可用标志，避免记录模式误用 planned_map
 
         int16 gps_recode_length;        // 已记录 GPS 辅助点数量
 
@@ -195,6 +198,7 @@ float get_distance(state_t p1, state_t p2);                                     
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void recode_waypoint(guandao_state * state);                                 //点位记录函数
+void guandao_build_smooth_plan(guandao_state * state);                       //由记录点生成平滑追踪路线
 /**
  * 接口说明：pursuit_contral_mode()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
  * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。

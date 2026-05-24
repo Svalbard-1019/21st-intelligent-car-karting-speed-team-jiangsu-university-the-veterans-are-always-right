@@ -73,20 +73,37 @@ static int16 guandao_clamp_length(int16 length)
     return length;
 }
 
+static int16 guandao_route_length(guandao_state *state)
+{
+    if(state->plan_ready && state->planned_length > 0) return state->planned_length;
+    return guandao_clamp_length(state->length_index);
+}
+
+static state_t guandao_route_point(guandao_state *state, int index)
+{
+    int16 route_length = guandao_route_length(state);
+    if(route_length <= 0) return state->current_state;
+    if(index < 0) index = 0;
+    if(index >= route_length) index = route_length - 1;
+    if(state->plan_ready && state->planned_length > 0) return state->planned_map[index];
+    return state->recode_map[index];
+}
+
 static int guandao_find_closest_index(guandao_state *state, int start_index, int end_index)
 {
     int best_index = start_index;
     float best_distance = 0.0f;
+    int16 route_length = guandao_route_length(state);
 
-    if(state->length_index <= 0) return 0;
+    if(route_length <= 0) return 0;
     if(start_index < 0) start_index = 0;
-    if(end_index >= state->length_index) end_index = state->length_index - 1;
+    if(end_index >= route_length) end_index = route_length - 1;
     if(start_index > end_index) return start_index;
 
-    best_distance = get_distance(state->current_state, state->recode_map[start_index]);
+    best_distance = get_distance(state->current_state, guandao_route_point(state, start_index));
     for(int i = start_index + 1; i <= end_index; i++)
     {
-        float distance = get_distance(state->current_state, state->recode_map[i]);
+        float distance = get_distance(state->current_state, guandao_route_point(state, i));
         if(distance + 0.05f < best_distance)
         {
             best_distance = distance;
@@ -114,6 +131,8 @@ void guandao_state_init(guandao_state * e)
     e->current_state.x=0.0f;
     e->current_state.y=0.0f;
     e->length_index=0;
+    e->planned_length=0;
+    e->plan_ready=0;
 
     e ->gps_recode_length =0;
 
@@ -226,6 +245,8 @@ void portion_1_reset(void)
     portion1_finally_length = 0;
     INS.length_index = guandao_clamp_length(INS.length_index);
     INS.current_point_index = 0;
+    INS.planned_length = 0;
+    INS.plan_ready = 0;
     daoche_flag = 0;
     out_v_l = 0;
     out_v_r = 0;
@@ -272,11 +293,19 @@ void portion_1(void)
         {
             INS.length_index = portion1_finally_length;            // 没有停车点时跑完整INS路线
         }
+        guandao_build_smooth_plan(&INS);
+        INS.current_point_index = 0;
+        if(INS.planned_length > 1)
+        {
+            int end_index = INS.planned_length - 1;
+            if(end_index > GUANDAO_START_SEARCH_POINTS) end_index = GUANDAO_START_SEARCH_POINTS;
+            INS.current_point_index = guandao_find_closest_index(&INS, 1, end_index);
+        }
         portion1_state_flag = 1;
     }
 
     pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
-    if(INS.current_point_index >= INS.length_index)
+    if(INS.current_point_index >= guandao_route_length(&INS))
     {
         out_v_l = 0;
         out_v_r = 0;
@@ -348,6 +377,54 @@ void recode_waypoint(guandao_state * state)
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
+void guandao_build_smooth_plan(guandao_state * state)
+{
+    int16 source_length = guandao_clamp_length(state->length_index);
+    state->planned_length = 0;
+    state->plan_ready = 0;
+
+    if(source_length <= 0) return;
+    if(source_length < 3)
+    {
+        for(int i = 0; i < source_length; i++)
+        {
+            state->planned_map[i] = state->recode_map[i];
+        }
+        state->planned_length = source_length;
+        state->plan_ready = 1;
+        return;
+    }
+
+    int samples = (MAX_LENGTH_INDEX - 1) / (source_length - 1);
+    if(samples < 1) samples = 1;
+    if(samples > 6) samples = 6;
+
+    for(int i = 0; i < source_length - 1 && state->planned_length < MAX_LENGTH_INDEX - 1; i++)
+    {
+        state_t p0 = state->recode_map[(i > 0) ? i - 1 : i];
+        state_t p1 = state->recode_map[i];
+        state_t p2 = state->recode_map[i + 1];
+        state_t p3 = state->recode_map[(i + 2 < source_length) ? i + 2 : i + 1];
+
+        for(int j = 0; j < samples && state->planned_length < MAX_LENGTH_INDEX - 1; j++)
+        {
+            float t = (float)j / (float)samples;
+            float t2 = t * t;
+            float t3 = t2 * t;
+            state_t out;
+            out.x = 0.5f * ((2.0f * p1.x) + (-p0.x + p2.x) * t + (2.0f * p0.x - 5.0f * p1.x + 4.0f * p2.x - p3.x) * t2 + (-p0.x + 3.0f * p1.x - 3.0f * p2.x + p3.x) * t3);
+            out.y = 0.5f * ((2.0f * p1.y) + (-p0.y + p2.y) * t + (2.0f * p0.y - 5.0f * p1.y + 4.0f * p2.y - p3.y) * t2 + (-p0.y + 3.0f * p1.y - 3.0f * p2.y + p3.y) * t3);
+            out.theta = p1.theta + (p2.theta - p1.theta) * t;
+            state->planned_map[state->planned_length] = out;
+            state->planned_length++;
+        }
+    }
+
+    state->planned_map[state->planned_length] = state->recode_map[source_length - 1];
+    state->planned_length++;
+    state->plan_ready = 1;
+}
+
 void portion2_points_recode(void)
 {
     static int16 p2p_r_flag1= 0 ;
@@ -391,9 +468,10 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float actual_ld = 0 , preview_alpha =0;
     float actual_ld2 = 0 , preview_alpha2 =0;
     float target_steering = 0;
+    int16 route_length = guandao_route_length(state);
 
     guandao_debug_stop_reason = 0;
-    if(state->length_index == 0 || state->current_point_index ==state->length_index)
+    if(route_length == 0 || state->current_point_index == route_length)
     {
         guandao_debug_stop_reason = 1;
         * out_v_l = 0;
@@ -405,10 +483,10 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
 
     state_t current_point = state->current_state;
     if(state->current_point_index < 0) state->current_point_index = 0;
-    if(state->current_point_index >= state->length_index) state->current_point_index = state->length_index - 1;
+    if(state->current_point_index >= route_length) state->current_point_index = route_length - 1;
 
     int search_end_index = state->current_point_index + GUANDAO_TRACE_SEARCH_POINTS;
-    if(search_end_index >= state->length_index) search_end_index = state->length_index - 1;
+    if(search_end_index >= route_length) search_end_index = route_length - 1;
     int closest_index = guandao_find_closest_index(state, state->current_point_index, search_end_index);
     if(closest_index > state->current_point_index)
     {
@@ -416,7 +494,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
         guandao_debug_stop_reason = 5;
     }
 
-    state_t target_point = state->recode_map[state->current_point_index];
+    state_t target_point = guandao_route_point(state, state->current_point_index);
 
     float dx = target_point.x - current_point.x;
     float dy = target_point.y - current_point.y;
@@ -435,8 +513,8 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     {
         if(guandao_debug_stop_reason == 0) guandao_debug_stop_reason = 2;
         state->current_point_index++;
-        if(state->current_point_index >=state->length_index )
-        {   state->current_point_index = state->length_index;
+        if(state->current_point_index >= route_length )
+        {   state->current_point_index = route_length;
             guandao_debug_stop_reason = 4;
             * out_v_l = 0;
             * out_v_r = 0;
@@ -474,7 +552,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
 
 //   slip_cheak(&guandao_ecd,target_steering);
 
-   float dist_to_final = get_distance(state->current_state, state->recode_map[state->length_index -1]);
+   float dist_to_final = get_distance(state->current_state, guandao_route_point(state, route_length - 1));
    guandao_debug_dist_final = dist_to_final;
    float v_center = base_speed;
 
@@ -494,7 +572,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    }
 
 
-   if (dist_to_final < final_dsts && state->current_point_index >= state->length_index - 30)
+   if (dist_to_final < final_dsts && state->current_point_index >= route_length - 30)
    {
 
        persuit_threshold = persuit_threshold*(dist_to_final / final_dsts);
@@ -532,7 +610,8 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
 void azimuth_adjust(guandao_state * state ,float start_d , float dist_to_final , float * target_steering , float target_yaw )
 {
     float angle_delta = 0;
-    if(dist_to_final < start_d && state->current_point_index >= state->length_index - 30)
+    int16 route_length = guandao_route_length(state);
+    if(dist_to_final < start_d && state->current_point_index >= route_length - 30)
     {
         if(!daoche_flag)angle_delta  = target_yaw - Yaw_1;
         else angle_delta  = -(target_yaw - Yaw_1);
@@ -573,18 +652,25 @@ void azimuth_adjust(guandao_state * state ,float start_d , float dist_to_final ,
 void pursuit_midhandle(guandao_state * state ,state_t * current_state , int index ,float * angle , float * distanse)
 {
     int preview_index = 0;
+    int16 route_length = guandao_route_length(state);
+    if(route_length <= 0)
+    {
+        *angle = 0.0f;
+        *distanse = 0.1f;
+        return;
+    }
     if(main_mode == Guandao_Recode_Mode)
     {
-        preview_index = state->length_index - 1;
+        preview_index = route_length - 1;
     }
     else
     {
         preview_index = state->current_point_index+index;
     }
 
-   if(preview_index >=state->length_index)preview_index = state->length_index - 1;
+   if(preview_index >= route_length)preview_index = route_length - 1;
 
-   state_t preview_point = state->recode_map[preview_index];
+   state_t preview_point = guandao_route_point(state, preview_index);
 
    float p_dx = preview_point.x - current_state->x;
    float p_dy = preview_point.y - current_state->y;
