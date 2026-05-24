@@ -64,6 +64,50 @@ void hotRc_Control_init(void)//遥控器引脚初始化
 
 }
 
+// SBUS receiver control.
+// Current hardware uses UART2: TX placeholder P10_5, RX P10_6.
+// CH1 controls steering, CH2 controls throttle. Channel range is usually 172~1811.
+#define SBUS_MIN    172
+#define SBUS_MID    1024
+#define SBUS_MAX    1811
+
+void sbus_rc_control(void)
+{
+    if(uart_receiver.state == 0)
+    {
+        hot_rc_speed = 0;
+        hot_rc_steer = 0;
+        hot_rc_delta = 0;
+        x6f_out[2] = 100;
+        x6f_out[3] = 100;
+        return;
+    }
+
+    uint16 ch_steer = uart_receiver.channel[0];
+    uint16 ch_throttle = uart_receiver.channel[1];
+    uint16 ch_save = uart_receiver.channel[2];
+    uint16 ch_stop = uart_receiver.channel[3];
+
+    hot_rc_steer = (float)(SBUS_MID - ch_steer) * 30.0f / (SBUS_MAX - SBUS_MID);
+    if(hot_rc_steer > -2.0f && hot_rc_steer < 2.0f)
+    {
+        hot_rc_steer = 0;
+    }
+
+    hot_rc_speed = (float)(SBUS_MID - ch_throttle) * 15.0f / (SBUS_MAX - SBUS_MID);
+    if(hot_rc_speed > -1.0f && hot_rc_speed < 1.0f)
+    {
+        hot_rc_speed = 0;
+    }
+
+    hot_rc_delta = (hot_rc_speed * tanf(hot_rc_steer / 3.0f / 180.0f * M_PI)) / WHEEL_BASE;
+
+    x6f_out[0] = (int16)ch_steer;
+    x6f_out[1] = (int16)ch_throttle;
+    x6f_out[2] = (ch_save > 1500) ? 200 : 100;
+    x6f_out[3] = (ch_stop > 1500) ? 200 : 100;
+}
+
 /**
  * 函数说明：hotRc_Show()。负责屏幕显示或菜单跳转，不直接改变底层硬件接线。
  * 所属模块：遥控器输入模块，当前科目一和 RackTest 基本禁用，避免和编码器/GPS 引脚冲突。

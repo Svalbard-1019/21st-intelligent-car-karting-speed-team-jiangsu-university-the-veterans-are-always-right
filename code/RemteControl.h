@@ -135,6 +135,7 @@ uint16_t map_x6f_to_pwm(int16_t x6f_out_0);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 int16_t motor_map_x6f_to_pwm(int16_t x6f_out_0);
+void sbus_rc_control(void);
 //void Control_TEXT();
 
 #endif /* CODE_REMTECONTROL_H_ */

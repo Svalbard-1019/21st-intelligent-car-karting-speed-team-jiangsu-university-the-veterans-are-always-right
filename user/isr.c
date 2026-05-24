@@ -97,7 +97,7 @@ IFX_INTERRUPT(cc61_pit_ch0_isr, 0, CCU6_1_CH0_ISR_PRIORITY)
     }
 
     /* 后轮独立模块: ISR 只做10ms编码器采样, PID在主循环处理 */
-    if(conrtol_mode == RACK_TEST || conrtol_mode == GUANDAO || conrtol_mode == DAOCHE)
+    if(conrtol_mode == RACK_TEST || conrtol_mode == GUANDAO || conrtol_mode == DAOCHE || conrtol_mode == YAOKONG)
     {
         static uint8 rear_tick = 0;
         rear_tick++;
@@ -150,7 +150,6 @@ IFX_INTERRUPT(cc61_pit_ch1_isr, 0, CCU6_1_CH1_ISR_PRIORITY)
                     case IDLE:
                         break;
                     case YAOKONG:
-                        Speed_Control(hot_rc_speed +(hot_rc_delta * TRACK_WIDTH / 2.0f) ,hot_rc_speed- (hot_rc_delta * TRACK_WIDTH / 2.0f));
                         break;
                     case GUANDAO:
                         break;

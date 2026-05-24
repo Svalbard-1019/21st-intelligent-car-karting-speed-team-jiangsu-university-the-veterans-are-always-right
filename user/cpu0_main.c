@@ -80,6 +80,10 @@ static void Guandao_Rear_Motor_Update(void)
     {
         target_mps = daoche_speed * GUANDAO_SPEED_TO_MPS;
     }
+    else if(conrtol_mode == YAOKONG)
+    {
+        target_mps = hot_rc_speed * GUANDAO_SPEED_TO_MPS;
+    }
     else if(main_mode != Rack_Test_Mode)
     {
         rear_motor_stop();
@@ -203,6 +207,7 @@ int core0_main(void)
 
     Init_All();                         // 初始化屏幕、按键、蜂鸣器、编码器、电机、IMU、GPS、路径结构等外设
     rear_motor_init();                  // 初始化后轮独立速度闭环模块，后续科目一直接使用这一套 PID/PWM 输出
+    uart_receiver_init();               // SBUS receiver: UART2, TX placeholder P10_5, RX P10_6, 100000 baud
     // 前轮转向改为 TIM4 磁编码器闭环，不再初始化 SPI 绝对值编码器
 //    hotRc_Control_init();                                                              // RackTest禁用遥控器，避免占用P33_6/P33_7编码器
    pit_ms_init(CCU61_CH1, 1);           // 1ms 周期任务：按键扫描、IMU 解算、旧速度控制入口
@@ -226,6 +231,8 @@ int core0_main(void)
     while (TRUE)
     {
         // 此处编写需要循环执行的代码
+
+        sbus_rc_control();
 
         switch(main_mode)                                                    // 根据主模式选择执行不同功能
         {
