@@ -64,13 +64,19 @@ static uint8 portion1_state_flag = 0;
 static uint16 portion1_finally_length = 0;
 static uint8 portion1_reverse_state = 0;
 static uint32 portion1_reverse_wait_start_ms = 0;
+static uint32 portion1_reverse_run_start_ms = 0;
 static state_t portion1_reverse_start_state = {0.0f, 0.0f, 0.0f};
 
 #define GUANDAO_START_SEARCH_POINTS    10
 #define GUANDAO_TRACE_SEARCH_POINTS    8
 #define GUANDAO_REVERSE_TRIGGER_DIST   0.35f
+#define GUANDAO_REVERSE_FINAL_DIST     0.55f
 #define GUANDAO_REVERSE_WAIT_MS        300u
-#define GUANDAO_REVERSE_DISTANCE       0.45f
+#define GUANDAO_REVERSE_DISTANCE       0.55f
+#define GUANDAO_REVERSE_MIN_MS         1800u
+#define GUANDAO_REVERSE_MAX_MS         3500u
+#define GUANDAO_STEERING_GAIN          2.2f
+#define GUANDAO_STEERING_CMD_LIMIT     65.0f
 
 static int16 guandao_clamp_length(int16 length)
 {
@@ -251,6 +257,7 @@ void portion_1_reset(void)
     portion1_finally_length = 0;
     portion1_reverse_state = 0;
     portion1_reverse_wait_start_ms = 0;
+    portion1_reverse_run_start_ms = 0;
     portion1_reverse_start_state.x = 0.0f;
     portion1_reverse_start_state.y = 0.0f;
     portion1_reverse_start_state.theta = 0.0f;
@@ -325,6 +332,7 @@ void portion_1(void)
         if((uint32)(system_getval_ms() - portion1_reverse_wait_start_ms) >= GUANDAO_REVERSE_WAIT_MS)
         {
             portion1_reverse_start_state = INS.current_state;
+            portion1_reverse_run_start_ms = system_getval_ms();
             daoche_flag = 1;
             conrtol_mode = DAOCHE;
             portion1_reverse_state = 2;
@@ -338,7 +346,9 @@ void portion_1(void)
         guandao_debug_stop_reason = 7;
         conrtol_mode = DAOCHE;
         guandao_debug_dist_final = get_distance(INS.current_state, portion1_reverse_start_state);
-        if(guandao_debug_dist_final >= GUANDAO_REVERSE_DISTANCE)
+        uint32 reverse_elapsed_ms = (uint32)(system_getval_ms() - portion1_reverse_run_start_ms);
+        if((guandao_debug_dist_final >= GUANDAO_REVERSE_DISTANCE && reverse_elapsed_ms >= GUANDAO_REVERSE_MIN_MS)
+                || reverse_elapsed_ms >= GUANDAO_REVERSE_MAX_MS)
         {
             out_v_l = 0;
             out_v_r = 0;
@@ -360,13 +370,36 @@ void portion_1(void)
     }
     else
     {
+        int16 active_route_length = 0;
+        uint8 reverse_ready = 0;
+        uint8 final_stop_ready = 0;
         pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
-        if(INS.current_point_index >= guandao_route_length(&INS))
+        active_route_length = guandao_route_length(&INS);
+        if(active_route_length > 0 && INS.current_point_index >= active_route_length - 2 && guandao_debug_dist_final <= GUANDAO_REVERSE_FINAL_DIST)
+        {
+            final_stop_ready = 1;
+        }
+        if(daoche_point_length > 0 && daoche_point_length < portion1_finally_length)
+        {
+            if(INS.current_point_index >= active_route_length)
+            {
+                reverse_ready = 1;
+            }
+            else if(INS.current_point_index >= active_route_length - 2 && guandao_debug_distance <= GUANDAO_REVERSE_TRIGGER_DIST)
+            {
+                reverse_ready = 1;
+            }
+            else if(guandao_debug_dist_final <= GUANDAO_REVERSE_FINAL_DIST)
+            {
+                reverse_ready = 1;
+            }
+        }
+        if(reverse_ready || final_stop_ready || INS.current_point_index >= active_route_length)
         {
             out_v_l = 0;
             out_v_r = 0;
             out_servo = 0;
-            if(daoche_point_length > 0 && daoche_point_length < portion1_finally_length && guandao_debug_distance <= GUANDAO_REVERSE_TRIGGER_DIST)
+            if(reverse_ready)
             {
                 portion1_reverse_wait_start_ms = system_getval_ms();
                 portion1_reverse_state = 1;
@@ -375,6 +408,7 @@ void portion_1(void)
             }
             else
             {
+                guandao_debug_stop_reason = 4;
                 conrtol_mode = GUANDAO;
             }
         }
@@ -601,16 +635,16 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
 
    if(angle_diff >=90)
    {
-       target_steering = 30.0f;
+       target_steering = GUANDAO_STEERING_CMD_LIMIT;
 
    }
    else if(angle_diff <= -90)
    {
-       target_steering = -30.0f;
+       target_steering = -GUANDAO_STEERING_CMD_LIMIT;
    }
    else if(fabsf(angle_diff) <=90)
    {
-       target_steering = 3.0f*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
+       target_steering = GUANDAO_STEERING_GAIN*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
    }
    ips200_show_float(X(10),  Y(9),target_steering ,5 ,5);
 
@@ -636,6 +670,16 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
 
            break;
        default : break;
+   }
+
+   Value_Limit_float(&target_steering ,-GUANDAO_STEERING_CMD_LIMIT,GUANDAO_STEERING_CMD_LIMIT);
+
+   if(fabsf(preview_alpha2) > 45.0f)
+   {
+       float curve_scale = 1.0f - (fabsf(preview_alpha2) - 45.0f) / 90.0f;
+       Value_Limit_float(&curve_scale, 0.55f, 1.0f);
+       v_center = base_speed * curve_scale;
+       if(v_center < MIN_SPEED) v_center = MIN_SPEED;
    }
 
 
