@@ -62,9 +62,15 @@ uint8 daoche_flag =0;                    // 倒车标志
 uint8 daoche_flash_cheack =0;// 倒车Flash检查标志
 static uint8 portion1_state_flag = 0;
 static uint16 portion1_finally_length = 0;
+static uint8 portion1_reverse_state = 0;
+static uint32 portion1_reverse_wait_start_ms = 0;
+static state_t portion1_reverse_start_state = {0.0f, 0.0f, 0.0f};
 
 #define GUANDAO_START_SEARCH_POINTS    10
 #define GUANDAO_TRACE_SEARCH_POINTS    8
+#define GUANDAO_REVERSE_TRIGGER_DIST   0.35f
+#define GUANDAO_REVERSE_WAIT_MS        300u
+#define GUANDAO_REVERSE_DISTANCE       0.45f
 
 static int16 guandao_clamp_length(int16 length)
 {
@@ -243,6 +249,11 @@ void portion_1_reset(void)
 {
     portion1_state_flag = 0;
     portion1_finally_length = 0;
+    portion1_reverse_state = 0;
+    portion1_reverse_wait_start_ms = 0;
+    portion1_reverse_start_state.x = 0.0f;
+    portion1_reverse_start_state.y = 0.0f;
+    portion1_reverse_start_state.theta = 0.0f;
     INS.length_index = guandao_clamp_length(INS.length_index);
     INS.current_point_index = 0;
     INS.planned_length = 0;
@@ -304,13 +315,69 @@ void portion_1(void)
         portion1_state_flag = 1;
     }
 
-    pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
-    if(INS.current_point_index >= guandao_route_length(&INS))
+    if(portion1_reverse_state == 1)
     {
         out_v_l = 0;
         out_v_r = 0;
         out_servo = 0;
+        guandao_debug_stop_reason = 6;
         conrtol_mode = GUANDAO;
+        if((uint32)(system_getval_ms() - portion1_reverse_wait_start_ms) >= GUANDAO_REVERSE_WAIT_MS)
+        {
+            portion1_reverse_start_state = INS.current_state;
+            daoche_flag = 1;
+            conrtol_mode = DAOCHE;
+            portion1_reverse_state = 2;
+        }
+    }
+    else if(portion1_reverse_state == 2)
+    {
+        out_v_l = daoche_speed;
+        out_v_r = daoche_speed;
+        out_servo = 0;
+        guandao_debug_stop_reason = 7;
+        conrtol_mode = DAOCHE;
+        guandao_debug_dist_final = get_distance(INS.current_state, portion1_reverse_start_state);
+        if(guandao_debug_dist_final >= GUANDAO_REVERSE_DISTANCE)
+        {
+            out_v_l = 0;
+            out_v_r = 0;
+            out_servo = 0;
+            daoche_flag = 0;
+            conrtol_mode = IDLE;
+            portion1_reverse_state = 3;
+            rear_motor_stop();
+            Buzzer_check(50);
+        }
+    }
+    else if(portion1_reverse_state == 3)
+    {
+        out_v_l = 0;
+        out_v_r = 0;
+        out_servo = 0;
+        guandao_debug_stop_reason = 8;
+        conrtol_mode = IDLE;
+    }
+    else
+    {
+        pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
+        if(INS.current_point_index >= guandao_route_length(&INS))
+        {
+            out_v_l = 0;
+            out_v_r = 0;
+            out_servo = 0;
+            if(daoche_point_length > 0 && daoche_point_length < portion1_finally_length && guandao_debug_distance <= GUANDAO_REVERSE_TRIGGER_DIST)
+            {
+                portion1_reverse_wait_start_ms = system_getval_ms();
+                portion1_reverse_state = 1;
+                conrtol_mode = GUANDAO;
+                Buzzer_check(30);
+            }
+            else
+            {
+                conrtol_mode = GUANDAO;
+            }
+        }
     }
     follow_points_show(&INS);
 }
