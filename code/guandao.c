@@ -76,7 +76,7 @@ static state_t portion1_reverse_start_state = {0.0f, 0.0f, 0.0f};
 #define GUANDAO_REVERSE_MIN_MS         1800u
 #define GUANDAO_REVERSE_MAX_MS         3500u
 #define GUANDAO_STEERING_GAIN          2.2f
-#define GUANDAO_STEERING_CMD_LIMIT     65.0f
+#define GUANDAO_STEERING_CMD_LIMIT     35.0f
 
 static int16 guandao_clamp_length(int16 length)
 {
