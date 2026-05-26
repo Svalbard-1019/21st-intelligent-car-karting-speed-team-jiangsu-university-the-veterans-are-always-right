@@ -75,6 +75,7 @@ static state_t portion1_reverse_start_state = {0.0f, 0.0f, 0.0f};
 #define GUANDAO_REVERSE_DISTANCE       0.55f
 #define GUANDAO_REVERSE_MIN_MS         1800u
 #define GUANDAO_REVERSE_MAX_MS         3500u
+#define GUANDAO_REVERSE_SPEED_UNITS    -6.0f
 #define GUANDAO_STEERING_GAIN          2.2f
 #define GUANDAO_STEERING_CMD_LIMIT     35.0f
 
@@ -340,8 +341,9 @@ void portion_1(void)
     }
     else if(portion1_reverse_state == 2)
     {
-        out_v_l = daoche_speed;
-        out_v_r = daoche_speed;
+        daoche_speed = GUANDAO_REVERSE_SPEED_UNITS;
+        out_v_l = GUANDAO_REVERSE_SPEED_UNITS;
+        out_v_r = GUANDAO_REVERSE_SPEED_UNITS;
         out_servo = 0;
         guandao_debug_stop_reason = 7;
         conrtol_mode = DAOCHE;

@@ -262,6 +262,10 @@ void rear_motor_pid_update_100ms(void)
     float ff     = target_pulses * REAR_FF_GAIN;
     float pid    = REAR_KP * error + REAR_KI * integral + REAR_KD * derivative;
     float pwm_f  = ff + pid;
+    if(target_mps < -0.01f && pwm_f > -(float)REAR_REVERSE_PWM_MIN)
+    {
+        pwm_f = -(float)REAR_REVERSE_PWM_MIN;
+    }
 
     encoder_100ms = 0;
     rear_motor_set_pwm((int16)pwm_f);
