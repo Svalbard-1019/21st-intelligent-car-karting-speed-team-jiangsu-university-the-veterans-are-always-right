@@ -35,6 +35,19 @@
 
 GPS_work gps_work;
 Lost_Point lost_judge;
+
+#define GPS_RECODE_AVERAGE_SAMPLES        20
+#define GPS_RECODE_SAMPLE_INTERVAL_MS     10u
+
+static guandao_state *gps_recode_average_state = NULL;
+static uint8 gps_recode_average_active = 0;
+static uint8 gps_recode_average_count = 0;
+static uint8 gps_recode_pair_flag = 0;
+static uint32 gps_recode_last_sample_ms = 0;
+static double gps_recode_lat_sum = 0.0;
+static double gps_recode_lon_sum = 0.0;
+static float gps_recode_yaw_sin_sum = 0.0f;
+static float gps_recode_yaw_cos_sum = 0.0f;
 /**
  * 函数说明：angle_plan()。完成本模块中的一个独立步骤，具体行为由函数体内的状态变量和硬件调用决定。
  * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
@@ -62,27 +75,93 @@ void angle_plan(float * angle)
  */
 void recode_gps(guandao_state * state)
 {
-    static uint8 rcd_gps_flag = 0 ;
-    switch(rcd_gps_flag)
+    if(state == NULL) return;
+    if(state->gps_recode_length >= MAX_GPS_RECODE) return;
+    if(gps_recode_average_active) return;
+    if(state->gps_recode_length <= 0) gps_recode_pair_flag = 0;
+
+    gps_recode_average_state = state;
+    gps_recode_average_active = 1;
+    gps_recode_average_count = 0;
+    gps_recode_last_sample_ms = 0;
+    gps_recode_lat_sum = 0.0;
+    gps_recode_lon_sum = 0.0;
+    gps_recode_yaw_sin_sum = 0.0f;
+    gps_recode_yaw_cos_sum = 0.0f;
+}
+
+void gps_recode_average_update(guandao_state * state)
+{
+    uint32 now_ms = 0;
+    float average_yaw = 0.0f;
+    int16 store_index = 0;
+
+    if(!gps_recode_average_active) return;
+    if(state != gps_recode_average_state) return;
+    if(state == NULL)
+    {
+        gps_recode_average_active = 0;
+        return;
+    }
+    if(state->gps_recode_length >= MAX_GPS_RECODE)
+    {
+        gps_recode_average_active = 0;
+        return;
+    }
+    if(gnss.state != 1) return;
+
+    now_ms = system_getval_ms();
+    if(gps_recode_last_sample_ms != 0
+            && (uint32)(now_ms - gps_recode_last_sample_ms) < GPS_RECODE_SAMPLE_INTERVAL_MS)
+    {
+        return;
+    }
+    gps_recode_last_sample_ms = now_ms;
+
+    gps_recode_lat_sum += gnss.latitude;
+    gps_recode_lon_sum += gnss.longitude;
+    gps_recode_yaw_sin_sum += sinf(Yaw_1 / 180.0f * M_PI);
+    gps_recode_yaw_cos_sum += cosf(Yaw_1 / 180.0f * M_PI);
+    gps_recode_average_count++;
+
+    if(gps_recode_average_count < GPS_RECODE_AVERAGE_SAMPLES) return;
+
+    store_index = state->gps_recode_length;
+    average_yaw = atan2f(gps_recode_yaw_sin_sum, gps_recode_yaw_cos_sum) * 180.0f / M_PI;
+    angle_plan(&average_yaw);
+
+    state->recode_gpsmap[store_index].lat = gps_recode_lat_sum / (double)GPS_RECODE_AVERAGE_SAMPLES;
+    state->recode_gpsmap[store_index].lon = gps_recode_lon_sum / (double)GPS_RECODE_AVERAGE_SAMPLES;
+    state->recode_gpsmap[store_index].cheak_flag = state->length_index;
+
+    switch(gps_recode_pair_flag)
     {
         case 0 :
-            state->recode_gpsmap[state->gps_recode_length].lat = gnss.latitude;
-            state->recode_gpsmap[state->gps_recode_length].lon = gnss.longitude;
-            state->recode_gpsmap[state->gps_recode_length].theta = Yaw_1;
-            state->recode_gpsmap[state->gps_recode_length].cheak_flag = state->length_index;
-            state->gps_recode_length ++;
-            rcd_gps_flag =1;
+            state->recode_gpsmap[store_index].theta = average_yaw;
+            gps_recode_pair_flag = 1;
             break;
         case 1 :
-            state->recode_gpsmap[state->gps_recode_length].lat = gnss.latitude;
-            state->recode_gpsmap[state->gps_recode_length].lon = gnss.longitude;
-            state->recode_gpsmap[state->gps_recode_length].theta =fabs(state->recode_gpsmap[state->gps_recode_length - 1].theta - Yaw_1) ;
-            state->recode_gpsmap[state->gps_recode_length].cheak_flag = state->length_index;
-            state->gps_recode_length ++;
-            rcd_gps_flag =0;
+            if(store_index > 0)
+            {
+                state->recode_gpsmap[store_index].theta = fabsf(state->recode_gpsmap[store_index - 1].theta - average_yaw);
+                angle_plan(&state->recode_gpsmap[store_index].theta);
+                state->recode_gpsmap[store_index].theta = fabsf(state->recode_gpsmap[store_index].theta);
+                gps_recode_pair_flag = 0;
+            }
+            else
+            {
+                state->recode_gpsmap[store_index].theta = average_yaw;
+                gps_recode_pair_flag = 1;
+            }
+            break;
+        default :
+            gps_recode_pair_flag = 0;
             break;
     }
 
+    state->gps_recode_length++;
+    gps_recode_average_active = 0;
+    Buzzer_check(50);
 }
 
 /**

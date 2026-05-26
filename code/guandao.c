@@ -66,6 +66,7 @@ static uint8 portion1_reverse_state = 0;
 static uint32 portion1_reverse_wait_start_ms = 0;
 static uint32 portion1_reverse_run_start_ms = 0;
 static state_t portion1_reverse_start_state = {0.0f, 0.0f, 0.0f};
+static float portion1_reverse_steer_cmd = 0.0f;
 
 #define GUANDAO_START_SEARCH_POINTS    10
 #define GUANDAO_TRACE_SEARCH_POINTS    8
@@ -83,6 +84,7 @@ static state_t portion1_reverse_start_state = {0.0f, 0.0f, 0.0f};
 #define GUANDAO_HIGH_SPEED_CMD_LIMIT   30.0f
 #define GUANDAO_HIGH_SPEED_PREVIEW     4
 #define GUANDAO_HIGH_SPEED_CURVE_LIMIT 5.0f
+#define GUANDAO_REVERSE_STEERING_GAIN  1.0f
 
 static int16 guandao_clamp_length(int16 length)
 {
@@ -267,6 +269,7 @@ void portion_1_reset(void)
     portion1_reverse_start_state.x = 0.0f;
     portion1_reverse_start_state.y = 0.0f;
     portion1_reverse_start_state.theta = 0.0f;
+    portion1_reverse_steer_cmd = 0.0f;
     INS.length_index = guandao_clamp_length(INS.length_index);
     INS.current_point_index = 0;
     INS.planned_length = 0;
@@ -332,7 +335,7 @@ void portion_1(void)
     {
         out_v_l = 0;
         out_v_r = 0;
-        out_servo = 0;
+        out_servo = portion1_reverse_steer_cmd;
         guandao_debug_stop_reason = 6;
         conrtol_mode = GUANDAO;
         if((uint32)(system_getval_ms() - portion1_reverse_wait_start_ms) >= GUANDAO_REVERSE_WAIT_MS)
@@ -349,7 +352,7 @@ void portion_1(void)
         daoche_speed = GUANDAO_REVERSE_SPEED_UNITS;
         out_v_l = GUANDAO_REVERSE_SPEED_UNITS;
         out_v_r = GUANDAO_REVERSE_SPEED_UNITS;
-        out_servo = 0;
+        out_servo = portion1_reverse_steer_cmd;
         guandao_debug_stop_reason = 7;
         conrtol_mode = DAOCHE;
         guandao_debug_dist_final = get_distance(INS.current_state, portion1_reverse_start_state);
@@ -403,6 +406,11 @@ void portion_1(void)
         }
         if(reverse_ready || final_stop_ready || INS.current_point_index >= active_route_length)
         {
+            if(reverse_ready)
+            {
+                portion1_reverse_steer_cmd = out_servo * GUANDAO_REVERSE_STEERING_GAIN;
+                Value_Limit_float(&portion1_reverse_steer_cmd, -GUANDAO_STEERING_CMD_LIMIT, GUANDAO_STEERING_CMD_LIMIT);
+            }
             out_v_l = 0;
             out_v_r = 0;
             out_servo = 0;
@@ -919,6 +927,7 @@ void guandao_recode(guandao_state * state)
 
     if(flag0){  guandao_state_init(p); daoche_point_length = 0; daoche_flash_cheack = 0;  flag0 =0;}          // 清空路径点数组，重置索引和位姿
     update_state(p  , &guandao_ecd);                        // 基于编码器数据更新当前车辆位姿（x, y, theta）
+    gps_recode_average_update(p);
 
 
     // KEY1 为上拉输入：未按=1，按下=0。

@@ -109,6 +109,7 @@ void angle_plan(float * angle);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void recode_gps(guandao_state * state);
+void gps_recode_average_update(guandao_state * state);
 /**
  * 接口说明：swtich_gps()。处理 GPS 辅助点、GPS 显示或 GPS 校验逻辑。
  * 所属模块：GPS 辅助记录和显示模块，不是科目一后轮驱动主链路，但用于路线校验和定位调试。
