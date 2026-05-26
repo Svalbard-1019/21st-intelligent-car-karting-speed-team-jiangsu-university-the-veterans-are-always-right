@@ -78,6 +78,11 @@ static state_t portion1_reverse_start_state = {0.0f, 0.0f, 0.0f};
 #define GUANDAO_REVERSE_SPEED_UNITS    -6.0f
 #define GUANDAO_STEERING_GAIN          2.2f
 #define GUANDAO_STEERING_CMD_LIMIT     35.0f
+#define GUANDAO_HIGH_SPEED_THRESHOLD   5.0f
+#define GUANDAO_HIGH_SPEED_GAIN        1.55f
+#define GUANDAO_HIGH_SPEED_CMD_LIMIT   30.0f
+#define GUANDAO_HIGH_SPEED_PREVIEW     4
+#define GUANDAO_HIGH_SPEED_CURVE_LIMIT 5.0f
 
 static int16 guandao_clamp_length(int16 length)
 {
@@ -571,6 +576,11 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float actual_ld = 0 , preview_alpha =0;
     float actual_ld2 = 0 , preview_alpha2 =0;
     float target_steering = 0;
+    float steering_gain = GUANDAO_STEERING_GAIN;
+    float steering_limit = GUANDAO_STEERING_CMD_LIMIT;
+    float curve_trigger_angle = 45.0f;
+    int steer_preview_steps = preview_spets;
+    int curve_preview_steps = 5;
     int16 route_length = guandao_route_length(state);
 
     guandao_debug_stop_reason = 0;
@@ -628,8 +638,23 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     }
 
     // preview_spets 决定转向预瞄点，数值越大越平滑，但弯道响应会更慢。
-    pursuit_midhandle(state , &current_point , preview_spets , &preview_alpha , &actual_ld);
-    pursuit_midhandle(state , &current_point , 5 , &preview_alpha2 , &actual_ld2);
+    if(base_speed > GUANDAO_HIGH_SPEED_THRESHOLD)
+    {
+        steering_gain = GUANDAO_HIGH_SPEED_GAIN;
+        steering_limit = GUANDAO_HIGH_SPEED_CMD_LIMIT;
+        curve_trigger_angle = 35.0f;
+        if(steer_preview_steps < GUANDAO_HIGH_SPEED_PREVIEW)
+        {
+            steer_preview_steps = GUANDAO_HIGH_SPEED_PREVIEW;
+        }
+    }
+    if(curve_preview_steps < steer_preview_steps + 3)
+    {
+        curve_preview_steps = steer_preview_steps + 3;
+    }
+
+    pursuit_midhandle(state , &current_point , steer_preview_steps , &preview_alpha , &actual_ld);
+    pursuit_midhandle(state , &current_point , curve_preview_steps , &preview_alpha2 , &actual_ld2);
 
    float k = 0;
    k = -0.0038*fabs(preview_alpha2) + 1;
@@ -637,16 +662,16 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
 
    if(angle_diff >=90)
    {
-       target_steering = GUANDAO_STEERING_CMD_LIMIT;
+       target_steering = steering_limit;
 
    }
    else if(angle_diff <= -90)
    {
-       target_steering = -GUANDAO_STEERING_CMD_LIMIT;
+       target_steering = -steering_limit;
    }
    else if(fabsf(angle_diff) <=90)
    {
-       target_steering = GUANDAO_STEERING_GAIN*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
+       target_steering = steering_gain*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
    }
    ips200_show_float(X(10),  Y(9),target_steering ,5 ,5);
 
@@ -674,14 +699,21 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        default : break;
    }
 
-   Value_Limit_float(&target_steering ,-GUANDAO_STEERING_CMD_LIMIT,GUANDAO_STEERING_CMD_LIMIT);
+   Value_Limit_float(&target_steering ,-steering_limit,steering_limit);
 
-   if(fabsf(preview_alpha2) > 45.0f)
+   if(fabsf(preview_alpha2) > curve_trigger_angle)
    {
-       float curve_scale = 1.0f - (fabsf(preview_alpha2) - 45.0f) / 90.0f;
+       float curve_scale = 1.0f - (fabsf(preview_alpha2) - curve_trigger_angle) / 90.0f;
        Value_Limit_float(&curve_scale, 0.55f, 1.0f);
        v_center = base_speed * curve_scale;
        if(v_center < MIN_SPEED) v_center = MIN_SPEED;
+   }
+   if(base_speed > GUANDAO_HIGH_SPEED_THRESHOLD && (fabsf(angle_diff) > 30.0f || fabsf(preview_alpha2) > curve_trigger_angle))
+   {
+       if(v_center > GUANDAO_HIGH_SPEED_CURVE_LIMIT)
+       {
+           v_center = GUANDAO_HIGH_SPEED_CURVE_LIMIT;
+       }
    }
 
 
