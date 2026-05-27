@@ -266,6 +266,10 @@ int core0_main(void)
                 Rack_Test_Run();
                 break;
 
+            case Remote_Drive_Mode:
+                conrtol_mode = YAOKONG;
+                break;
+
             default : break;
 
         }
@@ -297,6 +301,18 @@ int core0_main(void)
                 {
                     ips200_show_string(X(1),  Y(14), "Route FULL");
                 }
+            }
+            else if(main_mode == Remote_Drive_Mode)
+            {
+                ips200_show_string(X(1),  Y(8), "REMOTE");
+                ips200_show_string(X(1),  Y(9), "CH1");     ips200_show_int(X(6),  Y(9), x6f_out[0], 5);
+                ips200_show_string(X(12), Y(9), "CH2");     ips200_show_int(X(17), Y(9), x6f_out[1], 5);
+                ips200_show_string(X(1),  Y(10), "Steer");  ips200_show_float(X(9),  Y(10), hot_rc_steer, 3, 1);
+                ips200_show_string(X(1),  Y(11), "Speed");  ips200_show_float(X(9),  Y(11), hot_rc_speed * GUANDAO_SPEED_TO_MPS, 2, 1);
+                ips200_show_string(X(1),  Y(12), "TgtAct"); ips200_show_float(X(9),  Y(12), rear_motor_get_target_mps(), 2, 1); ips200_show_float(X(16), Y(12), rear_motor_get_speed_mps(), 2, 1);
+                ips200_show_string(X(1),  Y(13), "PWM");    ips200_show_int(X(7),  Y(13), rear_motor_get_pwm(), 5);
+                ips200_show_string(X(1),  Y(14), "State");  ips200_show_int(X(8),  Y(14), uart_receiver.state, 1);
+                ips200_show_string(X(12), Y(14), "CH4");    ips200_show_int(X(17), Y(14), x6f_out[3], 3);
             }
             // 自动驾驶诊断页：用于判断停车原因。
             // Idx 接近 Len 表示路线追完；TgtAct/PWM 为 0 表示后轮目标已被上层清掉。
