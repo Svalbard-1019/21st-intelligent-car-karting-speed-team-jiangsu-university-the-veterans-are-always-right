@@ -1068,6 +1068,8 @@ void guandao_recode(guandao_state * state)
             flag1 = 0;
             rc_ch3_wait_release = 1;
         }
+        if( p == &passage)portion2_points_recode();
+        else recode_waypoint(p);
         return;
     }
     else
@@ -1076,8 +1078,7 @@ void guandao_recode(guandao_state * state)
         {
             if(GPS_WORK_FLAG)
             {
-                recode_gps(p);
-                Buzzer_check(20);
+                if(recode_gps(p)) Buzzer_check(20);
             }
         }
         rc_ch3_start_ms = 0;
@@ -1091,7 +1092,7 @@ void guandao_recode(guandao_state * state)
     else recode_waypoint(p);                                         // 其他路径：自动等距记录（移动超过阈值自动记录）
 
 //    guandao_show(p);                                                // 在IPS200屏幕上显示路径信息（长度、位姿等）
-    if(GPS_WORK_FLAG){if(key2_flag == 1){ key2_flag = 0 ; recode_gps(p);  }}        // GPS辅助记录（可选）：当GPS工作标志为真且按键2被按下时
+    if(GPS_WORK_FLAG){if(key2_flag == 1){ key2_flag = 0 ; if(recode_gps(p)) Buzzer_check(20);  }}        // GPS辅助记录（可选）：当GPS工作标志为真且按键2被按下时
 //     guandao_show();
 
 }

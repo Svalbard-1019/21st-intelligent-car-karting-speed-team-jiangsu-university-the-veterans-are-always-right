@@ -108,7 +108,7 @@ void angle_plan(float * angle);
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
-void recode_gps(guandao_state * state);
+uint8 recode_gps(guandao_state * state);
 void gps_recode_average_update(guandao_state * state);
 /**
  * 接口说明：swtich_gps()。处理 GPS 辅助点、GPS 显示或 GPS 校验逻辑。
