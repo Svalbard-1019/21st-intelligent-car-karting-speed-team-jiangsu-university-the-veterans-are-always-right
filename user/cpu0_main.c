@@ -140,7 +140,7 @@ static void Serial_Debug_Update(void)
         guandao_state *record_state = Get_Record_Display_State();
 
         len = sprintf(line,
-                      "REC,t=%lu,route=%d,len=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,encL=%d,encR=%d,key1=%d,gps=%d,sat=%d,gflag=%d\r\n",
+                      "REC,t=%lu,route=%d,len=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,encL=%d,encR=%d,key1=%d,gps=%d,sat=%d,gflag=%d,parkS=%d,parkT=%d\r\n",
                       (unsigned long)now_ms,
                       route_setting_choice,
                       record_state->length_index,
@@ -154,7 +154,9 @@ static void Serial_Debug_Update(void)
                       gpio_get_level(KEY1),
                       gnss.state,
                       gnss.satellite_used,
-                      gnss_flag);
+                      gnss_flag,
+                      daoche_point_length,
+                      daoche_target_flag);
         if(len > 0)
         {
             Serial_Debug_Write(line);
@@ -293,9 +295,11 @@ int core0_main(void)
                 ips200_show_string(X(10), Y(12), "GPS");     ips200_show_int(X(15), Y(12), gnss.state, 1);
                 ips200_show_string(X(1),  Y(13), "Sat");     ips200_show_int(X(6),  Y(13), gnss.satellite_used, 3);
                 ips200_show_string(X(10), Y(13), "GFlag");   ips200_show_int(X(17), Y(13), gnss_flag, 1);
+                ips200_show_string(X(1),  Y(14), "ParkS");   ips200_show_int(X(8),  Y(14), daoche_point_length, 4);
+                ips200_show_string(X(13), Y(14), "T");       ips200_show_int(X(16), Y(14), daoche_target_flag, 1);
                 if(record_state->length_index >= MAX_LENGTH_INDEX)
                 {
-                    ips200_show_string(X(1),  Y(14), "Route FULL");
+                    ips200_show_string(X(1),  Y(15), "Route FULL");
                 }
             }
             // 自动驾驶诊断页：用于判断停车原因。

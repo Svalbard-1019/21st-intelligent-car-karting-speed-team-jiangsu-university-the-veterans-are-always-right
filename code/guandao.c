@@ -57,6 +57,9 @@ float guandao_debug_angle_diff = 0.0f;
 float guandao_debug_dist_final = 0.0f;
 uint8 guandao_debug_stop_reason = 0;
 
+int16 daoche_target_length = 0;
+state_t daoche_target_state = {0.0f, 0.0f, 0.0f};
+uint8 daoche_target_flag = 0;
 int16 daoche_point_length = 0;    // 倒车点长度
 uint8 daoche_flag =0;                    // 倒车标志
 uint8 daoche_flash_cheack =0;// 倒车Flash检查标志
@@ -81,10 +84,18 @@ static float portion1_reverse_steer_cmd = 0.0f;
 #define GUANDAO_STEERING_CMD_LIMIT     35.0f
 #define GUANDAO_HIGH_SPEED_THRESHOLD   5.0f
 #define GUANDAO_HIGH_SPEED_GAIN        1.55f
-#define GUANDAO_HIGH_SPEED_CMD_LIMIT   30.0f
-#define GUANDAO_HIGH_SPEED_PREVIEW     4
-#define GUANDAO_HIGH_SPEED_CURVE_LIMIT 5.0f
+#define GUANDAO_HIGH_SPEED_CMD_LIMIT   32.0f
+#define GUANDAO_VERY_HIGH_SPEED_GAIN   1.20f
+#define GUANDAO_VERY_HIGH_CMD_LIMIT    28.0f
+#define GUANDAO_VERY_HIGH_CURVE_LIMIT  10.0f
+#define GUANDAO_STEER_RATE_LOW         3.0f
+#define GUANDAO_STEER_RATE_HIGH        1.5f
+#define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
+#define GUANDAO_REVERSE_TARGET_DIST    0.12f
+#define GUANDAO_REVERSE_TARGET_YAW     6.0f
+#define GUANDAO_REVERSE_TARGET_KP_D    30.0f
+#define GUANDAO_REVERSE_TARGET_KP_YAW  0.45f
 
 static int16 guandao_clamp_length(int16 length)
 {
@@ -349,16 +360,40 @@ void portion_1(void)
     }
     else if(portion1_reverse_state == 2)
     {
+        uint8 reverse_finished = 0;
         daoche_speed = GUANDAO_REVERSE_SPEED_UNITS;
         out_v_l = GUANDAO_REVERSE_SPEED_UNITS;
         out_v_r = GUANDAO_REVERSE_SPEED_UNITS;
-        out_servo = portion1_reverse_steer_cmd;
         guandao_debug_stop_reason = 7;
         conrtol_mode = DAOCHE;
         guandao_debug_dist_final = get_distance(INS.current_state, portion1_reverse_start_state);
         uint32 reverse_elapsed_ms = (uint32)(system_getval_ms() - portion1_reverse_run_start_ms);
-        if((guandao_debug_dist_final >= GUANDAO_REVERSE_DISTANCE && reverse_elapsed_ms >= GUANDAO_REVERSE_MIN_MS)
-                || reverse_elapsed_ms >= GUANDAO_REVERSE_MAX_MS)
+        if(daoche_target_flag)
+        {
+            float target_dx = daoche_target_state.x - INS.current_state.x;
+            float target_dy = daoche_target_state.y - INS.current_state.y;
+            float target_dist = hypotf(target_dx, target_dy);
+            float target_angle = atan2f(target_dx, target_dy) / M_PI * 180.0f;
+            float position_error = target_angle - INS.current_state.theta;
+            float yaw_error = daoche_target_state.theta - Yaw_1;
+            angle_plan(&position_error);
+            angle_plan(&yaw_error);
+            guandao_debug_dist_final = target_dist;
+            portion1_reverse_steer_cmd = GUANDAO_REVERSE_TARGET_KP_D * sinf(position_error / 180.0f * M_PI)
+                    + GUANDAO_REVERSE_TARGET_KP_YAW * yaw_error;
+            Value_Limit_float(&portion1_reverse_steer_cmd, -GUANDAO_STEERING_CMD_LIMIT, GUANDAO_STEERING_CMD_LIMIT);
+            if(target_dist <= GUANDAO_REVERSE_TARGET_DIST && fabsf(yaw_error) <= GUANDAO_REVERSE_TARGET_YAW
+                    && reverse_elapsed_ms >= GUANDAO_REVERSE_MIN_MS)
+            {
+                reverse_finished = 1;
+            }
+        }
+        else if(guandao_debug_dist_final >= GUANDAO_REVERSE_DISTANCE && reverse_elapsed_ms >= GUANDAO_REVERSE_MIN_MS)
+        {
+            reverse_finished = 1;
+        }
+        out_servo = portion1_reverse_steer_cmd;
+        if(reverse_finished || reverse_elapsed_ms >= GUANDAO_REVERSE_MAX_MS)
         {
             out_v_l = 0;
             out_v_r = 0;
@@ -448,10 +483,17 @@ void portion_1(void)
  */
 void recode_waypoint(guandao_state * state)
 {
+    static uint8 park_record_stage = 0;
+    static uint8 park_wait_release = 0;
     if(state ->length_index >=MAX_LENGTH_INDEX)return;
 
     if(state ->length_index ==0)
     {
+        if(state == &INS)
+        {
+            park_record_stage = 0;
+            park_wait_release = 0;
+        }
         state->recode_map[state->length_index] =state->current_state;
         state->length_index++;
         return;
@@ -466,17 +508,37 @@ void recode_waypoint(guandao_state * state)
         state->length_index++;
     }
 
-    static uint8 dche_flag = 1;
+    uint8 park_pressed = (key1_flag == 1 || x6f_out[3] == 200);
+
+    if(!park_pressed)
+    {
+        park_wait_release = 0;
+    }
     if(state->length_index >= MAX_LENGTH_INDEX)return;
-    if(state == &INS && (key1_flag == 1|| x6f_out[3] ==200) && dche_flag ==1)  //遥控器控制
+    if(state == &INS && park_pressed && !park_wait_release)
     {
         key1_flag =0;
-        dche_flag =0;
-        state->recode_map[state->length_index] =state->current_state;
-        daoche_point_length = state->length_index;
-        state->length_index++;
-        daoche_flag =1;
-        daoche_flash_cheack =1;
+        park_wait_release = 1;
+        if(park_record_stage == 0)
+        {
+            state->recode_map[state->length_index] =state->current_state;
+            daoche_point_length = state->length_index;
+            state->length_index++;
+            daoche_flag =1;
+            daoche_flash_cheack =1;
+            park_record_stage = 1;
+            Buzzer_check(30);
+        }
+        else
+        {
+            daoche_target_state = state->current_state;
+            daoche_target_state.theta = Yaw_1;
+            daoche_target_length = state->length_index;
+            daoche_target_flag = 1;
+            daoche_flash_cheack = 1;
+            park_record_stage = 2;
+            Buzzer_check(80);
+        }
     }
 }
 /*第二部分路径点记录
@@ -586,7 +648,9 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float target_steering = 0;
     float steering_gain = GUANDAO_STEERING_GAIN;
     float steering_limit = GUANDAO_STEERING_CMD_LIMIT;
-    float curve_trigger_angle = 45.0f;
+    float steering_rate_limit = GUANDAO_STEER_RATE_LOW;
+    static float last_target_steering = 0.0f;
+    static uint32 last_steer_limit_ms = 0;
     int steer_preview_steps = preview_spets;
     int curve_preview_steps = 5;
     int16 route_length = guandao_route_length(state);
@@ -598,6 +662,8 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
         * out_v_l = 0;
         * out_v_r = 0;
         *out_servo = 0;
+        last_target_steering = 0.0f;
+        last_steer_limit_ms = 0;
 //        Buzzer_check(50);
         return;
     }
@@ -640,6 +706,8 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
             * out_v_l = 0;
             * out_v_r = 0;
             *out_servo = 0;
+            last_target_steering = 0.0f;
+            last_steer_limit_ms = 0;
 //            Buzzer_check(50);
             return;
         }
@@ -650,10 +718,16 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     {
         steering_gain = GUANDAO_HIGH_SPEED_GAIN;
         steering_limit = GUANDAO_HIGH_SPEED_CMD_LIMIT;
-        curve_trigger_angle = 35.0f;
-        if(steer_preview_steps < GUANDAO_HIGH_SPEED_PREVIEW)
+        if(base_speed >= 15.0f)
         {
-            steer_preview_steps = GUANDAO_HIGH_SPEED_PREVIEW;
+            steering_gain = GUANDAO_VERY_HIGH_SPEED_GAIN;
+            steering_limit = GUANDAO_VERY_HIGH_CMD_LIMIT;
+            if(steer_preview_steps < 8) steer_preview_steps = 8;
+            steering_rate_limit = GUANDAO_STEER_RATE_HIGH;
+        }
+        else if(base_speed >= 10.0f)
+        {
+            if(steer_preview_steps < 4) steer_preview_steps = 4;
         }
     }
     if(curve_preview_steps < steer_preview_steps + 3)
@@ -709,21 +783,27 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
 
    Value_Limit_float(&target_steering ,-steering_limit,steering_limit);
 
-   if(fabsf(preview_alpha2) > curve_trigger_angle)
+   if(fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE)
    {
-       float curve_scale = 1.0f - (fabsf(preview_alpha2) - curve_trigger_angle) / 90.0f;
+       float curve_scale = 1.0f - (fabsf(preview_alpha2) - GUANDAO_CURVE_TRIGGER_ANGLE) / 90.0f;
        Value_Limit_float(&curve_scale, 0.55f, 1.0f);
        v_center = base_speed * curve_scale;
        if(v_center < MIN_SPEED) v_center = MIN_SPEED;
    }
-   if(base_speed > GUANDAO_HIGH_SPEED_THRESHOLD && (fabsf(angle_diff) > 30.0f || fabsf(preview_alpha2) > curve_trigger_angle))
+   if(base_speed >= 15.0f && (fabsf(angle_diff) > 25.0f || fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE))
    {
-       if(v_center > GUANDAO_HIGH_SPEED_CURVE_LIMIT)
+       if(v_center > GUANDAO_VERY_HIGH_CURVE_LIMIT)
        {
-           v_center = GUANDAO_HIGH_SPEED_CURVE_LIMIT;
+           v_center = GUANDAO_VERY_HIGH_CURVE_LIMIT;
        }
    }
-
+   else if(base_speed > GUANDAO_HIGH_SPEED_THRESHOLD && (fabsf(angle_diff) > 30.0f || fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE))
+   {
+       if(v_center > base_speed * 0.75f)
+       {
+           v_center = base_speed * 0.75f;
+       }
+   }
 
    if (dist_to_final < final_dsts && state->current_point_index >= route_length - 30)
    {
@@ -735,6 +815,22 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    }
 
    // 差动驱动速度分配：这里仍是惯导旧速度单位，cpu0_main.c 会再换算为 m/s 给 rear_motor。
+   if(state->current_point_index <= 2)
+   {
+       last_target_steering = target_steering;
+       last_steer_limit_ms = system_getval_ms();
+   }
+   uint32 steer_now_ms = system_getval_ms();
+   uint32 steer_elapsed_ms = (last_steer_limit_ms == 0) ? 20u : (uint32)(steer_now_ms - last_steer_limit_ms);
+   if(steer_elapsed_ms > 100u) steer_elapsed_ms = 20u;
+   float steer_delta_limit = steering_rate_limit * ((float)steer_elapsed_ms / 20.0f);
+   float steer_delta = target_steering - last_target_steering;
+   Value_Limit_float(&steer_delta, -steer_delta_limit, steer_delta_limit);
+   target_steering = last_target_steering + steer_delta;
+   Value_Limit_float(&target_steering ,-steering_limit,steering_limit);
+   last_target_steering = target_steering;
+   last_steer_limit_ms = steer_now_ms;
+
    float w = (v_center * tanf(target_steering/3.0f/180.0f*M_PI)) / WHEEL_BASE;
    *out_v_l = v_center + (w * TRACK_WIDTH / 2.0f);
    *out_v_r = v_center - (w * TRACK_WIDTH / 2.0f);
@@ -925,7 +1021,7 @@ void guandao_recode(guandao_state * state)
         choice_flag++;                                                  // 空指针保护：若链表提前结束则退出函数
     }
 
-    if(flag0){  guandao_state_init(p); daoche_point_length = 0; daoche_flash_cheack = 0;  flag0 =0;}          // 清空路径点数组，重置索引和位姿
+    if(flag0){  guandao_state_init(p); daoche_point_length = 0; daoche_target_length = 0; daoche_target_flag = 0; daoche_flash_cheack = 0;  flag0 =0;}          // 清空路径点数组，重置索引和位姿
     update_state(p  , &guandao_ecd);                        // 基于编码器数据更新当前车辆位姿（x, y, theta）
     gps_recode_average_update(p);
 

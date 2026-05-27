@@ -384,6 +384,12 @@ void Flash_Write_INSpoints(void)
         flash_union_buffer[i].int32_type = double_to_int32(INS.recode_gpsmap[j].lon);
     }
 
+    flash_union_buffer[gps_max_storage].int16_type = daoche_target_flag;
+    flash_union_buffer[gps_max_storage + 1].int16_type = daoche_target_length;
+    flash_union_buffer[gps_max_storage + 2].float_type = daoche_target_state.x;
+    flash_union_buffer[gps_max_storage + 3].float_type = daoche_target_state.y;
+    flash_union_buffer[gps_max_storage + 4].float_type = daoche_target_state.theta;
+
 
     if(flash_check(FLASH_SECTION_INDEX,RECODE_MAP_POINTS_INDEX))
     {
@@ -432,6 +438,25 @@ void Flash_Read_INSpoints(void)
         for(int i = get_max_storage+3 , j = 0; i < gps_max_storage ; i+=2 , j++)
         {
             INS.recode_gpsmap[j].lon = int32_to_double(flash_union_buffer[i].int32_type);
+        }
+        daoche_target_flag = (flash_union_buffer[gps_max_storage].int16_type == 1) ? 1 : 0;
+        daoche_target_length = flash_clamp_route_length(flash_union_buffer[gps_max_storage + 1].int16_type);
+        daoche_target_state.x = flash_union_buffer[gps_max_storage + 2].float_type;
+        daoche_target_state.y = flash_union_buffer[gps_max_storage + 3].float_type;
+        daoche_target_state.theta = flash_union_buffer[gps_max_storage + 4].float_type;
+        if(!daoche_target_flag
+                || daoche_point_length <= 0
+                || daoche_target_length <= daoche_point_length
+                || daoche_target_length > INS.length_index
+                || fabsf(daoche_target_state.x) > 10000.0f
+                || fabsf(daoche_target_state.y) > 10000.0f
+                || fabsf(daoche_target_state.theta) > 360.0f)
+        {
+            daoche_target_flag = 0;
+            daoche_target_length = 0;
+            daoche_target_state.x = 0.0f;
+            daoche_target_state.y = 0.0f;
+            daoche_target_state.theta = 0.0f;
         }
     }
 
