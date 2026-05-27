@@ -484,7 +484,10 @@ void portion_1(void)
 void recode_waypoint(guandao_state * state)
 {
     static uint8 park_record_stage = 0;
-    static uint8 park_wait_release = 0;
+    static uint8 rc_ch4_last_pressed = 0;
+    uint8 rc_ch4_pressed = (x6f_out[3] == 200);
+    uint8 park_pressed = (key1_flag == 1 || (rc_ch4_pressed && !rc_ch4_last_pressed));
+    rc_ch4_last_pressed = rc_ch4_pressed;
     if(state ->length_index >=MAX_LENGTH_INDEX)return;
 
     if(state ->length_index ==0)
@@ -492,7 +495,7 @@ void recode_waypoint(guandao_state * state)
         if(state == &INS)
         {
             park_record_stage = 0;
-            park_wait_release = 0;
+            rc_ch4_last_pressed = 0;
         }
         state->recode_map[state->length_index] =state->current_state;
         state->length_index++;
@@ -508,17 +511,10 @@ void recode_waypoint(guandao_state * state)
         state->length_index++;
     }
 
-    uint8 park_pressed = (key1_flag == 1 || x6f_out[3] == 200);
-
-    if(!park_pressed)
-    {
-        park_wait_release = 0;
-    }
     if(state->length_index >= MAX_LENGTH_INDEX)return;
-    if(state == &INS && park_pressed && !park_wait_release)
+    if(state == &INS && park_pressed)
     {
         key1_flag =0;
-        park_wait_release = 1;
         if(park_record_stage == 0)
         {
             state->recode_map[state->length_index] =state->current_state;
@@ -1004,7 +1000,6 @@ float out_servo = 0;
 void guandao_recode(guandao_state * state)
 {
     static uint8 flag0 = 1;                                                 // 首次调用标志（1=首次，0=已初始化），用于执行一次性初始化
-    static uint8 flag1 = 1;                                                 // Flash存储标志（1=允许存储，0=已存储），防止重复保存
     static uint32 key1_save_start_ms = 0;
     static uint8 key1_save_wait_release = 0;
     static uint32 rc_ch3_start_ms = 0;
@@ -1033,11 +1028,10 @@ void guandao_recode(guandao_state * state)
         key1_flag = 0;
         now_ms = system_getval_ms();
         if(key1_save_start_ms == 0) key1_save_start_ms = now_ms;
-        if((uint32)(now_ms - key1_save_start_ms) > 1500 && flag1)
+        if((uint32)(now_ms - key1_save_start_ms) > 1500 && !key1_save_wait_release)
         {
             Flash_Store_Mode(route_setting_choice);
             Buzzer_check(50);
-            flag1 = 0;
             key1_save_wait_release = 1;
         }
         return;
@@ -1061,11 +1055,10 @@ void guandao_recode(guandao_state * state)
     {
         now_ms = system_getval_ms();
         if(rc_ch3_start_ms == 0) rc_ch3_start_ms = now_ms;
-        if((uint32)(now_ms - rc_ch3_start_ms) > 1500 && flag1)
+        if((uint32)(now_ms - rc_ch3_start_ms) > 1500 && !rc_ch3_wait_release)
         {
             Flash_Store_Mode(route_setting_choice);
             Buzzer_check(50);
-            flag1 = 0;
             rc_ch3_wait_release = 1;
         }
         if( p == &passage)portion2_points_recode();

@@ -189,8 +189,8 @@ void Flash_Store_Mode(uint8 route_choice)
             if(portion3_points_switch()){  Flash_Write_portion_3points();}
             break;
         default :break;
-        if(GPS_WORK_FLAG)Flash_Write_gpscheak();
     }
+    if(GPS_WORK_FLAG)Flash_Write_gpscheak();
 
 
 }

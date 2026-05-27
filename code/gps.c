@@ -38,6 +38,7 @@ Lost_Point lost_judge;
 
 #define GPS_RECODE_AVERAGE_SAMPLES        20
 #define GPS_RECODE_SAMPLE_INTERVAL_MS     10u
+#define GPS_RECODE_WAIT_TIMEOUT_MS        1000u
 
 static guandao_state *gps_recode_average_state = NULL;
 static uint8 gps_recode_average_active = 0;
@@ -77,7 +78,6 @@ uint8 recode_gps(guandao_state * state)
 {
     if(state == NULL) return 0;
     if(state->gps_recode_length >= MAX_GPS_RECODE) return 0;
-    if(gps_recode_average_active) return 0;
     if(state->gps_recode_length <= 0) gps_recode_pair_flag = 0;
 
     gps_recode_average_state = state;
@@ -109,9 +109,20 @@ void gps_recode_average_update(guandao_state * state)
         gps_recode_average_active = 0;
         return;
     }
-    if(gnss.state != 1) return;
 
     now_ms = system_getval_ms();
+    if(gps_recode_last_sample_ms != 0
+            && (uint32)(now_ms - gps_recode_last_sample_ms) > GPS_RECODE_WAIT_TIMEOUT_MS)
+    {
+        gps_recode_average_active = 0;
+        gps_recode_average_count = 0;
+        return;
+    }
+    if(gnss.state != 1)
+    {
+        if(gps_recode_last_sample_ms == 0) gps_recode_last_sample_ms = now_ms;
+        return;
+    }
     if(gps_recode_last_sample_ms != 0
             && (uint32)(now_ms - gps_recode_last_sample_ms) < GPS_RECODE_SAMPLE_INTERVAL_MS)
     {
