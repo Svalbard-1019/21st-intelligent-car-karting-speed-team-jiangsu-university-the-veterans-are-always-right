@@ -94,9 +94,6 @@ static float portion1_reverse_steer_cmd = 0.0f;
 #define GUANDAO_STEER_RATE_HIGH        1.5f
 #define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
 #define GUANDAO_SHARP_TURN_ANGLE       45.0f
-#define GUANDAO_SHARP_TURN_SPEED_RATIO 0.55f
-#define GUANDAO_HAIRPIN_TURN_ANGLE     70.0f
-#define GUANDAO_HAIRPIN_SPEED_RATIO    0.45f
 #define GUANDAO_FRONT_TARGET_ANGLE     100.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
 #define GUANDAO_REVERSE_TARGET_DIST    0.12f
@@ -925,20 +922,6 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        Value_Limit_float(&curve_scale, 0.55f, 1.0f);
        v_center = base_speed * curve_scale;
        if(v_center < MIN_SPEED) v_center = MIN_SPEED;
-   }
-   if(upcoming_turn >= GUANDAO_HAIRPIN_TURN_ANGLE)
-   {
-       if(v_center > base_speed * GUANDAO_HAIRPIN_SPEED_RATIO)
-       {
-           v_center = base_speed * GUANDAO_HAIRPIN_SPEED_RATIO;
-       }
-   }
-   else if(upcoming_turn >= GUANDAO_SHARP_TURN_ANGLE)
-   {
-       if(v_center > base_speed * GUANDAO_SHARP_TURN_SPEED_RATIO)
-       {
-           v_center = base_speed * GUANDAO_SHARP_TURN_SPEED_RATIO;
-       }
    }
    if(base_speed >= 15.0f && (fabsf(angle_diff) > 25.0f || fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE))
    {
