@@ -98,6 +98,7 @@ static float portion1_reverse_steer_cmd = 0.0f;
 #define GUANDAO_REVERSE_TARGET_YAW     6.0f
 #define GUANDAO_REVERSE_TARGET_KP_D    30.0f
 #define GUANDAO_REVERSE_TARGET_KP_YAW  0.45f
+#define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
 
 static int16 guandao_clamp_length(int16 length)
 {
@@ -396,8 +397,8 @@ void portion_1(void)
             angle_plan(&position_error);
             angle_plan(&yaw_error);
             guandao_debug_dist_final = target_dist;
-            portion1_reverse_steer_cmd = GUANDAO_REVERSE_TARGET_KP_D * sinf(position_error / 180.0f * M_PI)
-                    + GUANDAO_REVERSE_TARGET_KP_YAW * yaw_error;
+            portion1_reverse_steer_cmd = -(GUANDAO_REVERSE_TARGET_KP_D * sinf(position_error / 180.0f * M_PI)
+                    + GUANDAO_REVERSE_TARGET_KP_YAW * yaw_error);
             Value_Limit_float(&portion1_reverse_steer_cmd, -GUANDAO_STEERING_CMD_LIMIT, GUANDAO_STEERING_CMD_LIMIT);
             if(target_dist <= GUANDAO_REVERSE_TARGET_DIST && fabsf(yaw_error) <= GUANDAO_REVERSE_TARGET_YAW
                     && reverse_elapsed_ms >= GUANDAO_REVERSE_MIN_MS)
@@ -502,6 +503,8 @@ void recode_waypoint(guandao_state * state)
 {
     static uint8 park_record_stage = 0;
     static uint8 rc_ch4_last_pressed = 0;
+    static uint8 gps_auto_has_point = 0;
+    static state_t gps_auto_last_state = {0.0f, 0.0f, 0.0f};
     uint8 rc_ch4_pressed = (x6f_out[3] == 200);
     uint8 park_pressed = (key1_flag == 1 || (rc_ch4_pressed && !rc_ch4_last_pressed));
     rc_ch4_last_pressed = rc_ch4_pressed;
@@ -513,10 +516,15 @@ void recode_waypoint(guandao_state * state)
         {
             park_record_stage = 0;
             rc_ch4_last_pressed = 0;
+            gps_auto_has_point = 0;
         }
         state->recode_map[state->length_index] =state->current_state;
         state->length_index++;
-        if(state == &INS && GPS_WORK_FLAG) recode_gps(state);
+        if(state == &INS && GPS_WORK_FLAG && recode_gps(state))
+        {
+            gps_auto_last_state = state->current_state;
+            gps_auto_has_point = 1;
+        }
         return;
     }
 
@@ -527,7 +535,13 @@ void recode_waypoint(guandao_state * state)
     {
         state->recode_map[state->length_index] =state->current_state;
         state->length_index++;
-        if(state == &INS && GPS_WORK_FLAG) recode_gps(state);
+        if(state == &INS && GPS_WORK_FLAG
+                && (!gps_auto_has_point || get_distance(state->current_state, gps_auto_last_state) >= GUANDAO_AUTO_GPS_RECORD_DIST)
+                && recode_gps(state))
+        {
+            gps_auto_last_state = state->current_state;
+            gps_auto_has_point = 1;
+        }
     }
 
     if(state->length_index >= MAX_LENGTH_INDEX)return;
