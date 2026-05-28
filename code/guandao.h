@@ -132,6 +132,8 @@ extern float out_servo ;
 extern uint8 route_setting_choice;
 extern int16 daoche_point_length ;
 extern int16 daoche_target_length;
+extern state_t daoche_start_state;
+extern uint8 daoche_start_flag;
 extern state_t daoche_target_state;
 extern uint8 daoche_target_flag;
 extern float daoche_speed ;

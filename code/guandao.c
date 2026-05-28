@@ -58,6 +58,8 @@ float guandao_debug_dist_final = 0.0f;
 uint8 guandao_debug_stop_reason = 0;
 
 int16 daoche_target_length = 0;
+state_t daoche_start_state = {0.0f, 0.0f, 0.0f};
+uint8 daoche_start_flag = 0;
 state_t daoche_target_state = {0.0f, 0.0f, 0.0f};
 uint8 daoche_target_flag = 0;
 int16 daoche_point_length = 0;    // 倒车点长度
@@ -85,9 +87,9 @@ static float portion1_reverse_steer_cmd = 0.0f;
 #define GUANDAO_HIGH_SPEED_THRESHOLD   5.0f
 #define GUANDAO_HIGH_SPEED_GAIN        1.55f
 #define GUANDAO_HIGH_SPEED_CMD_LIMIT   32.0f
+#define GUANDAO_CURVE_SPEED_RATIO      0.70f
 #define GUANDAO_VERY_HIGH_SPEED_GAIN   1.20f
 #define GUANDAO_VERY_HIGH_CMD_LIMIT    28.0f
-#define GUANDAO_VERY_HIGH_CURVE_LIMIT  10.0f
 #define GUANDAO_STEER_RATE_LOW         3.0f
 #define GUANDAO_STEER_RATE_HIGH        1.5f
 #define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
@@ -166,6 +168,13 @@ void guandao_state_init(guandao_state * e)
     e->plan_ready=0;
 
     e ->gps_recode_length =0;
+    if(e == &INS)
+    {
+        daoche_start_state.x = 0.0f;
+        daoche_start_state.y = 0.0f;
+        daoche_start_state.theta = 0.0f;
+        daoche_start_flag = 0;
+    }
 
 }
 /*初始化路径数据结构链*/
@@ -351,7 +360,15 @@ void portion_1(void)
         conrtol_mode = GUANDAO;
         if((uint32)(system_getval_ms() - portion1_reverse_wait_start_ms) >= GUANDAO_REVERSE_WAIT_MS)
         {
-            portion1_reverse_start_state = INS.current_state;
+            if(daoche_start_flag)
+            {
+                INS.current_state = daoche_start_state;
+                portion1_reverse_start_state = daoche_start_state;
+            }
+            else
+            {
+                portion1_reverse_start_state = INS.current_state;
+            }
             portion1_reverse_run_start_ms = system_getval_ms();
             daoche_flag = 1;
             conrtol_mode = DAOCHE;
@@ -518,6 +535,9 @@ void recode_waypoint(guandao_state * state)
         if(park_record_stage == 0)
         {
             state->recode_map[state->length_index] =state->current_state;
+            daoche_start_state = state->current_state;
+            daoche_start_state.theta = Yaw_1;
+            daoche_start_flag = 1;
             daoche_point_length = state->length_index;
             state->length_index++;
             daoche_flag =1;
@@ -788,9 +808,9 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    }
    if(base_speed >= 15.0f && (fabsf(angle_diff) > 25.0f || fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE))
    {
-       if(v_center > GUANDAO_VERY_HIGH_CURVE_LIMIT)
+       if(v_center > base_speed * GUANDAO_CURVE_SPEED_RATIO)
        {
-           v_center = GUANDAO_VERY_HIGH_CURVE_LIMIT;
+           v_center = base_speed * GUANDAO_CURVE_SPEED_RATIO;
        }
    }
    else if(base_speed > GUANDAO_HIGH_SPEED_THRESHOLD && (fabsf(angle_diff) > 30.0f || fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE))
@@ -1016,7 +1036,7 @@ void guandao_recode(guandao_state * state)
         choice_flag++;                                                  // 空指针保护：若链表提前结束则退出函数
     }
 
-    if(flag0){  guandao_state_init(p); daoche_point_length = 0; daoche_target_length = 0; daoche_target_flag = 0; daoche_flash_cheack = 0;  flag0 =0;}          // 清空路径点数组，重置索引和位姿
+    if(flag0){  guandao_state_init(p); daoche_point_length = 0; daoche_start_flag = 0; daoche_target_length = 0; daoche_target_flag = 0; daoche_flash_cheack = 0;  flag0 =0;}          // 清空路径点数组，重置索引和位姿
     update_state(p  , &guandao_ecd);                        // 基于编码器数据更新当前车辆位姿（x, y, theta）
     gps_recode_average_update(p);
 

@@ -389,6 +389,10 @@ void Flash_Write_INSpoints(void)
     flash_union_buffer[gps_max_storage + 2].float_type = daoche_target_state.x;
     flash_union_buffer[gps_max_storage + 3].float_type = daoche_target_state.y;
     flash_union_buffer[gps_max_storage + 4].float_type = daoche_target_state.theta;
+    flash_union_buffer[gps_max_storage + 5].int16_type = daoche_start_flag;
+    flash_union_buffer[gps_max_storage + 6].float_type = daoche_start_state.x;
+    flash_union_buffer[gps_max_storage + 7].float_type = daoche_start_state.y;
+    flash_union_buffer[gps_max_storage + 8].float_type = daoche_start_state.theta;
 
 
     if(flash_check(FLASH_SECTION_INDEX,RECODE_MAP_POINTS_INDEX))
@@ -444,6 +448,27 @@ void Flash_Read_INSpoints(void)
         daoche_target_state.x = flash_union_buffer[gps_max_storage + 2].float_type;
         daoche_target_state.y = flash_union_buffer[gps_max_storage + 3].float_type;
         daoche_target_state.theta = flash_union_buffer[gps_max_storage + 4].float_type;
+        daoche_start_flag = (flash_union_buffer[gps_max_storage + 5].int16_type == 1) ? 1 : 0;
+        daoche_start_state.x = flash_union_buffer[gps_max_storage + 6].float_type;
+        daoche_start_state.y = flash_union_buffer[gps_max_storage + 7].float_type;
+        daoche_start_state.theta = flash_union_buffer[gps_max_storage + 8].float_type;
+        if(!daoche_start_flag
+                || daoche_point_length <= 0
+                || daoche_point_length > INS.length_index
+                || fabsf(daoche_start_state.x) > 10000.0f
+                || fabsf(daoche_start_state.y) > 10000.0f
+                || fabsf(daoche_start_state.theta) > 360.0f)
+        {
+            daoche_start_flag = 0;
+            daoche_start_state.x = 0.0f;
+            daoche_start_state.y = 0.0f;
+            daoche_start_state.theta = 0.0f;
+        }
+        if(!daoche_start_flag && daoche_point_length > 0 && daoche_point_length < INS.length_index)
+        {
+            daoche_start_state = INS.recode_map[daoche_point_length];
+            daoche_start_flag = 1;
+        }
         if(!daoche_target_flag
                 || daoche_point_length <= 0
                 || daoche_target_length <= daoche_point_length
@@ -457,6 +482,13 @@ void Flash_Read_INSpoints(void)
             daoche_target_state.x = 0.0f;
             daoche_target_state.y = 0.0f;
             daoche_target_state.theta = 0.0f;
+        }
+        if(!daoche_target_flag)
+        {
+            daoche_start_flag = 0;
+            daoche_start_state.x = 0.0f;
+            daoche_start_state.y = 0.0f;
+            daoche_start_state.theta = 0.0f;
         }
     }
 
