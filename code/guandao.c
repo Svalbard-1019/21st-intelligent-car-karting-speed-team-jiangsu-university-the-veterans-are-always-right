@@ -516,6 +516,7 @@ void recode_waypoint(guandao_state * state)
         }
         state->recode_map[state->length_index] =state->current_state;
         state->length_index++;
+        if(state == &INS && GPS_WORK_FLAG) recode_gps(state);
         return;
     }
 
@@ -526,6 +527,7 @@ void recode_waypoint(guandao_state * state)
     {
         state->recode_map[state->length_index] =state->current_state;
         state->length_index++;
+        if(state == &INS && GPS_WORK_FLAG) recode_gps(state);
     }
 
     if(state->length_index >= MAX_LENGTH_INDEX)return;
@@ -1036,8 +1038,17 @@ void guandao_recode(guandao_state * state)
         choice_flag++;                                                  // 空指针保护：若链表提前结束则退出函数
     }
 
-    if(flag0){  guandao_state_init(p); daoche_point_length = 0; daoche_start_flag = 0; daoche_target_length = 0; daoche_target_flag = 0; daoche_flash_cheack = 0;  flag0 =0;}          // 清空路径点数组，重置索引和位姿
-    update_state(p  , &guandao_ecd);                        // 基于编码器数据更新当前车辆位姿（x, y, theta）
+    if(flag0)
+    {
+        guandao_state_init(p);
+        daoche_point_length = 0;
+        daoche_start_flag = 0;
+        daoche_target_length = 0;
+        daoche_target_flag = 0;
+        daoche_flash_cheack = 0;
+        flag0 = 0;
+    }
+    update_state(p  , &guandao_ecd);
     gps_recode_average_update(p);
 
 

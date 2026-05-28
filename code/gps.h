@@ -26,7 +26,7 @@
 
 // 宏定义
 
-#define GPS_WORK_NUM                            30
+#define GPS_WORK_NUM                            100
 #define GPS_WORK_FLAG                            1
 #define GPS_SWITCH_DISTANCE                  2.0f
 //外部变量

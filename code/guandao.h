@@ -37,7 +37,7 @@
 // 当前只接左后轮编码器，左右轮里程都复用同一反馈，所以这个值直接影响记录距离和自动驾驶里程。
 #define ONE_TICK_DISTANCE                      0.000378f
 #define MAX_LENGTH_INDEX                       400        // 单条路线最多保存点数，Flash 写入也按这个上限组织
-#define MAX_GPS_RECODE                         30         // GPS 辅助校验点数量上限
+#define MAX_GPS_RECODE                         100        // GPS 辅助校验点数量上限
 #define M_PI                                   3.14159265358979323846f
 #define WHEEL_BASE                             0.724f     // 前后轴距，单位 m，用于纯追踪转角计算
 #define TRACK_WIDTH                            0.594f     // 左右轮距，单位 m，用于差速速度分配

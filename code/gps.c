@@ -44,6 +44,7 @@ static guandao_state *gps_recode_average_state = NULL;
 static uint8 gps_recode_average_active = 0;
 static uint8 gps_recode_average_count = 0;
 static uint8 gps_recode_pair_flag = 0;
+static int16 gps_recode_average_cheak_flag = 0;
 static uint32 gps_recode_last_sample_ms = 0;
 static double gps_recode_lat_sum = 0.0;
 static double gps_recode_lon_sum = 0.0;
@@ -78,11 +79,13 @@ uint8 recode_gps(guandao_state * state)
 {
     if(state == NULL) return 0;
     if(state->gps_recode_length >= MAX_GPS_RECODE) return 0;
+    if(gps_recode_average_active) return 0;
     if(state->gps_recode_length <= 0) gps_recode_pair_flag = 0;
 
     gps_recode_average_state = state;
     gps_recode_average_active = 1;
     gps_recode_average_count = 0;
+    gps_recode_average_cheak_flag = state->length_index;
     gps_recode_last_sample_ms = 0;
     gps_recode_lat_sum = 0.0;
     gps_recode_lon_sum = 0.0;
@@ -144,7 +147,7 @@ void gps_recode_average_update(guandao_state * state)
 
     state->recode_gpsmap[store_index].lat = gps_recode_lat_sum / (double)GPS_RECODE_AVERAGE_SAMPLES;
     state->recode_gpsmap[store_index].lon = gps_recode_lon_sum / (double)GPS_RECODE_AVERAGE_SAMPLES;
-    state->recode_gpsmap[store_index].cheak_flag = state->length_index;
+    state->recode_gpsmap[store_index].cheak_flag = gps_recode_average_cheak_flag;
 
     switch(gps_recode_pair_flag)
     {
