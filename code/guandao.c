@@ -533,7 +533,7 @@ void recode_waypoint(guandao_state * state)
             daoche_target_flag = 1;
             daoche_flash_cheack = 1;
             park_record_stage = 2;
-            Buzzer_check(80);
+            Buzzer_check(30);
         }
     }
 }
