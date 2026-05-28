@@ -80,7 +80,7 @@ static float portion1_reverse_steer_cmd = 0.0f;
 #define GUANDAO_REVERSE_WAIT_MS        300u
 #define GUANDAO_REVERSE_DISTANCE       0.55f
 #define GUANDAO_REVERSE_MIN_MS         1800u
-#define GUANDAO_REVERSE_MAX_MS         3500u
+#define GUANDAO_REVERSE_MAX_MS         6500u
 #define GUANDAO_REVERSE_SPEED_UNITS    -6.0f
 #define GUANDAO_STEERING_GAIN          2.2f
 #define GUANDAO_STEERING_CMD_LIMIT     35.0f
@@ -95,9 +95,9 @@ static float portion1_reverse_steer_cmd = 0.0f;
 #define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
 #define GUANDAO_REVERSE_TARGET_DIST    0.12f
-#define GUANDAO_REVERSE_TARGET_YAW     6.0f
+#define GUANDAO_REVERSE_TARGET_YAW     3.0f
 #define GUANDAO_REVERSE_TARGET_KP_D    30.0f
-#define GUANDAO_REVERSE_TARGET_KP_YAW  0.45f
+#define GUANDAO_REVERSE_TARGET_KP_YAW  0.75f
 #define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
 
 static int16 guandao_clamp_length(int16 length)
