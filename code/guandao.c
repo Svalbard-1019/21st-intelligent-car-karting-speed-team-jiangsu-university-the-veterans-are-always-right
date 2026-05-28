@@ -1031,7 +1031,7 @@ void guandao_recode(guandao_state * state)
         if((uint32)(now_ms - key1_save_start_ms) > 1500 && !key1_save_wait_release)
         {
             Flash_Store_Mode(route_setting_choice);
-            Buzzer_check(50);
+            Buzzer_check(200);
             key1_save_wait_release = 1;
         }
         return;
@@ -1058,7 +1058,7 @@ void guandao_recode(guandao_state * state)
         if((uint32)(now_ms - rc_ch3_start_ms) > 1500 && !rc_ch3_wait_release)
         {
             Flash_Store_Mode(route_setting_choice);
-            Buzzer_check(50);
+            Buzzer_check(200);
             rc_ch3_wait_release = 1;
         }
         if( p == &passage)portion2_points_recode();
