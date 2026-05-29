@@ -1476,39 +1476,30 @@ uint16 portion3_foint_flag = 0;
  */
 uint8 portion3_points_switch(void)
 {
-    float x_delta = portion_3.recode_map[portion_3.length_index -1 ].x ;
-    int8 cut_length =(uint8)(WHEEL_BASE/recode_threshold);
-    if(cut_length < 1)cut_length = 1;
+    int16 left = 0;
+    int16 right = portion_3.length_index - 1;
 
-    portion3_foint_flag = cut_length;
-
-    for(uint8 i = 1 ; i<=cut_length ; i++ )
+    if(portion_3.length_index <= 1)
     {
-        portion_3.recode_map[portion_3.length_index].x = portion_3.recode_map[portion_3.length_index - 1].x ;
-        portion_3.recode_map[portion_3.length_index].y = portion_3.recode_map[portion_3.length_index - 1].y - i*recode_threshold;
-        portion_3.length_index ++;
-
-        if(portion_3.length_index >=MAX_LENGTH_INDEX)return 0;
+        portion3_foint_flag = 0;
+        return 0;
     }
 
-    for(int i =cut_length ; i < portion_3.length_index ; i++)
+    /*
+     * Subject 3 uses portion_3 as a remote-control recording route.
+     * The recorded direction is start area -> parking area, while the
+     * autonomous run must return parking area -> start area.  Keep the
+     * recorded geometry unchanged and only reverse the point order.
+     */
+    portion3_foint_flag = portion_3.length_index;
+    while(left < right)
     {
-        portion_3.recode_map[i].x -= x_delta;
+        state_t temp = portion_3.recode_map[left];
+        portion_3.recode_map[left] = portion_3.recode_map[right];
+        portion_3.recode_map[right] = temp;
+        left++;
+        right--;
     }
-
-    float * p = (float *)malloc(sizeof(portion_3.recode_map[0].x)*portion_3.length_index*2);
-    for( int i = portion_3.length_index -1 , j = 1 ; i >= cut_length ; i-- , j++)
-    {
-        p[2*j - 2] =  portion_3.recode_map[i].x;
-        p[2*j -1] =  portion_3.recode_map[i].y;
-    }
-    portion_3.length_index -=cut_length;
-    for(int i = 0  , j = 1; i < portion_3.length_index-1 ; i++ , j++)
-    {
-        portion_3.recode_map[i].x = p[2*j - 2];
-        portion_3.recode_map[i].y = p[2*j -1];
-    }
-    free(p);
 
     return 1;
 }
