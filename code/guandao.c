@@ -101,6 +101,8 @@ static float portion1_reverse_steer_cmd = 0.0f;
 #define GUANDAO_REVERSE_TARGET_KP_D    30.0f
 #define GUANDAO_REVERSE_TARGET_KP_YAW  0.75f
 #define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
+#define PORTION3_PURSUIT_THRESHOLD     0.25f
+#define PORTION3_FINAL_STOP_DIST       0.6f
 
 static int16 guandao_clamp_length(int16 length)
 {
@@ -764,6 +766,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     int steer_preview_steps = preview_spets;
     int curve_preview_steps = 5;
     int16 route_length = guandao_route_length(state);
+    float arrive_threshold = persuit_threshold;
     float upcoming_turn = 0.0f;
 
     guandao_debug_stop_reason = 0;
@@ -782,6 +785,12 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     state_t current_point = state->current_state;
     if(state->current_point_index < 0) state->current_point_index = 0;
     if(state->current_point_index >= route_length) state->current_point_index = route_length - 1;
+    if(route_setting_choice == 2)
+    {
+        arrive_threshold = PORTION3_PURSUIT_THRESHOLD;
+        steer_preview_steps = 1;
+        curve_preview_steps = 3;
+    }
 
     int search_end_index = state->current_point_index + GUANDAO_TRACE_SEARCH_POINTS;
     if(search_end_index >= route_length) search_end_index = route_length - 1;
@@ -822,7 +831,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
 
     // 只允许“距离足够近”时切到下一个路线点。
     // 旧逻辑曾用 |angle_diff| > 90 直接跳点，车头方向一反就会瞬间跳到终点并停车。
-    if(distance_to_target <= persuit_threshold)
+    if(distance_to_target <= arrive_threshold)
     {
         if(guandao_debug_stop_reason == 0) guandao_debug_stop_reason = 2;
         state->current_point_index++;
@@ -907,7 +916,6 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
            azimuth_adjust(state , 1.3 , dist_to_final , &target_steering ,CORRECT_ANGLE_1);
            break;
        case 2:
-           azimuth_adjust(state , 5.5 , dist_to_final , &target_steering ,CORRECT_ANGLE_3);
            break;
        case 3:
 
@@ -942,10 +950,22 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    if (dist_to_final < final_dsts && state->current_point_index >= route_length - 30)
    {
 
-       persuit_threshold = persuit_threshold*(dist_to_final / final_dsts);
-       if(persuit_threshold < 0.3f){persuit_threshold = 0.3f;}
+       arrive_threshold = persuit_threshold*(dist_to_final / final_dsts);
+       if(arrive_threshold < 0.3f){arrive_threshold = 0.3f;}
        v_center = base_speed * (dist_to_final / final_dsts);
        if (v_center < MIN_SPEED) v_center = MIN_SPEED; // 最低速度限制
+   }
+   if(route_setting_choice == 2 && state->current_point_index >= route_length - 1
+           && dist_to_final <= PORTION3_FINAL_STOP_DIST)
+   {
+       state->current_point_index = route_length;
+       guandao_debug_stop_reason = 8;
+       * out_v_l = 0;
+       * out_v_r = 0;
+       *out_servo = 0;
+       last_target_steering = 0.0f;
+       last_steer_limit_ms = 0;
+       return;
    }
 
    // 差动驱动速度分配：这里仍是惯导旧速度单位，cpu0_main.c 会再换算为 m/s 给 rear_motor。
