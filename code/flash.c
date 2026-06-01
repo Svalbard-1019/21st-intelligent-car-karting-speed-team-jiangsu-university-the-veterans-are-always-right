@@ -67,10 +67,7 @@ static float flash_sanitize_float(float value, float fallback, float min_value, 
 
 static void flash_sanitize_runtime_params(void)
 {
-    speed_pid[3] = flash_sanitize_float(speed_pid[3],
-                                        FLASH_RECODE_THRESHOLD_DEFAULT,
-                                        FLASH_RECODE_THRESHOLD_MIN,
-                                        FLASH_RECODE_THRESHOLD_MAX);
+    speed_pid[3] = FLASH_RECODE_THRESHOLD_DEFAULT;
     speed_pid[4] = flash_sanitize_float(speed_pid[4],
                                         FLASH_PURSUIT_THRESHOLD_DEFAULT,
                                         FLASH_PURSUIT_THRESHOLD_MIN,
