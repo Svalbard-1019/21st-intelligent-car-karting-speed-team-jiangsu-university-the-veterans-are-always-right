@@ -788,8 +788,6 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     if(route_setting_choice == 2)
     {
         arrive_threshold = PORTION3_PURSUIT_THRESHOLD;
-        steer_preview_steps = 1;
-        curve_preview_steps = 3;
     }
 
     int search_end_index = state->current_point_index + GUANDAO_TRACE_SEARCH_POINTS;
