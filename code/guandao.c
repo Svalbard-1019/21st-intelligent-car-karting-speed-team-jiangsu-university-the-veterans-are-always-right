@@ -100,7 +100,7 @@ static float portion1_reverse_steer_cmd = 0.0f;
 #define GUANDAO_REVERSE_TARGET_YAW     3.0f
 #define GUANDAO_REVERSE_TARGET_KP_D    30.0f
 #define GUANDAO_REVERSE_TARGET_KP_YAW  0.75f
-#define GUANDAO_AUTO_GPS_RECORD_DIST   0.5f
+#define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
 
 static int16 guandao_clamp_length(int16 length)
 {
