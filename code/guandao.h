@@ -333,6 +333,7 @@ void portion_1_reset(void);                   // 进入科目一前清零里程�
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 uint8 portion3_points_switch(void);
+void portion3_return_reset(void);
 /**
  * 接口说明：Guandao_Points_Show()。负责屏幕显示或菜单跳转，不直接改变底层硬件接线。
  * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。

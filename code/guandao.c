@@ -1480,6 +1480,10 @@ uint8 portion3_points_switch(void)
     static state_t reverse_map[MAX_LENGTH_INDEX];
     int16 len = portion_3.length_index;
     state_t origin;
+    float return_heading = 0.0f;
+    float heading_rad = 0.0f;
+    float heading_sin = 0.0f;
+    float heading_cos = 1.0f;
 
     if(len <= 1)
     {
@@ -1495,18 +1499,25 @@ uint8 portion3_points_switch(void)
      * Reversing the point order alone is not enough: after saving or
      * rebooting, the car starts the return run with its local position at
      * (0,0), but the recorded parking-area endpoint still has the old
-     * start-area coordinates.  Use that endpoint as the new origin so the
-     * first return target is near the real car.
+     * start-area coordinates.  Use that endpoint as the new origin, then
+     * rotate the path so the first return segment points to local +Y.
      */
     origin = portion_3.recode_map[len - 1];
+    return_heading = guandao_segment_yaw(origin, portion_3.recode_map[len - 2]);
+    heading_rad = return_heading / 180.0f * M_PI;
+    heading_sin = sinf(heading_rad);
+    heading_cos = cosf(heading_rad);
     portion3_foint_flag = len;
 
     for(int16 i = 0; i < len; i++)
     {
         state_t src = portion_3.recode_map[len - 1 - i];
-        reverse_map[i].x = src.x - origin.x;
-        reverse_map[i].y = src.y - origin.y;
-        reverse_map[i].theta = src.theta + 180.0f;
+        float dx = src.x - origin.x;
+        float dy = src.y - origin.y;
+
+        reverse_map[i].x = dx * heading_cos - dy * heading_sin;
+        reverse_map[i].y = dx * heading_sin + dy * heading_cos;
+        reverse_map[i].theta = src.theta + 180.0f - return_heading;
         angle_plan(&reverse_map[i].theta);
     }
 
@@ -1523,6 +1534,21 @@ uint8 portion3_points_switch(void)
     portion_3.plan_ready = 0;
 
     return 1;
+}
+
+void portion3_return_reset(void)
+{
+    portion_3.current_state.x = 0.0f;
+    portion_3.current_state.y = 0.0f;
+    portion_3.current_state.theta = 0.0f;
+    portion_3.current_point_index = 0;
+    portion_3.planned_length = 0;
+    portion_3.plan_ready = 0;
+    out_v_l = 0.0f;
+    out_v_r = 0.0f;
+    out_servo = 0.0f;
+    daoche_flag = 0;
+    Yaw_1 = 0.0f;
 }
 /*在IPS200屏幕上显示路径点地图
 
