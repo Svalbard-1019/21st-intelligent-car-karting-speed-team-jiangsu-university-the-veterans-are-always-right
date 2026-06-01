@@ -126,7 +126,7 @@ static void Serial_Debug_Update(void)
 {
     static uint32 last_ms = 0;
     uint32 now_ms = system_getval_ms();
-    static char line[320];
+    static char line[512];
     int len;
 
     if(now_ms - last_ms < SERIAL_DEBUG_PERIOD_MS)
@@ -140,18 +140,26 @@ static void Serial_Debug_Update(void)
         guandao_state *record_state = Get_Record_Display_State();
 
         len = sprintf(line,
-                      "REC,t=%lu,route=%d,len=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,encL=%d,encR=%d,key1=%d,gps=%d,sat=%d,gflag=%d,parkS=%d,parkT=%d\r\n",
+                      "REC,t=%lu,route=%d,len=%d,gpslen=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,lastx100=%ld,lasty100=%ld,lastth10=%ld,encL=%d,encR=%d,key1=%d,ch1=%d,ch2=%d,ch3=%d,ch4=%d,gps=%d,sat=%d,gflag=%d,parkS=%d,parkT=%d\r\n",
                       (unsigned long)now_ms,
                       route_setting_choice,
                       record_state->length_index,
+                      record_state->gps_recode_length,
                       (record_state->length_index >= MAX_LENGTH_INDEX),
                       (long)Serial_Debug_Scale(recode_threshold, 100.0f),
                       (long)Serial_Debug_Scale(record_state->current_state.x, 100.0f),
                       (long)Serial_Debug_Scale(record_state->current_state.y, 100.0f),
                       (long)Serial_Debug_Scale(record_state->current_state.theta, 10.0f),
+                      (long)Serial_Debug_Scale((record_state->length_index > 0) ? record_state->recode_map[record_state->length_index - 1].x : 0.0f, 100.0f),
+                      (long)Serial_Debug_Scale((record_state->length_index > 0) ? record_state->recode_map[record_state->length_index - 1].y : 0.0f, 100.0f),
+                      (long)Serial_Debug_Scale((record_state->length_index > 0) ? record_state->recode_map[record_state->length_index - 1].theta : 0.0f, 10.0f),
                       guandao_ecd.delta_l,
                       guandao_ecd.delta_r,
                       gpio_get_level(KEY1),
+                      x6f_out[0],
+                      x6f_out[1],
+                      x6f_out[2],
+                      x6f_out[3],
                       gnss.state,
                       gnss.satellite_used,
                       gnss_flag,
@@ -180,6 +188,68 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(INS.current_state.x, 100.0f),
                       (long)Serial_Debug_Scale(INS.current_state.y, 100.0f),
                       (long)Serial_Debug_Scale(Yaw_1, 10.0f),
+                      (long)Serial_Debug_Scale(out_v_l, 10.0f),
+                      (long)Serial_Debug_Scale(out_v_r, 10.0f),
+                      (long)Serial_Debug_Scale(out_servo, 10.0f),
+                      (long)Serial_Debug_Scale(rear_motor_get_target_mps(), 100.0f),
+                      (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
+                      rear_motor_get_pwm(),
+                      rear_motor_get_encoder_10ms(),
+                      (long)rear_motor_get_encoder_100ms());
+        if(len > 0)
+        {
+            Serial_Debug_Write(line);
+        }
+    }
+    else if(main_mode == Guandao_portion_3)
+    {
+        int target_index = portion_3.current_point_index;
+        state_t target_point;
+        float dx;
+        float dy;
+        float target_angle;
+        float angle_error;
+
+        if(target_index < 0) target_index = 0;
+        if(target_index >= portion_3.length_index && portion_3.length_index > 0)
+        {
+            target_index = portion_3.length_index - 1;
+        }
+        if(portion_3.length_index > 0)
+        {
+            target_point = portion_3.recode_map[target_index];
+        }
+        else
+        {
+            target_point.x = 0.0f;
+            target_point.y = 0.0f;
+            target_point.theta = 0.0f;
+        }
+        dx = target_point.x - portion_3.current_state.x;
+        dy = target_point.y - portion_3.current_state.y;
+        target_angle = atan2f(dx, dy) / M_PI * 180.0f;
+        angle_error = target_angle - portion_3.current_state.theta;
+        angle_plan(&angle_error);
+
+        len = sprintf(line,
+                      "P3AUTO,t=%lu,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      (unsigned long)now_ms,
+                      portion_3.current_point_index,
+                      portion_3.length_index,
+                      portion_3.gps_recode_length,
+                      (long)Serial_Debug_Scale(guandao_debug_distance, 100.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_angle_diff, 10.0f),
+                      guandao_debug_stop_reason,
+                      (long)Serial_Debug_Scale(portion_3.current_state.x, 100.0f),
+                      (long)Serial_Debug_Scale(portion_3.current_state.y, 100.0f),
+                      (long)Serial_Debug_Scale(Yaw_1, 10.0f),
+                      (long)Serial_Debug_Scale(target_point.x, 100.0f),
+                      (long)Serial_Debug_Scale(target_point.y, 100.0f),
+                      (long)Serial_Debug_Scale(target_point.theta, 10.0f),
+                      (long)Serial_Debug_Scale(dx, 100.0f),
+                      (long)Serial_Debug_Scale(dy, 100.0f),
+                      (long)Serial_Debug_Scale(target_angle, 10.0f),
+                      (long)Serial_Debug_Scale(angle_error, 10.0f),
                       (long)Serial_Debug_Scale(out_v_l, 10.0f),
                       (long)Serial_Debug_Scale(out_v_r, 10.0f),
                       (long)Serial_Debug_Scale(out_servo, 10.0f),
