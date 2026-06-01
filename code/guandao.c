@@ -100,7 +100,7 @@ static float portion1_reverse_steer_cmd = 0.0f;
 #define GUANDAO_REVERSE_TARGET_YAW     3.0f
 #define GUANDAO_REVERSE_TARGET_KP_D    30.0f
 #define GUANDAO_REVERSE_TARGET_KP_YAW  0.75f
-#define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
+#define GUANDAO_AUTO_GPS_RECORD_DIST   0.5f
 
 static int16 guandao_clamp_length(int16 length)
 {
@@ -571,6 +571,7 @@ void recode_waypoint(guandao_state * state)
     static uint8 rc_ch4_last_pressed = 0;
     static uint8 gps_auto_has_point = 0;
     static state_t gps_auto_last_state = {0.0f, 0.0f, 0.0f};
+    uint8 auto_gps_enabled = (state == &INS || state == &portion_3);
     uint8 rc_ch4_pressed = (x6f_out[3] == 200);
     uint8 park_pressed = (key1_flag == 1 || (rc_ch4_pressed && !rc_ch4_last_pressed));
     rc_ch4_last_pressed = rc_ch4_pressed;
@@ -578,7 +579,7 @@ void recode_waypoint(guandao_state * state)
 
     if(state ->length_index ==0)
     {
-        if(state == &INS)
+        if(auto_gps_enabled)
         {
             park_record_stage = 0;
             rc_ch4_last_pressed = 0;
@@ -586,7 +587,7 @@ void recode_waypoint(guandao_state * state)
         }
         state->recode_map[state->length_index] =state->current_state;
         state->length_index++;
-        if(state == &INS && GPS_WORK_FLAG && recode_gps(state))
+        if(auto_gps_enabled && GPS_WORK_FLAG && recode_gps(state))
         {
             gps_auto_last_state = state->current_state;
             gps_auto_has_point = 1;
@@ -601,7 +602,7 @@ void recode_waypoint(guandao_state * state)
     {
         state->recode_map[state->length_index] =state->current_state;
         state->length_index++;
-        if(state == &INS && GPS_WORK_FLAG
+        if(auto_gps_enabled && GPS_WORK_FLAG
                 && (!gps_auto_has_point || get_distance(state->current_state, gps_auto_last_state) >= GUANDAO_AUTO_GPS_RECORD_DIST)
                 && recode_gps(state))
         {
@@ -1476,10 +1477,11 @@ uint16 portion3_foint_flag = 0;
  */
 uint8 portion3_points_switch(void)
 {
-    int16 left = 0;
-    int16 right = portion_3.length_index - 1;
+    static state_t reverse_map[MAX_LENGTH_INDEX];
+    int16 len = portion_3.length_index;
+    state_t origin;
 
-    if(portion_3.length_index <= 1)
+    if(len <= 1)
     {
         portion3_foint_flag = 0;
         return 0;
@@ -1488,18 +1490,37 @@ uint8 portion3_points_switch(void)
     /*
      * Subject 3 uses portion_3 as a remote-control recording route.
      * The recorded direction is start area -> parking area, while the
-     * autonomous run must return parking area -> start area.  Keep the
-     * recorded geometry unchanged and only reverse the point order.
+     * autonomous run must return parking area -> start area.
+     *
+     * Reversing the point order alone is not enough: after saving or
+     * rebooting, the car starts the return run with its local position at
+     * (0,0), but the recorded parking-area endpoint still has the old
+     * start-area coordinates.  Use that endpoint as the new origin so the
+     * first return target is near the real car.
      */
-    portion3_foint_flag = portion_3.length_index;
-    while(left < right)
+    origin = portion_3.recode_map[len - 1];
+    portion3_foint_flag = len;
+
+    for(int16 i = 0; i < len; i++)
     {
-        state_t temp = portion_3.recode_map[left];
-        portion_3.recode_map[left] = portion_3.recode_map[right];
-        portion_3.recode_map[right] = temp;
-        left++;
-        right--;
+        state_t src = portion_3.recode_map[len - 1 - i];
+        reverse_map[i].x = src.x - origin.x;
+        reverse_map[i].y = src.y - origin.y;
+        reverse_map[i].theta = src.theta + 180.0f;
+        angle_plan(&reverse_map[i].theta);
     }
+
+    for(int16 i = 0; i < len; i++)
+    {
+        portion_3.recode_map[i] = reverse_map[i];
+    }
+
+    portion_3.current_state.x = 0.0f;
+    portion_3.current_state.y = 0.0f;
+    portion_3.current_state.theta = Yaw_1;
+    portion_3.current_point_index = 0;
+    portion_3.planned_length = 0;
+    portion_3.plan_ready = 0;
 
     return 1;
 }
