@@ -94,7 +94,7 @@ void sbus_rc_control(void)
         hot_rc_steer = 0;
     }
 
-    hot_rc_speed = (float)(SBUS_MID - ch_throttle) * 15.0f / (SBUS_MAX - SBUS_MID);
+    hot_rc_speed = (float)(SBUS_MID - ch_throttle) * 50.0f / (SBUS_MAX - SBUS_MID);
     if(hot_rc_speed > -1.0f && hot_rc_speed < 1.0f)
     {
         hot_rc_speed = 0;
