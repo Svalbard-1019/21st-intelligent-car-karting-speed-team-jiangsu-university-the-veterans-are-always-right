@@ -58,6 +58,10 @@ float guandao_debug_distance = 0.0f;
 float guandao_debug_angle_diff = 0.0f;
 float guandao_debug_dist_final = 0.0f;
 uint8 guandao_debug_stop_reason = 0;
+int16 guandao_debug_reverse_index = 0;
+int16 guandao_debug_reverse_end = 0;
+uint8 guandao_debug_reverse_source = 0;
+float guandao_debug_reverse_yaw_error = 0.0f;
 
 int16 daoche_target_length = 0;
 state_t daoche_start_state = {0.0f, 0.0f, 0.0f};
@@ -79,6 +83,11 @@ static uint8 portion1_reverse_segment = 0;
 static AutoParkPlan portion1_reverse_plan;
 static uint8 portion1_reverse_plan_ready = 0;
 static uint8 portion1_reverse_route_index = 0;
+static uint8 portion1_reverse_trace_ready = 0;
+static int16 portion1_reverse_trace_index = 0;
+static int16 portion1_reverse_trace_end = 0;
+static uint32 portion1_reverse_target_hold_ms = 0;
+static uint32 portion1_reverse_steer_ms = 0;
 
 #define GUANDAO_START_SEARCH_POINTS    10
 #define GUANDAO_TRACE_SEARCH_POINTS    8
@@ -88,7 +97,7 @@ static uint8 portion1_reverse_route_index = 0;
 #define GUANDAO_REVERSE_WAIT_MS        300u
 #define GUANDAO_REVERSE_DISTANCE       0.55f
 #define GUANDAO_REVERSE_MIN_MS         1800u
-#define GUANDAO_REVERSE_MAX_MS         6500u
+#define GUANDAO_REVERSE_MAX_MS         12000u
 #define GUANDAO_REVERSE_SPEED_UNITS    -6.0f
 #define GUANDAO_STEERING_GAIN          2.2f
 #define GUANDAO_STEERING_CMD_LIMIT     35.0f
@@ -115,6 +124,14 @@ static uint8 portion1_reverse_route_index = 0;
 #define GUANDAO_REVERSE_FORWARD_SPEED  5.0f
 #define GUANDAO_REVERSE_PLAN_TOL_DIST  0.16f
 #define GUANDAO_REVERSE_PLAN_TOL_YAW   6.0f
+#define GUANDAO_REVERSE_TRACE_SPEED    -3.0f
+#define GUANDAO_REVERSE_TRACE_FINE_SPEED -2.0f
+#define GUANDAO_REVERSE_TRACE_LOOKAHEAD 0.35f
+#define GUANDAO_REVERSE_TRACE_REACHED  0.20f
+#define GUANDAO_REVERSE_TRACE_SEARCH   6
+#define GUANDAO_REVERSE_TRACE_GAIN     1.40f
+#define GUANDAO_REVERSE_TRACE_RATE     2.0f
+#define GUANDAO_REVERSE_TRACE_HOLD_MS  300u
 #define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
 #define PORTION3_PURSUIT_THRESHOLD     0.25f
 #define PORTION3_FINAL_STOP_DIST       0.6f
@@ -364,6 +381,161 @@ static uint8 guandao_reverse_execute_plan(void)
     guandao_debug_dist_final = get_distance(INS.current_state, daoche_target_state);
     return 0;
 }
+
+static uint8 guandao_reverse_trace_is_valid(void)
+{
+    return (daoche_target_flag
+            && daoche_point_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
+            && daoche_target_length > daoche_point_length + 1
+            && daoche_target_length <= portion1_finally_length
+            && daoche_target_length < MAX_LENGTH_INDEX);
+}
+
+static state_t guandao_reverse_trace_point(int16 index)
+{
+    if(index >= portion1_reverse_trace_end) return daoche_target_state;
+    if(index < 0) index = 0;
+    return INS.recode_map[index];
+}
+
+static void guandao_reverse_trace_prepare(void)
+{
+    portion1_reverse_trace_ready = 0;
+    portion1_reverse_trace_index = 0;
+    portion1_reverse_trace_end = 0;
+    portion1_reverse_target_hold_ms = 0;
+    portion1_reverse_steer_ms = 0;
+    guandao_debug_reverse_index = 0;
+    guandao_debug_reverse_end = 0;
+    guandao_debug_reverse_source = 0;
+    guandao_debug_reverse_yaw_error = 0.0f;
+
+    if(!guandao_reverse_trace_is_valid()) return;
+
+    portion1_reverse_trace_index = daoche_point_length + 1;
+    portion1_reverse_trace_end = daoche_target_length;
+    portion1_reverse_trace_ready = 1;
+    guandao_debug_reverse_index = portion1_reverse_trace_index;
+    guandao_debug_reverse_end = portion1_reverse_trace_end;
+    guandao_debug_reverse_source = 1;
+}
+
+static uint8 guandao_reverse_trace_update(void)
+{
+    state_t target;
+    state_t final_target = daoche_target_state;
+    int16 search_end;
+    int16 best_index;
+    float best_distance;
+    float final_distance;
+    float yaw_error;
+    float motion_heading;
+    float dx;
+    float dy;
+    float target_distance;
+    float target_angle;
+    float alpha;
+    float steering;
+    float desired_servo;
+    float steer_delta;
+    float speed = GUANDAO_REVERSE_TRACE_SPEED;
+    uint32 now_ms = system_getval_ms();
+    uint32 steer_elapsed_ms;
+
+    if(!portion1_reverse_trace_ready) return 0;
+
+    search_end = portion1_reverse_trace_index + GUANDAO_REVERSE_TRACE_SEARCH;
+    if(search_end > portion1_reverse_trace_end) search_end = portion1_reverse_trace_end;
+    best_index = portion1_reverse_trace_index;
+    best_distance = get_distance(INS.current_state, guandao_reverse_trace_point(best_index));
+    for(int16 i = portion1_reverse_trace_index + 1; i <= search_end; i++)
+    {
+        float distance = get_distance(INS.current_state, guandao_reverse_trace_point(i));
+        if(distance + 0.03f < best_distance)
+        {
+            best_distance = distance;
+            best_index = i;
+        }
+    }
+    if(best_index > portion1_reverse_trace_index) portion1_reverse_trace_index = best_index;
+
+    while(portion1_reverse_trace_index < portion1_reverse_trace_end
+            && get_distance(INS.current_state, guandao_reverse_trace_point(portion1_reverse_trace_index))
+                    <= GUANDAO_REVERSE_TRACE_REACHED)
+    {
+        portion1_reverse_trace_index++;
+    }
+
+    target = guandao_reverse_trace_point(portion1_reverse_trace_index);
+    while(portion1_reverse_trace_index < portion1_reverse_trace_end
+            && get_distance(INS.current_state, target) < GUANDAO_REVERSE_TRACE_LOOKAHEAD)
+    {
+        portion1_reverse_trace_index++;
+        target = guandao_reverse_trace_point(portion1_reverse_trace_index);
+    }
+
+    dx = target.x - INS.current_state.x;
+    dy = target.y - INS.current_state.y;
+    target_distance = hypotf(dx, dy);
+    if(target_distance < 0.12f) target_distance = 0.12f;
+    target_angle = atan2f(dx, dy) / M_PI * 180.0f;
+    motion_heading = guandao_normalize_angle(Yaw_1 + 180.0f);
+    alpha = guandao_normalize_angle(target_angle - motion_heading);
+    steering = GUANDAO_REVERSE_TRACE_GAIN
+            * atan2f(2.0f * WHEEL_BASE * sinf(alpha / 180.0f * M_PI), target_distance)
+            / M_PI * 180.0f;
+    Value_Limit_float(&steering, -GUANDAO_STEERING_CMD_LIMIT, GUANDAO_STEERING_CMD_LIMIT);
+
+    desired_servo = -steering;
+    steer_elapsed_ms = (portion1_reverse_steer_ms == 0) ? 20u : (uint32)(now_ms - portion1_reverse_steer_ms);
+    if(steer_elapsed_ms > 100u) steer_elapsed_ms = 20u;
+    steer_delta = desired_servo - portion1_reverse_steer_cmd;
+    {
+        float delta_limit = GUANDAO_REVERSE_TRACE_RATE * ((float)steer_elapsed_ms / 20.0f);
+        Value_Limit_float(&steer_delta, -delta_limit, delta_limit);
+    }
+    portion1_reverse_steer_cmd += steer_delta;
+    Value_Limit_float(&portion1_reverse_steer_cmd, -GUANDAO_STEERING_CMD_LIMIT, GUANDAO_STEERING_CMD_LIMIT);
+    portion1_reverse_steer_ms = now_ms;
+
+    final_distance = get_distance(INS.current_state, final_target);
+    yaw_error = guandao_normalize_angle(final_target.theta - Yaw_1);
+    if(final_distance <= GUANDAO_REVERSE_FINE_DIST
+            || portion1_reverse_trace_index >= portion1_reverse_trace_end - 1)
+    {
+        speed = GUANDAO_REVERSE_TRACE_FINE_SPEED;
+    }
+
+    daoche_flag = 1;
+    conrtol_mode = DAOCHE;
+    daoche_speed = speed;
+    out_v_l = speed;
+    out_v_r = speed;
+    out_servo = portion1_reverse_steer_cmd;
+    guandao_debug_stop_reason = 10;
+    guandao_debug_distance = get_distance(INS.current_state, target);
+    guandao_debug_angle_diff = alpha;
+    guandao_debug_dist_final = final_distance;
+    guandao_debug_reverse_index = portion1_reverse_trace_index;
+    guandao_debug_reverse_end = portion1_reverse_trace_end;
+    guandao_debug_reverse_yaw_error = yaw_error;
+
+    if(final_distance <= GUANDAO_REVERSE_PLAN_TOL_DIST
+            && fabsf(yaw_error) <= GUANDAO_REVERSE_PLAN_TOL_YAW)
+    {
+        if(portion1_reverse_target_hold_ms == 0) portion1_reverse_target_hold_ms = now_ms;
+        if((uint32)(now_ms - portion1_reverse_target_hold_ms) >= GUANDAO_REVERSE_TRACE_HOLD_MS)
+        {
+            return 1;
+        }
+    }
+    else
+    {
+        portion1_reverse_target_hold_ms = 0;
+    }
+
+    return 0;
+}
 /*初始化路径数据结构链*/
 /**
  * 函数说明：guandao_chain_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
@@ -483,6 +655,15 @@ void portion_1_reset(void)
     portion1_reverse_segment = 0;
     portion1_reverse_plan_ready = 0;
     portion1_reverse_route_index = 0;
+    portion1_reverse_trace_ready = 0;
+    portion1_reverse_trace_index = 0;
+    portion1_reverse_trace_end = 0;
+    portion1_reverse_target_hold_ms = 0;
+    portion1_reverse_steer_ms = 0;
+    guandao_debug_reverse_index = 0;
+    guandao_debug_reverse_end = 0;
+    guandao_debug_reverse_source = 0;
+    guandao_debug_reverse_yaw_error = 0.0f;
     INS.length_index = guandao_clamp_length(INS.length_index);
     INS.current_point_index = 0;
     INS.planned_length = 0;
@@ -556,9 +737,20 @@ void portion_1(void)
             portion1_reverse_start_state = INS.current_state;
             portion1_reverse_segment_start_state = INS.current_state;
             portion1_reverse_segment = 0;
-            guandao_reverse_prepare_plan();
+            guandao_reverse_trace_prepare();
+            if(portion1_reverse_trace_ready)
+            {
+                portion1_reverse_plan_ready = 0;
+                portion1_reverse_route_index = 0;
+            }
+            else
+            {
+                guandao_reverse_prepare_plan();
+                guandao_debug_reverse_source = portion1_reverse_plan_ready ? 2 : 3;
+            }
             portion1_reverse_run_start_ms = system_getval_ms();
-            if(portion1_reverse_plan_ready && portion1_reverse_plan.route_count > 0
+            if(!portion1_reverse_trace_ready
+                    && portion1_reverse_plan_ready && portion1_reverse_plan.route_count > 0
                     && portion1_reverse_plan.routes[0].is_forward)
             {
                 daoche_flag = 0;
@@ -581,7 +773,19 @@ void portion_1(void)
         guandao_debug_stop_reason = 7;
         conrtol_mode = DAOCHE;
         guandao_debug_dist_final = reverse_travelled;
-        if(portion1_reverse_plan_ready)
+        if(portion1_reverse_trace_ready)
+        {
+            if(guandao_reverse_trace_update())
+            {
+                reverse_finished = 1;
+            }
+            else if(reverse_elapsed_ms < GUANDAO_REVERSE_MAX_MS)
+            {
+                follow_points_show(&INS);
+                return;
+            }
+        }
+        if(!portion1_reverse_trace_ready && portion1_reverse_plan_ready)
         {
             if(guandao_reverse_execute_plan())
             {
@@ -605,7 +809,7 @@ void portion_1(void)
                 return;
             }
         }
-        if(daoche_target_flag)
+        if(!portion1_reverse_trace_ready && daoche_target_flag)
         {
             float target_dx = daoche_target_state.x - INS.current_state.x;
             float target_dy = daoche_target_state.y - INS.current_state.y;
@@ -644,7 +848,9 @@ void portion_1(void)
                 reverse_finished = 1;
             }
         }
-        else if(reverse_travelled >= GUANDAO_REVERSE_DISTANCE && reverse_elapsed_ms >= GUANDAO_REVERSE_MIN_MS)
+        else if(!portion1_reverse_trace_ready
+                && reverse_travelled >= GUANDAO_REVERSE_DISTANCE
+                && reverse_elapsed_ms >= GUANDAO_REVERSE_MIN_MS)
         {
             reverse_finished = 1;
         }
@@ -653,12 +859,14 @@ void portion_1(void)
         out_servo = portion1_reverse_steer_cmd;
         if(reverse_finished || reverse_elapsed_ms >= GUANDAO_REVERSE_MAX_MS)
         {
+            uint8 reverse_timeout = (!reverse_finished && reverse_elapsed_ms >= GUANDAO_REVERSE_MAX_MS);
             out_v_l = 0;
             out_v_r = 0;
             out_servo = 0;
             daoche_flag = 0;
             conrtol_mode = IDLE;
-            portion1_reverse_state = 3;
+            portion1_reverse_state = reverse_timeout ? 4 : 3;
+            guandao_debug_stop_reason = reverse_timeout ? 11 : 8;
             rear_motor_stop();
             Buzzer_check(50);
         }
@@ -669,6 +877,14 @@ void portion_1(void)
         out_v_r = 0;
         out_servo = 0;
         guandao_debug_stop_reason = 8;
+        conrtol_mode = IDLE;
+    }
+    else if(portion1_reverse_state == 4)
+    {
+        out_v_l = 0;
+        out_v_r = 0;
+        out_servo = 0;
+        guandao_debug_stop_reason = 11;
         conrtol_mode = IDLE;
     }
     else
