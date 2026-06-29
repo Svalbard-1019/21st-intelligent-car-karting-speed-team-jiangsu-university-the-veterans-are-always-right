@@ -444,6 +444,7 @@ static uint8 guandao_taught_reverse_update(void)
     state_t target;
     int16 search_end;
     int16 best_index;
+    int16 lookahead_index;
     float best_distance;
     float target_distance;
     float final_distance;
@@ -482,12 +483,13 @@ static uint8 guandao_taught_reverse_update(void)
         portion1_taught_reverse_index++;
     }
 
-    target = portion1_taught_reverse_map[portion1_taught_reverse_index];
-    while(portion1_taught_reverse_index < portion1_taught_reverse_length - 1
+    lookahead_index = portion1_taught_reverse_index;
+    target = portion1_taught_reverse_map[lookahead_index];
+    while(lookahead_index < portion1_taught_reverse_length - 1
             && get_distance(INS.current_state, target) < GUANDAO_TAUGHT_REVERSE_LOOKAHEAD)
     {
-        portion1_taught_reverse_index++;
-        target = portion1_taught_reverse_map[portion1_taught_reverse_index];
+        lookahead_index++;
+        target = portion1_taught_reverse_map[lookahead_index];
     }
 
     target_distance = get_distance(INS.current_state, target);
