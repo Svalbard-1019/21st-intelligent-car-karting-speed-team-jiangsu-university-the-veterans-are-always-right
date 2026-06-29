@@ -144,10 +144,6 @@ extern float persuit_threshold ;  //PURSUIT_THRESHOLD
 extern float recode_threshold ;//RECORD_THRESHOLD
 extern int16 preview_spets ;       //PREVIEW_SPETS
 extern float final_dsts ;
-extern int16 guandao_debug_reverse_index;
-extern int16 guandao_debug_reverse_end;
-extern uint8 guandao_debug_reverse_source;
-extern float guandao_debug_reverse_yaw_error;
 extern float guandao_debug_distance;             // 自动驾驶调试：当前位置到当前目标点距离
 extern float guandao_debug_angle_diff;           // 自动驾驶调试：车头方向与目标点方向夹角
 extern float guandao_debug_dist_final;           // 自动驾驶调试：当前位置到终点距离
