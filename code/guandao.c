@@ -364,6 +364,38 @@ static uint8 guandao_reverse_execute_plan(void)
     guandao_debug_dist_final = get_distance(INS.current_state, daoche_target_state);
     return 0;
 }
+
+uint8 guandao_reverse_debug_state(void)
+{
+    return portion1_reverse_state;
+}
+
+uint8 guandao_reverse_debug_plan_ready(void)
+{
+    return portion1_reverse_plan_ready;
+}
+
+uint8 guandao_reverse_debug_route_index(void)
+{
+    return portion1_reverse_route_index;
+}
+
+int16 guandao_reverse_debug_route_count(void)
+{
+    return portion1_reverse_plan.route_count;
+}
+
+float guandao_reverse_debug_target_distance(void)
+{
+    if(!daoche_target_flag) return -1.0f;
+    return get_distance(INS.current_state, daoche_target_state);
+}
+
+float guandao_reverse_debug_target_yaw_error(void)
+{
+    if(!daoche_target_flag) return 0.0f;
+    return guandao_normalize_angle(daoche_target_state.theta - Yaw_1);
+}
 /*初始化路径数据结构链*/
 /**
  * 函数说明：guandao_chain_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。

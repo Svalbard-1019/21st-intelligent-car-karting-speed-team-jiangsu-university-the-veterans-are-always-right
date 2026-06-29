@@ -173,7 +173,7 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,rstate=%d,pready=%d,pidx=%d,pcnt=%d,td100=%ld,tyaw10=%ld,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
                       (unsigned long)now_ms,
                       INS.current_point_index,
                       INS.length_index,
@@ -183,6 +183,12 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(guandao_debug_angle_diff, 10.0f),
                       (long)Serial_Debug_Scale(guandao_debug_dist_final, 100.0f),
                       guandao_debug_stop_reason,
+                      guandao_reverse_debug_state(),
+                      guandao_reverse_debug_plan_ready(),
+                      guandao_reverse_debug_route_index(),
+                      guandao_reverse_debug_route_count(),
+                      (long)Serial_Debug_Scale(guandao_reverse_debug_target_distance(), 100.0f),
+                      (long)Serial_Debug_Scale(guandao_reverse_debug_target_yaw_error(), 10.0f),
                       (long)Serial_Debug_Scale(persuit_threshold, 100.0f),
                       preview_spets,
                       (long)Serial_Debug_Scale(INS.current_state.x, 100.0f),

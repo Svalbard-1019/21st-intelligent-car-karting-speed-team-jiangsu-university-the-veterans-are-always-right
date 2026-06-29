@@ -313,6 +313,12 @@ void guandao_trace(guandao_state * state);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void portion_1(void);                         // 科目一完整自动驾驶入口，按 INS 路线追踪到停车点/终点
+uint8 guandao_reverse_debug_state(void);
+uint8 guandao_reverse_debug_plan_ready(void);
+uint8 guandao_reverse_debug_route_index(void);
+int16 guandao_reverse_debug_route_count(void);
+float guandao_reverse_debug_target_distance(void);
+float guandao_reverse_debug_target_yaw_error(void);
 /**
  * 接口说明：portion_1_reset()。清零内部状态和控制输出，用于重新进入测试/自动驾驶前恢复初始状态。
  * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
