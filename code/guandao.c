@@ -434,7 +434,7 @@ static uint8 guandao_reverse_trace_update(void)
     float dy;
     float target_distance;
     float target_angle;
-    float alpha;
+    float reverse_heading_error;
     float steering;
     float desired_servo;
     float steer_delta;
@@ -480,9 +480,9 @@ static uint8 guandao_reverse_trace_update(void)
     if(target_distance < 0.12f) target_distance = 0.12f;
     target_angle = atan2f(dx, dy) / M_PI * 180.0f;
     motion_heading = guandao_normalize_angle(Yaw_1 + 180.0f);
-    alpha = guandao_normalize_angle(target_angle - motion_heading);
+    reverse_heading_error = guandao_normalize_angle(target_angle - motion_heading);
     steering = GUANDAO_REVERSE_TRACE_GAIN
-            * atan2f(2.0f * WHEEL_BASE * sinf(alpha / 180.0f * M_PI), target_distance)
+            * atan2f(2.0f * WHEEL_BASE * sinf(reverse_heading_error / 180.0f * M_PI), target_distance)
             / M_PI * 180.0f;
     Value_Limit_float(&steering, -GUANDAO_STEERING_CMD_LIMIT, GUANDAO_STEERING_CMD_LIMIT);
 
@@ -514,7 +514,7 @@ static uint8 guandao_reverse_trace_update(void)
     out_servo = portion1_reverse_steer_cmd;
     guandao_debug_stop_reason = 10;
     guandao_debug_distance = get_distance(INS.current_state, target);
-    guandao_debug_angle_diff = alpha;
+    guandao_debug_angle_diff = reverse_heading_error;
     guandao_debug_dist_final = final_distance;
     guandao_debug_reverse_index = portion1_reverse_trace_index;
     guandao_debug_reverse_end = portion1_reverse_trace_end;
