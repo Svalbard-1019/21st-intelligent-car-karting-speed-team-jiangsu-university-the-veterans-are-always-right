@@ -91,7 +91,7 @@ static uint8 portion1_reverse_route_index = 0;
 #define GUANDAO_REVERSE_MAX_MS         6500u
 #define GUANDAO_REVERSE_SPEED_UNITS    -6.0f
 #define GUANDAO_STEERING_GAIN          2.2f
-#define GUANDAO_STEERING_CMD_LIMIT     35.0f
+#define GUANDAO_STEERING_CMD_LIMIT     40.0f
 #define GUANDAO_HIGH_SPEED_THRESHOLD   5.0f
 #define GUANDAO_HIGH_SPEED_GAIN        1.55f
 #define GUANDAO_HIGH_SPEED_CMD_LIMIT   32.0f
