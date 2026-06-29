@@ -315,7 +315,7 @@ void guandao_trace(guandao_state * state);
 void portion_1(void);                         // 科目一完整自动驾驶入口，按 INS 路线追踪到停车点/终点
 uint8 guandao_reverse_debug_state(void);
 uint8 guandao_reverse_debug_plan_ready(void);
-uint8 guandao_reverse_debug_route_index(void);
+int16 guandao_reverse_debug_route_index(void);
 int16 guandao_reverse_debug_route_count(void);
 float guandao_reverse_debug_target_distance(void);
 float guandao_reverse_debug_target_yaw_error(void);
