@@ -969,17 +969,11 @@ void portion_1(void)
         uint8 reverse_ready = 0;
         uint8 final_stop_ready = 0;
         uint8 reverse_route_valid = 0;
-        float reverse_start_distance = 10000.0f;
         pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
         active_route_length = guandao_route_length(&INS);
         reverse_route_valid = (daoche_point_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && active_route_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
-                && daoche_point_length < portion1_finally_length
-                && daoche_start_flag);
-        if(reverse_route_valid)
-        {
-            reverse_start_distance = get_distance(INS.current_state, daoche_start_state);
-        }
+                && daoche_point_length < portion1_finally_length);
         if(!reverse_route_valid
                 && active_route_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && INS.current_point_index >= active_route_length - 2
@@ -991,7 +985,7 @@ void portion_1(void)
         {
             // 必须已经追到路线末段，并真正到达记录时的第一停车位姿附近。
             if(INS.current_point_index >= active_route_length - 2
-                    && reverse_start_distance <= 0.30f)
+                    && guandao_debug_dist_final <= 0.30f)
             {
                 reverse_ready = 1;
             }
