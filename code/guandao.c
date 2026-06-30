@@ -132,7 +132,9 @@ static uint32 portion1_taught_reverse_steer_ms = 0;
 #define GUANDAO_TAUGHT_REVERSE_GAIN    1.40f
 #define GUANDAO_TAUGHT_REVERSE_RATE    2.0f
 #define GUANDAO_TAUGHT_REVERSE_HOLD_MS 300u
-#define GUANDAO_TAUGHT_REVERSE_MAX_MS  12000u
+// 低速教学倒车的弯线路程明显长于起终点直线距离；12 s 会在距目标约 0.3 m 时超时。
+// 末端另有 12 cm 位置停车保护，因此延长运行时间而不放宽停车边界。
+#define GUANDAO_TAUGHT_REVERSE_MAX_MS  18000u
 #define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
 #define PORTION3_PURSUIT_THRESHOLD     0.25f
 #define PORTION3_FINAL_STOP_DIST       0.6f
