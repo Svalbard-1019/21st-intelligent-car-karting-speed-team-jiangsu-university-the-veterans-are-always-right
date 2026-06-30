@@ -3,12 +3,12 @@
  *
  * 模块职责：
  * 1. Init_All() 初始化屏幕、按键、蜂鸣器、编码器、电机、IMU、GPS、路线结构。
- * 2. Encoder_Get() 读取后轮编码器，目前左右反馈共用左编码器。
+ * 2. Encoder_Get() 分别读取左右后轮编码器，用于里程和打滑判断。
  * 3. Moter_Set()/VeerMoter_Set() 输出旧电机 PWM。
  * 4. Rack_Test_Run() 提供机架测试页面。
  *
  * 硬件注意：
- * - 后轮编码器当前使用 TIM2：P33_7/P33_6。
+ * - 左后轮编码器使用 TIM2：P33_7/P33_6；右后轮使用 TIM5：P10_3/P10_1。
  * - 蜂鸣器为无源蜂鸣器，Buzzer_check() 会输出约 2kHz 方波。
  * - 如果 Enc 没数据，优先查 P33_7/P33_6 是否被遥控/摄像头/其他外设占用。
  */
@@ -17,7 +17,7 @@
  * 主函数/科目一调用链：
  * 1. core0_main() 首先调用 Init_All()，Init_All() 集中初始化屏幕、按键、蜂鸣器、编码器、电机、IMU、GPS 和惯导状态。
  * 2. CCU61_CH1 中断周期调用 Key_Scan()、IMU_GetValues()；CCU61_CH0 中断周期调用转向控制、GPS 解析和后轮编码器采样。
- * 3. 科目一记录模式通过 Encoder_Get(&guandao_ecd) 获取后轮里程；当前左右反馈共用左后轮编码器。
+ * 3. 科目一记录模式通过 Encoder_Get(&guandao_ecd) 获取左右后轮里程。
  * 4. Rack_Test_Run() 是架上调试入口，用来分别验证前轮转向、后轮速度和 IMU 直线保持，避免一上来就跑完整科目一。
  */
 
@@ -323,7 +323,10 @@ void Encoder_count_init(Encoder_t *count)
  */
 void Encoder_Init(void)
 {
-    encoder_quad_init(ENCODER_QUADDEC, ENCODER_QUADDEC_A, ENCODER_QUADDEC_B);
+    encoder_quad_init(ENCODER_LEFT, ENCODER_LEFT_A, ENCODER_LEFT_B);
+    // GPT12 的 TIM5 不支持 TIM2/3/4 那种完整正交边沿采集。
+    // 用 A 相作脉冲、B 相作方向输入，可稳定获得右轮正反向计数。
+    encoder_dir_init(ENCODER_RIGHT, ENCODER_RIGHT_A, ENCODER_RIGHT_B);
 
 }
 
@@ -341,22 +344,30 @@ void Encoder_Get(Encoder_t *count)
 {
 
     count->left_counter = l_ecdcounter();                  // 获取左编码器计数
-    int32 raw_delta = calculate_delta(count->left_counter,count ->last_ecdcount_l);
-    if(raw_delta > ENCODER_DELTA_ABS_MAX || raw_delta < -ENCODER_DELTA_ABS_MAX)
+    // 左右编码器机械安装方向相反，统一约定车辆前进时两侧计数均为正。
+    count->right_counter = (int16)(-r_ecdcounter());       // 获取右编码器计数并反向
+    int32 raw_delta_l = calculate_delta(count->left_counter, count->last_ecdcount_l);
+    int32 raw_delta_r = calculate_delta(count->right_counter, count->last_ecdcount_r);
+    if(raw_delta_l > ENCODER_DELTA_ABS_MAX || raw_delta_l < -ENCODER_DELTA_ABS_MAX)
     {
-        raw_delta = 0;
         count->delta_l = 0;
     }
     else
     {
-        count->delta_l = (count->delta_l * 3 + raw_delta) / 4;
+        count->delta_l = (count->delta_l * 3 + raw_delta_l) / 4;
     }
-    count->right_counter  = count->left_counter;           // 当前只接左编码器，左右后轮共用速度反馈
-    count->delta_r = count->delta_l;
+    if(raw_delta_r > ENCODER_DELTA_ABS_MAX || raw_delta_r < -ENCODER_DELTA_ABS_MAX)
+    {
+        count->delta_r = 0;
+    }
+    else
+    {
+        count->delta_r = (count->delta_r * 3 + raw_delta_r) / 4;
+    }
 //    ips200_show_int(X(1),  Y(8),count->delta_l ,5);
 //    ips200_show_int(X(10),  Y(8),count->delta_r ,5);
-    count ->last_ecdcount_l = count->left_counter;
-    count-> last_ecdcount_r = count->right_counter ;
+    count->last_ecdcount_l = count->left_counter;
+    count->last_ecdcount_r = count->right_counter;
 //    encoder_clear_count(ENCODER_QUADDEC);                                       // 清空编码器计数
 
 }
@@ -572,6 +583,10 @@ void Rack_Straight_Update(void)
  */
 void Rack_Test_Run(void)
 {
+    // Rack Test 不经过 guandao 的 update_state()，需要在这里主动刷新双编码器。
+    // 传感器页显示累计原始计数，避免主循环高频读取时瞬时增量很快滤波到 0。
+    Encoder_Get(&Speed_ecd);
+
     if(key1_flag == 1)
     {
         key1_flag = 0;
@@ -614,8 +629,8 @@ void Rack_Test_Run(void)
     {
         /* Stage 0: 传感器显示, Stage 1: 前轮转向测试 */
         ips200_show_string(X(1), Y(3), "Yaw");         ips200_show_float(X(10), Y(3), Yaw_1, 4, 2);
-        ips200_show_string(X(1), Y(4), "EncL");        ips200_show_int(X(10), Y(4), Speed_ecd.delta_l, 5);
-        ips200_show_string(X(1), Y(5), "EncR");        ips200_show_int(X(10), Y(5), Speed_ecd.delta_r, 5);
+        ips200_show_string(X(1), Y(4), "EncL");        ips200_show_int(X(10), Y(4), Speed_ecd.left_counter, 6);
+        ips200_show_string(X(1), Y(5), "EncR");        ips200_show_int(X(10), Y(5), Speed_ecd.right_counter, 6);
         ips200_show_string(X(1), Y(6), "SteerT");      ips200_show_int(X(10), Y(6), rack_test_steer_target, 5);
         ips200_show_string(X(1), Y(7), "SteerA");      ips200_show_int(X(10), Y(7), angle, 5);
         ips200_show_string(X(1), Y(8), "SteerO");      ips200_show_int(X(10), Y(8), angle_speed, 5);

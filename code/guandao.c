@@ -67,6 +67,8 @@ uint8 daoche_target_flag = 0;
 int16 daoche_point_length = 0;    // 倒车点长度
 uint8 daoche_flag =0;                    // 倒车标志
 uint8 daoche_flash_cheack =0;// 倒车Flash检查标志
+static uint8 park_record_stage = 0;
+static uint8 guandao_record_init_pending = 1;
 static uint8 portion1_state_flag = 0;
 static uint16 portion1_finally_length = 0;
 static uint8 portion1_reverse_state = 0;
@@ -535,6 +537,14 @@ static uint8 guandao_taught_reverse_update(void)
     guandao_debug_angle_diff = heading_error;
     guandao_debug_dist_final = final_distance;
 
+    // 障碍物附近以停车位置优先：教学路径已经走到末端且进入 12 cm 范围就结束。
+    // 航向未完全收敛时继续倒车可能越过目标并撞击立柱。
+    if(portion1_taught_reverse_index >= portion1_taught_reverse_length - 2
+            && final_distance <= GUANDAO_REVERSE_TARGET_DIST)
+    {
+        return 1;
+    }
+
     if(final_distance <= GUANDAO_REVERSE_PLAN_TOL_DIST
             && fabsf(final_yaw_error) <= GUANDAO_REVERSE_PLAN_TOL_YAW)
     {
@@ -730,7 +740,8 @@ void portion_1_reset(void)
     INS.current_state.theta = 0.0f;
     Encoder_count_init(&guandao_ecd);
     Encoder_count_init(&Speed_ecd);
-    encoder_clear_count(ENCODER_QUADDEC);
+    encoder_clear_count(ENCODER_LEFT);
+    encoder_clear_count(ENCODER_RIGHT);
     rear_motor_stop();
 
     if(INS.length_index > 1)
@@ -1017,7 +1028,6 @@ void portion_1(void)
  */
 void recode_waypoint(guandao_state * state)
 {
-    static uint8 park_record_stage = 0;
     static uint8 rc_ch4_last_pressed = 0;
     static uint8 gps_auto_has_point = 0;
     static state_t gps_auto_last_state = {0.0f, 0.0f, 0.0f};
@@ -1349,7 +1359,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    //限幅
    Value_Limit_float(&target_steering ,-MAX_STEERING_RAD,MAX_STEERING_RAD);
 
-//   slip_cheak(&guandao_ecd,target_steering);
+   slip_cheak(&guandao_ecd,target_steering);
 
    float dist_to_final = get_distance(state->current_state, guandao_route_point(state, route_length - 1));
    guandao_debug_dist_final = dist_to_final;
@@ -1603,7 +1613,6 @@ float out_servo = 0;
  */
 void guandao_recode(guandao_state * state)
 {
-    static uint8 flag0 = 1;                                                 // 首次调用标志（1=首次，0=已初始化），用于执行一次性初始化
     static uint32 key1_save_start_ms = 0;
     static uint8 key1_save_wait_release = 0;
     static uint32 rc_ch3_start_ms = 0;
@@ -1620,7 +1629,7 @@ void guandao_recode(guandao_state * state)
         choice_flag++;                                                  // 空指针保护：若链表提前结束则退出函数
     }
 
-    if(flag0)
+    if(guandao_record_init_pending)
     {
         guandao_state_init(p);
         daoche_point_length = 0;
@@ -1628,7 +1637,8 @@ void guandao_recode(guandao_state * state)
         daoche_target_length = 0;
         daoche_target_flag = 0;
         daoche_flash_cheack = 0;
-        flag0 = 0;
+        park_record_stage = 0;
+        guandao_record_init_pending = 0;
     }
     update_state(p  , &guandao_ecd);
     gps_recode_average_update(p);
@@ -1643,6 +1653,13 @@ void guandao_recode(guandao_state * state)
         if(key1_save_start_ms == 0) key1_save_start_ms = now_ms;
         if((uint32)(now_ms - key1_save_start_ms) > 1500 && !key1_save_wait_release)
         {
+            // 第二次按键若直接长按保存，先登记当前倒车终点，再写 Flash。
+            // 否则旧逻辑会在按键释放时才登记终点，导致 Flash 中 target_flag 仍为 0。
+            if(p == &INS && daoche_start_flag && !daoche_target_flag)
+            {
+                key1_flag = 1;
+                recode_waypoint(p);
+            }
             Flash_Store_Mode(route_setting_choice);
             Buzzer_check(200);
             key1_save_wait_release = 1;
@@ -1670,6 +1687,11 @@ void guandao_recode(guandao_state * state)
         if(rc_ch3_start_ms == 0) rc_ch3_start_ms = now_ms;
         if((uint32)(now_ms - rc_ch3_start_ms) > 1500 && !rc_ch3_wait_release)
         {
+            if(p == &INS && daoche_start_flag && !daoche_target_flag)
+            {
+                key1_flag = 1;
+                recode_waypoint(p);
+            }
             Flash_Store_Mode(route_setting_choice);
             Buzzer_check(200);
             rc_ch3_wait_release = 1;
@@ -1701,6 +1723,19 @@ void guandao_recode(guandao_state * state)
     if(GPS_WORK_FLAG){if(key2_flag == 1){ key2_flag = 0 ; if(recode_gps(p)) Buzzer_check(20);  }}        // GPS辅助记录（可选）：当GPS工作标志为真且按键2被按下时
 //     guandao_show();
 
+}
+
+void guandao_record_session_reset(void)
+{
+    guandao_record_init_pending = 1;
+    park_record_stage = 0;
+    daoche_point_length = 0;
+    daoche_start_flag = 0;
+    daoche_target_length = 0;
+    daoche_target_flag = 0;
+    daoche_flash_cheack = 0;
+    daoche_flag = 0;
+    key1_flag = 0;
 }
 /*这是一个路径生成器函数，
  * 用于自动构建一个对称的8段式复杂路径。

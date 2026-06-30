@@ -262,7 +262,11 @@ void rear_motor_pid_update_100ms(void)
     float ff     = target_pulses * REAR_FF_GAIN;
     float pid    = REAR_KP * error + REAR_KI * integral + REAR_KD * derivative;
     float pwm_f  = ff + pid;
-    if(target_mps < -0.01f && pwm_f > -(float)REAR_REVERSE_PWM_MIN)
+    // 最小反向 PWM 只用于静止起步克服摩擦。
+    // 车辆已经在倒退时必须允许 PID 减小反向输出、甚至短暂正向制动，
+    // 否则低速倒车目标也会被强制保持在 -1800，造成持续超速。
+    if(target_mps < -0.01f && actual_mps > -0.05f
+            && pwm_f < 0.0f && pwm_f > -(float)REAR_REVERSE_PWM_MIN)
     {
         pwm_f = -(float)REAR_REVERSE_PWM_MIN;
     }

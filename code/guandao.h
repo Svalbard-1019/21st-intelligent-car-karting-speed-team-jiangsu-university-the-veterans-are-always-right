@@ -34,7 +34,7 @@
 
 // ============================== 科目一惯导参数 ==============================
 // ONE_TICK_DISTANCE：后轮编码器每个计数对应的车辆前进距离，单位 m。
-// 当前只接左后轮编码器，左右轮里程都复用同一反馈，所以这个值直接影响记录距离和自动驾驶里程。
+// 左右后轮编码器的脉冲距离标定值，直接影响记录距离、自动驾驶里程和打滑检测。
 #define ONE_TICK_DISTANCE                      0.000378f
 #define MAX_LENGTH_INDEX                       400        // 单条路线最多保存点数，Flash 写入也按这个上限组织
 #define MAX_GPS_RECODE                         100        // GPS 辅助校验点数量上限
@@ -293,6 +293,7 @@ void pursuit_midhandle(guandao_state * state ,state_t * current_state , int inde
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void guandao_recode(guandao_state * state);
+void guandao_record_session_reset(void);
 /**
  * 接口说明：guandao_trace()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
  * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。

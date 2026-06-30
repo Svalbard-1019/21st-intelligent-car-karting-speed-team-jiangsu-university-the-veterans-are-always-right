@@ -14,7 +14,7 @@
  * 主函数/科目一调用链：
  * 1. core0_main() 首先调用 Init_All()，Init_All() 集中初始化屏幕、按键、蜂鸣器、编码器、电机、IMU、GPS 和惯导状态。
  * 2. CCU61_CH1 中断周期调用 Key_Scan()、IMU_GetValues()；CCU61_CH0 中断周期调用转向控制、GPS 解析和后轮编码器采样。
- * 3. 科目一记录模式通过 Encoder_Get(&guandao_ecd) 获取后轮里程；当前左右反馈共用左后轮编码器。
+ * 3. 科目一记录模式通过 Encoder_Get(&guandao_ecd) 获取左右后轮里程。
  * 4. Rack_Test_Run() 是架上调试入口，用来分别验证前轮转向、后轮速度和 IMU 直线保持，避免一上来就跑完整科目一。
  */
 
@@ -73,8 +73,10 @@ extern Encoder_t guandao_ecd;
 extern Encoder_t Steer_ecd;
 
 //宏定义
-#define r_ecdcounter()    encoder_get_count(ENCODER_QUADDEC)
-#define l_ecdcounter()    encoder_get_count(ENCODER_QUADDEC)
+#define l_ecdcounter()    encoder_get_count(ENCODER_LEFT)
+// TIM2 正交模式的驱动读数会自动 /4；TIM5 方向模式需手动做同样归一化。
+#define RIGHT_ENCODER_COUNT_DIV       (4)
+#define r_ecdcounter()    ((int16)(encoder_get_count(ENCODER_RIGHT) / RIGHT_ENCODER_COUNT_DIV))
 #define BUZZER_PIN  (P33_10)      //蜂鸣器
 
 #define KEY1                    (P20_6)    //按键引脚配置   //P20_6  //P11_3
@@ -91,9 +93,17 @@ extern Encoder_t Steer_ecd;
 #define SERVO_MOTOR_LMAX            (65)                                        //左打死60
 #define SERVO_MOTOR_RMAX            (95)                                       //右打死100
 
-#define ENCODER_QUADDEC                 (TIM2_ENCODER)
-#define ENCODER_QUADDEC_A               (TIM2_ENCODER_CH1_P33_7)
-#define ENCODER_QUADDEC_B               (TIM2_ENCODER_CH2_P33_6)
+#define ENCODER_LEFT                    (TIM2_ENCODER)
+#define ENCODER_LEFT_A                  (TIM2_ENCODER_CH1_P33_7)
+#define ENCODER_LEFT_B                  (TIM2_ENCODER_CH2_P33_6)
+#define ENCODER_RIGHT                   (TIM5_ENCODER)
+#define ENCODER_RIGHT_A                 (TIM5_ENCODER_CH1_P10_3) // A相/计数脉冲
+#define ENCODER_RIGHT_B                 (TIM5_ENCODER_CH2_P10_1) // B相/计数方向
+
+// 兼容仍以单后轮编码器名称访问左轮的旧代码（后轮速度 PID 等）。
+#define ENCODER_QUADDEC                 ENCODER_LEFT
+#define ENCODER_QUADDEC_A               ENCODER_LEFT_A
+#define ENCODER_QUADDEC_B               ENCODER_LEFT_B
 
 #define PWM_L              (ATOM0_CH3_P21_5)
 #define PWM_R              (ATOM0_CH1_P21_3)
