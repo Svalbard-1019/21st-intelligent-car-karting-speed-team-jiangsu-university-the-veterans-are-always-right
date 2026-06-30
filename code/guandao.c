@@ -778,7 +778,12 @@ void portion_1(void)
         portion1_finally_length = INS.length_index;
         if(daoche_point_length > 0 && daoche_point_length < portion1_finally_length)
         {
-            INS.length_index = daoche_point_length;                // KEY1记录的点作为科目一停车点
+            // daoche_point_length 是停车点的数组下标，路线长度必须再加 1 才会包含该点。
+            INS.length_index = daoche_point_length + 1;
+            if(INS.length_index > portion1_finally_length)
+            {
+                INS.length_index = portion1_finally_length;
+            }
         }
         else
         {
@@ -964,12 +969,19 @@ void portion_1(void)
         uint8 reverse_ready = 0;
         uint8 final_stop_ready = 0;
         uint8 reverse_route_valid = 0;
+        float reverse_start_distance = 10000.0f;
         pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
         active_route_length = guandao_route_length(&INS);
         reverse_route_valid = (daoche_point_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && active_route_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
-                && daoche_point_length < portion1_finally_length);
-        if(active_route_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
+                && daoche_point_length < portion1_finally_length
+                && daoche_start_flag);
+        if(reverse_route_valid)
+        {
+            reverse_start_distance = get_distance(INS.current_state, daoche_start_state);
+        }
+        if(!reverse_route_valid
+                && active_route_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && INS.current_point_index >= active_route_length - 2
                 && guandao_debug_dist_final <= GUANDAO_REVERSE_FINAL_DIST)
         {
@@ -977,20 +989,14 @@ void portion_1(void)
         }
         if(reverse_route_valid)
         {
-            if(INS.current_point_index >= active_route_length)
-            {
-                reverse_ready = 1;
-            }
-            else if(INS.current_point_index >= active_route_length - 2 && guandao_debug_distance <= GUANDAO_REVERSE_TRIGGER_DIST)
-            {
-                reverse_ready = 1;
-            }
-            else if(guandao_debug_dist_final <= GUANDAO_REVERSE_FINAL_DIST)
+            // 必须已经追到路线末段，并真正到达记录时的第一停车位姿附近。
+            if(INS.current_point_index >= active_route_length - 2
+                    && reverse_start_distance <= 0.30f)
             {
                 reverse_ready = 1;
             }
         }
-        if(reverse_ready || final_stop_ready || INS.current_point_index >= active_route_length)
+        if(reverse_ready || final_stop_ready)
         {
             if(reverse_ready)
             {
