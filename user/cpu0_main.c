@@ -140,7 +140,7 @@ static void Serial_Debug_Update(void)
         guandao_state *record_state = Get_Record_Display_State();
 
         len = sprintf(line,
-                      "REC,t=%lu,route=%d,len=%d,gpslen=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,lastx100=%ld,lasty100=%ld,lastth10=%ld,encL=%d,encR=%d,key1=%d,ch1=%d,ch2=%d,ch3=%d,ch4=%d,gps=%d,sat=%d,gflag=%d,parkS=%d,parkT=%d\r\n",
+                      "REC,t=%lu,route=%d,len=%d,gpslen=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,lastx100=%ld,lasty100=%ld,lastth10=%ld,encL=%d,encR=%d,key1=%d,ch1=%d,ch2=%d,ch3=%d,ch4=%d,gps=%d,sat=%d,gflag=%d,parkS=%d,parkT=%d,parkE=%d\r\n",
                       (unsigned long)now_ms,
                       route_setting_choice,
                       record_state->length_index,
@@ -164,7 +164,8 @@ static void Serial_Debug_Update(void)
                       gnss.satellite_used,
                       gnss_flag,
                       daoche_point_length,
-                      daoche_target_flag);
+                      daoche_target_flag,
+                      daoche_target_length);
         if(len > 0)
         {
             Serial_Debug_Write(line);

@@ -68,6 +68,7 @@ int16 daoche_point_length = 0;    // 倒车点长度
 uint8 daoche_flag =0;                    // 倒车标志
 uint8 daoche_flash_cheack =0;// 倒车Flash检查标志
 static uint8 park_record_stage = 0;
+static uint32 park_start_record_ms = 0;
 static uint8 guandao_record_init_pending = 1;
 static uint8 portion1_state_flag = 0;
 static uint16 portion1_finally_length = 0;
@@ -135,6 +136,9 @@ static uint32 portion1_taught_reverse_steer_ms = 0;
 // 低速教学倒车的弯线路程明显长于起终点直线距离；实测 18 s 仍会在距目标约 0.23 m 时超时。
 // 末端另有 12 cm 位置停车保护，因此延长运行时间而不放宽停车边界。
 #define GUANDAO_TAUGHT_REVERSE_MAX_MS  24000u
+#define GUANDAO_PARK_SECOND_MIN_MS      1000u
+#define GUANDAO_PARK_SECOND_MIN_DIST    0.30f
+#define GUANDAO_PARK_SECOND_MIN_POINTS  2
 #define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
 #define PORTION3_PURSUIT_THRESHOLD     0.25f
 #define PORTION3_FINAL_STOP_DIST       0.6f
@@ -1044,6 +1048,7 @@ void recode_waypoint(guandao_state * state)
         if(auto_gps_enabled)
         {
             park_record_stage = 0;
+            park_start_record_ms = 0;
             rc_ch4_last_pressed = 0;
             gps_auto_has_point = 0;
         }
@@ -1088,9 +1093,13 @@ void recode_waypoint(guandao_state * state)
             daoche_flag =1;
             daoche_flash_cheack =1;
             park_record_stage = 1;
+            park_start_record_ms = system_getval_ms();
             Buzzer_check(30);
         }
-        else
+        else if(park_record_stage == 1
+                && (uint32)(system_getval_ms() - park_start_record_ms) >= GUANDAO_PARK_SECOND_MIN_MS
+                && state->length_index >= daoche_point_length + GUANDAO_PARK_SECOND_MIN_POINTS
+                && get_distance(state->current_state, daoche_start_state) >= GUANDAO_PARK_SECOND_MIN_DIST)
         {
             daoche_target_state = state->current_state;
             daoche_target_state.theta = Yaw_1;
@@ -1640,6 +1649,7 @@ void guandao_recode(guandao_state * state)
         daoche_target_flag = 0;
         daoche_flash_cheack = 0;
         park_record_stage = 0;
+        park_start_record_ms = 0;
         guandao_record_init_pending = 0;
     }
     update_state(p  , &guandao_ecd);
@@ -1731,6 +1741,7 @@ void guandao_record_session_reset(void)
 {
     guandao_record_init_pending = 1;
     park_record_stage = 0;
+    park_start_record_ms = 0;
     daoche_point_length = 0;
     daoche_start_flag = 0;
     daoche_target_length = 0;
