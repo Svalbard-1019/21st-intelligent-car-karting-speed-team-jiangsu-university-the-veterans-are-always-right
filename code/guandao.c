@@ -95,6 +95,7 @@ static uint32 portion1_taught_reverse_steer_ms = 0;
 #define GUANDAO_REVERSE_TRIGGER_DIST   0.35f
 #define GUANDAO_REVERSE_FINAL_DIST     0.55f
 #define GUANDAO_REVERSE_MIN_ROUTE_POINTS 5
+#define GUANDAO_PARK_ENTRY_DIST        0.15f
 #define GUANDAO_REVERSE_WAIT_MS        300u
 #define GUANDAO_REVERSE_DISTANCE       0.55f
 #define GUANDAO_REVERSE_MIN_MS         1800u
@@ -969,8 +970,15 @@ void portion_1(void)
         uint8 reverse_ready = 0;
         uint8 final_stop_ready = 0;
         uint8 reverse_route_valid = 0;
+        float reverse_entry_distance = 10000.0f;
         pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
         active_route_length = guandao_route_length(&INS);
+        if(active_route_length > 0)
+        {
+            reverse_entry_distance = get_distance(INS.current_state,
+                    guandao_route_point(&INS, active_route_length - 1));
+            guandao_debug_dist_final = reverse_entry_distance;
+        }
         reverse_route_valid = (daoche_point_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && active_route_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && daoche_point_length < portion1_finally_length);
@@ -985,7 +993,7 @@ void portion_1(void)
         {
             // 必须已经追到路线末段，并真正到达记录时的第一停车位姿附近。
             if(INS.current_point_index >= active_route_length - 2
-                    && guandao_debug_dist_final <= 0.30f)
+                    && reverse_entry_distance <= GUANDAO_PARK_ENTRY_DIST)
             {
                 reverse_ready = 1;
             }
@@ -1269,6 +1277,15 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     }
 
     state_t target_point = guandao_route_point(state, state->current_point_index);
+
+    // 科目一第一停车点必须精确到达；中间路线点仍使用较大的追踪阈值保证流畅。
+    if(state == &INS
+            && daoche_point_length > 0
+            && daoche_point_length < portion1_finally_length
+            && state->current_point_index >= route_length - 1)
+    {
+        arrive_threshold = GUANDAO_PARK_ENTRY_DIST;
+    }
 
     float dx = target_point.x - current_point.x;
     float dy = target_point.y - current_point.y;
