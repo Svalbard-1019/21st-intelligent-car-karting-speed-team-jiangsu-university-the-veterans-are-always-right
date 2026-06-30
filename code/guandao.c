@@ -970,14 +970,28 @@ void portion_1(void)
         uint8 reverse_ready = 0;
         uint8 final_stop_ready = 0;
         uint8 reverse_route_valid = 0;
+        uint8 reverse_entry_passed = 0;
         float reverse_entry_distance = 10000.0f;
         pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
         active_route_length = guandao_route_length(&INS);
         if(active_route_length > 0)
         {
-            reverse_entry_distance = get_distance(INS.current_state,
-                    guandao_route_point(&INS, active_route_length - 1));
+            state_t reverse_entry = guandao_route_point(&INS, active_route_length - 1);
+            reverse_entry_distance = get_distance(INS.current_state, reverse_entry);
             guandao_debug_dist_final = reverse_entry_distance;
+            if(active_route_length > 5)
+            {
+                state_t entry_reference = guandao_route_point(&INS, active_route_length - 6);
+                float route_x = reverse_entry.x - entry_reference.x;
+                float route_y = reverse_entry.y - entry_reference.y;
+                float passed_x = INS.current_state.x - reverse_entry.x;
+                float passed_y = INS.current_state.y - reverse_entry.y;
+                if(route_x * route_x + route_y * route_y > 0.0001f
+                        && route_x * passed_x + route_y * passed_y >= 0.0f)
+                {
+                    reverse_entry_passed = 1;
+                }
+            }
         }
         reverse_route_valid = (daoche_point_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && active_route_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
@@ -993,7 +1007,8 @@ void portion_1(void)
         {
             // 必须已经追到路线末段，并真正到达记录时的第一停车位姿附近。
             if(INS.current_point_index >= active_route_length - 2
-                    && reverse_entry_distance <= GUANDAO_PARK_ENTRY_DIST)
+                    && (reverse_entry_distance <= GUANDAO_PARK_ENTRY_DIST
+                        || (reverse_entry_passed && reverse_entry_distance <= 0.45f)))
             {
                 reverse_ready = 1;
             }
