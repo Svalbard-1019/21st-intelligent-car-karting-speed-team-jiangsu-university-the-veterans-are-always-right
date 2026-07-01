@@ -212,6 +212,17 @@ static void Serial_Debug_Update(void)
         {
             Serial_Debug_Write(line);
         }
+        if(guandao_reverse_debug_state() == 1)
+        {
+            len = sprintf(line, "PARKGPS,t=%lu,ready=%d,count=%d,ref=%d,dx100=%ld,dy100=%ld\r\n",
+                    (unsigned long)now_ms,
+                    guandao_park_gps_debug_ready(),
+                    guandao_park_gps_debug_count(),
+                    guandao_park_gps_debug_reference(),
+                    (long)Serial_Debug_Scale(guandao_park_gps_debug_offset_x(), 100.0f),
+                    (long)Serial_Debug_Scale(guandao_park_gps_debug_offset_y(), 100.0f));
+            if(len > 0) Serial_Debug_Write(line);
+        }
     }
     else if(main_mode == Guandao_portion_3)
     {
