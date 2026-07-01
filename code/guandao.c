@@ -154,6 +154,10 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_TAUGHT_REVERSE_GAIN    1.40f
 #define GUANDAO_TAUGHT_REVERSE_RATE    2.0f
 #define GUANDAO_TAUGHT_REVERSE_HOLD_MS 300u
+#define GUANDAO_PARK_GPS_SAMPLES        10
+#define GUANDAO_PARK_GPS_SAMPLE_MS      100u
+#define GUANDAO_PARK_GPS_MAX_ERROR      2.0f
+#define GUANDAO_PARK_GPS_MAX_DISTANCE   5.0f
 // 低速教学倒车的弯线路程明显长于起终点直线距离；实测 18 s 仍会在距目标约 0.23 m 时超时。
 // 末端另有 12 cm 位置停车保护，因此延长运行时间而不放宽停车边界。
 #define GUANDAO_TAUGHT_REVERSE_MAX_MS  34000u
@@ -166,6 +170,141 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_SYSTEM_MS_WRAP         42950u
 
 static float guandao_normalize_angle(float angle);
+static uint32 guandao_elapsed_ms(uint32 now_ms, uint32 start_ms);
+
+static uint8 portion1_park_gps_ready = 0;
+static uint8 portion1_park_gps_count = 0;
+static int16 portion1_park_gps_reference = -1;
+static uint32 portion1_park_gps_sample_ms = 0;
+static float portion1_park_gps_offset_x_sum = 0.0f;
+static float portion1_park_gps_offset_y_sum = 0.0f;
+static float portion1_park_gps_offset_x = 0.0f;
+static float portion1_park_gps_offset_y = 0.0f;
+
+static uint8 guandao_gps_to_ins_vector(int16 reference, double latitude,
+        double longitude, float *ins_x, float *ins_y)
+{
+    int16 pair;
+    int16 route_a;
+    int16 route_b;
+    double latitude_rad;
+    float gps_e;
+    float gps_n;
+    float pair_e;
+    float pair_n;
+    float route_x;
+    float route_y;
+    float denominator;
+    float scale;
+    float a;
+    float b;
+
+    if(reference < 0 || reference >= INS.gps_recode_length) return 0;
+    /* Use points about three metres apart; adjacent one-metre GNSS points make
+     * the frame angle too sensitive to ordinary positioning noise. */
+    pair = (reference >= 3) ? reference - 3 : reference + 3;
+    if(pair < 0 || pair >= INS.gps_recode_length) return 0;
+    route_a = INS.recode_gpsmap[reference].cheak_flag;
+    route_b = INS.recode_gpsmap[pair].cheak_flag;
+    if(route_a < 0 || route_a >= portion1_finally_length
+            || route_b < 0 || route_b >= portion1_finally_length) return 0;
+
+    latitude_rad = INS.recode_gpsmap[reference].lat * M_PI / 180.0;
+    gps_e = (float)((INS.recode_gpsmap[reference].lon - longitude)
+            * 111320.0 * cos(latitude_rad));
+    gps_n = (float)((INS.recode_gpsmap[reference].lat - latitude) * 111320.0);
+    pair_e = (float)((INS.recode_gpsmap[reference].lon - INS.recode_gpsmap[pair].lon)
+            * 111320.0 * cos(latitude_rad));
+    pair_n = (float)((INS.recode_gpsmap[reference].lat - INS.recode_gpsmap[pair].lat)
+            * 111320.0);
+    route_x = INS.recode_map[route_a].x - INS.recode_map[route_b].x;
+    route_y = INS.recode_map[route_a].y - INS.recode_map[route_b].y;
+    denominator = pair_e * pair_e + pair_n * pair_n;
+    if(denominator < 2.25f) return 0;
+    scale = sqrtf((route_x * route_x + route_y * route_y) / denominator);
+    if(scale < 0.5f || scale > 1.5f) return 0;
+
+    a = (route_x * pair_e + route_y * pair_n) / denominator;
+    b = (route_y * pair_e - route_x * pair_n) / denominator;
+    *ins_x = a * gps_e - b * gps_n;
+    *ins_y = b * gps_e + a * gps_n;
+    return 1;
+}
+
+static void guandao_park_gps_reset(void)
+{
+    portion1_park_gps_ready = 0;
+    portion1_park_gps_count = 0;
+    portion1_park_gps_reference = -1;
+    portion1_park_gps_sample_ms = 0;
+    portion1_park_gps_offset_x_sum = 0.0f;
+    portion1_park_gps_offset_y_sum = 0.0f;
+    portion1_park_gps_offset_x = 0.0f;
+    portion1_park_gps_offset_y = 0.0f;
+}
+
+/* Each GNSS fix is paired with the simultaneous INS pose, so averaging does
+ * not require stopping the car at the parking entrance. */
+static void guandao_park_gps_update(void)
+{
+    int16 reference = -1;
+    int16 route_index;
+    int best_difference = 32767;
+    float reference_dx;
+    float reference_dy;
+    float offset_x;
+    float offset_y;
+    uint32 now_ms;
+
+    if(portion1_park_gps_ready || !daoche_start_flag || gnss.state != 1) return;
+    if(INS.current_point_index + 20 < daoche_point_length) return;
+    if(INS.gps_recode_length < 2) return;
+
+    for(int16 i = 0; i < INS.gps_recode_length; i++)
+    {
+        int difference = INS.recode_gpsmap[i].cheak_flag - daoche_point_length;
+        if(difference < 0) difference = -difference;
+        if(difference < best_difference)
+        {
+            best_difference = difference;
+            reference = i;
+        }
+    }
+    if(reference < 0) return;
+    route_index = INS.recode_gpsmap[reference].cheak_flag;
+    if(route_index < 0 || route_index >= portion1_finally_length) return;
+
+    now_ms = system_getval_ms();
+    if(portion1_park_gps_sample_ms != 0
+            && guandao_elapsed_ms(now_ms, portion1_park_gps_sample_ms) < GUANDAO_PARK_GPS_SAMPLE_MS) return;
+    portion1_park_gps_sample_ms = now_ms;
+    if(get_two_points_distance(gnss.latitude, gnss.longitude,
+            INS.recode_gpsmap[reference].lat, INS.recode_gpsmap[reference].lon)
+            > GUANDAO_PARK_GPS_MAX_DISTANCE) return;
+    if(!guandao_gps_to_ins_vector(reference, gnss.latitude, gnss.longitude,
+            &reference_dx, &reference_dy)) return;
+
+    offset_x = INS.current_state.x + reference_dx - INS.recode_map[route_index].x;
+    offset_y = INS.current_state.y + reference_dy - INS.recode_map[route_index].y;
+    if(hypotf(offset_x, offset_y) > GUANDAO_PARK_GPS_MAX_ERROR) return;
+
+    portion1_park_gps_reference = reference;
+    portion1_park_gps_offset_x_sum += offset_x;
+    portion1_park_gps_offset_y_sum += offset_y;
+    portion1_park_gps_count++;
+    if(portion1_park_gps_count >= GUANDAO_PARK_GPS_SAMPLES)
+    {
+        portion1_park_gps_offset_x = portion1_park_gps_offset_x_sum / portion1_park_gps_count;
+        portion1_park_gps_offset_y = portion1_park_gps_offset_y_sum / portion1_park_gps_count;
+        portion1_park_gps_ready = 1;
+    }
+}
+
+uint8 guandao_park_gps_debug_ready(void) { return portion1_park_gps_ready; }
+uint8 guandao_park_gps_debug_count(void) { return portion1_park_gps_count; }
+int16 guandao_park_gps_debug_reference(void) { return portion1_park_gps_reference; }
+float guandao_park_gps_debug_offset_x(void) { return portion1_park_gps_offset_x; }
+float guandao_park_gps_debug_offset_y(void) { return portion1_park_gps_offset_y; }
 
 // system_getval_ms() is derived from a 32-bit 10 ns counter and wraps about every 42.95 s.
 // Plain uint32 subtraction on the divided millisecond value does not preserve that modulus.
@@ -541,6 +680,17 @@ static void guandao_taught_reverse_prepare(void)
     portion1_taught_reverse_map[portion1_taught_reverse_length] = portion1_taught_reverse_target;
     portion1_taught_reverse_length++;
 
+    if(portion1_park_gps_ready)
+    {
+        for(int16 i = 0; i < portion1_taught_reverse_length; i++)
+        {
+            portion1_taught_reverse_map[i].x += portion1_park_gps_offset_x;
+            portion1_taught_reverse_map[i].y += portion1_park_gps_offset_y;
+        }
+        portion1_taught_reverse_target.x += portion1_park_gps_offset_x;
+        portion1_taught_reverse_target.y += portion1_park_gps_offset_y;
+    }
+
     if(portion1_taught_reverse_length >= 3)
     {
         search_end = GUANDAO_TAUGHT_REVERSE_SEARCH;
@@ -867,6 +1017,7 @@ void portion_1_reset(void)
     portion1_taught_reverse_ready = 0;
     portion1_taught_reverse_hold_ms = 0;
     portion1_taught_reverse_steer_ms = 0;
+    guandao_park_gps_reset();
     portion1_approach_active = 0;
     portion1_approach_steer_cmd = 0.0f;
     portion1_approach_steer_ms = 0;
@@ -915,6 +1066,7 @@ void portion_1_reset(void)
 void portion_1(void)
 {
     update_state(&INS,&guandao_ecd);                              // 更新当前车辆位姿（基于编码器航迹推算）
+    guandao_park_gps_update();                                    // 停车入口附近动态估算本次 GPS/惯导平移偏差
     if(portion1_state_flag == 0)                                   // 首次进入函数时确定本次停车点
     {
         portion1_finally_length = INS.length_index;
