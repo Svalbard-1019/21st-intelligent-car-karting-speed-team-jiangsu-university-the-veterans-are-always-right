@@ -180,9 +180,6 @@ static float portion1_park_gps_offset_x_sum = 0.0f;
 static float portion1_park_gps_offset_y_sum = 0.0f;
 static float portion1_park_gps_offset_x = 0.0f;
 static float portion1_park_gps_offset_y = 0.0f;
-static uint8 portion1_park_gps_error = 0;
-static double portion1_park_gps_last_latitude = 0.0;
-static double portion1_park_gps_last_longitude = 0.0;
 
 static uint8 guandao_gps_to_ins_vector(int16 reference, double latitude,
         double longitude, float *ins_x, float *ins_y)
@@ -197,9 +194,8 @@ static uint8 guandao_gps_to_ins_vector(int16 reference, double latitude,
     float pair_n;
     float route_x;
     float route_y;
-    float gps_length;
-    float route_length;
-    float normalization;
+    float denominator;
+    float scale;
     float a;
     float b;
 
@@ -223,15 +219,13 @@ static uint8 guandao_gps_to_ins_vector(int16 reference, double latitude,
             * 111320.0);
     route_x = INS.recode_map[route_a].x - INS.recode_map[route_b].x;
     route_y = INS.recode_map[route_a].y - INS.recode_map[route_b].y;
-    gps_length = hypotf(pair_e, pair_n);
-    route_length = hypotf(route_x, route_y);
-    if(gps_length < 1.5f || route_length < 1.0f) return 0;
-    normalization = gps_length * route_length;
+    denominator = pair_e * pair_e + pair_n * pair_n;
+    if(denominator < 2.25f) return 0;
+    scale = sqrtf((route_x * route_x + route_y * route_y) / denominator);
+    if(scale < 0.5f || scale > 1.5f) return 0;
 
-    /* Rotation only: GNSS metres stay metres.  Using the noisy ratio between
-     * two short GNSS segments as a scale factor can amplify lateral error. */
-    a = (route_x * pair_e + route_y * pair_n) / normalization;
-    b = (route_y * pair_e - route_x * pair_n) / normalization;
+    a = (route_x * pair_e + route_y * pair_n) / denominator;
+    b = (route_y * pair_e - route_x * pair_n) / denominator;
     *ins_x = a * gps_e - b * gps_n;
     *ins_y = b * gps_e + a * gps_n;
     return 1;
@@ -247,9 +241,6 @@ static void guandao_park_gps_reset(void)
     portion1_park_gps_offset_y_sum = 0.0f;
     portion1_park_gps_offset_x = 0.0f;
     portion1_park_gps_offset_y = 0.0f;
-    portion1_park_gps_error = 0;
-    portion1_park_gps_last_latitude = 0.0;
-    portion1_park_gps_last_longitude = 0.0;
 }
 
 /* Each GNSS fix is paired with the simultaneous INS pose, so averaging does
@@ -263,77 +254,41 @@ static void guandao_park_gps_update(void)
     float reference_dy;
     float offset_x;
     float offset_y;
-    int sample_start_index;
     uint32 now_ms;
 
     if(portion1_park_gps_ready || !daoche_start_flag || gnss.state != 1) return;
-    sample_start_index = INS.plan_ready ? INS.planned_length - 20 : daoche_point_length - 10;
-    if(sample_start_index < 0) sample_start_index = 0;
-    if(INS.current_point_index < sample_start_index) return;
-    if(INS.gps_recode_length < 4)
+    if(INS.current_point_index + 20 < daoche_point_length) return;
+    if(INS.gps_recode_length < 2) return;
+
+    for(int16 i = 0; i < INS.gps_recode_length; i++)
     {
-        portion1_park_gps_error = 1;
-        return;
+        int difference = INS.recode_gpsmap[i].cheak_flag - daoche_point_length;
+        if(difference < 0) difference = -difference;
+        if(difference < best_difference)
+        {
+            best_difference = difference;
+            reference = i;
+        }
     }
+    if(reference < 0) return;
+    route_index = INS.recode_gpsmap[reference].cheak_flag;
+    if(route_index < 0 || route_index >= portion1_finally_length) return;
 
     now_ms = system_getval_ms();
     if(portion1_park_gps_sample_ms != 0
             && guandao_elapsed_ms(now_ms, portion1_park_gps_sample_ms) < GUANDAO_PARK_GPS_SAMPLE_MS) return;
     portion1_park_gps_sample_ms = now_ms;
-    if(gnss.latitude == portion1_park_gps_last_latitude
-            && gnss.longitude == portion1_park_gps_last_longitude) return;
-    portion1_park_gps_last_latitude = gnss.latitude;
-    portion1_park_gps_last_longitude = gnss.longitude;
-
-    if(portion1_park_gps_reference < 0)
-    {
-        for(int16 i = 0; i < INS.gps_recode_length; i++)
-        {
-            int difference = INS.recode_gpsmap[i].cheak_flag - daoche_point_length;
-            if(difference < 0) difference = -difference;
-            if(difference < best_difference)
-            {
-                best_difference = difference;
-                reference = i;
-            }
-        }
-        portion1_park_gps_reference = reference;
-    }
-    reference = portion1_park_gps_reference;
-    if(reference < 0)
-    {
-        portion1_park_gps_error = 2;
-        return;
-    }
-    route_index = INS.recode_gpsmap[reference].cheak_flag;
-    if(route_index < 0 || route_index >= portion1_finally_length)
-    {
-        portion1_park_gps_error = 3;
-        return;
-    }
     if(get_two_points_distance(gnss.latitude, gnss.longitude,
             INS.recode_gpsmap[reference].lat, INS.recode_gpsmap[reference].lon)
-            > GUANDAO_PARK_GPS_MAX_DISTANCE)
-    {
-        portion1_park_gps_error = 4;
-        return;
-    }
+            > GUANDAO_PARK_GPS_MAX_DISTANCE) return;
     if(!guandao_gps_to_ins_vector(reference, gnss.latitude, gnss.longitude,
-            &reference_dx, &reference_dy))
-    {
-        portion1_park_gps_error = 5;
-        return;
-    }
+            &reference_dx, &reference_dy)) return;
 
     offset_x = INS.current_state.x + reference_dx - INS.recode_map[route_index].x;
     offset_y = INS.current_state.y + reference_dy - INS.recode_map[route_index].y;
-    if(hypotf(offset_x, offset_y) > GUANDAO_PARK_GPS_MAX_ERROR)
-    {
-        portion1_park_gps_error = 6;
-        return;
-    }
+    if(hypotf(offset_x, offset_y) > GUANDAO_PARK_GPS_MAX_ERROR) return;
 
-    portion1_park_gps_error = 0;
+    portion1_park_gps_reference = reference;
     portion1_park_gps_offset_x_sum += offset_x;
     portion1_park_gps_offset_y_sum += offset_y;
     portion1_park_gps_count++;
@@ -350,7 +305,6 @@ uint8 guandao_park_gps_debug_count(void) { return portion1_park_gps_count; }
 int16 guandao_park_gps_debug_reference(void) { return portion1_park_gps_reference; }
 float guandao_park_gps_debug_offset_x(void) { return portion1_park_gps_offset_x; }
 float guandao_park_gps_debug_offset_y(void) { return portion1_park_gps_offset_y; }
-uint8 guandao_park_gps_debug_error(void) { return portion1_park_gps_error; }
 
 // system_getval_ms() is derived from a 32-bit 10 ns counter and wraps about every 42.95 s.
 // Plain uint32 subtraction on the divided millisecond value does not preserve that modulus.
