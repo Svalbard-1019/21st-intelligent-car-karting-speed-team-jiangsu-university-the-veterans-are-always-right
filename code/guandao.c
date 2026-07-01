@@ -1414,11 +1414,20 @@ void portion_1(void)
 void recode_waypoint(guandao_state * state)
 {
     static uint8 rc_ch4_last_pressed = 0;
+    static uint8 rc_ch4_armed = 0;
     static uint8 gps_auto_has_point = 0;
     static state_t gps_auto_last_state = {0.0f, 0.0f, 0.0f};
     uint8 auto_gps_enabled = (state == &INS || state == &portion_3);
     uint8 rc_ch4_pressed = (x6f_out[3] == 200);
-    uint8 park_pressed = (key1_flag == 1 || (rc_ch4_pressed && !rc_ch4_last_pressed));
+    uint8 park_pressed;
+
+    /* Ignore a CH4 high level already present when record mode starts.  The
+     * operator must release CH4 once before a new rising edge can mark a
+     * parking point; the physical KEY1 remains immediately available. */
+    if(!rc_ch4_pressed) rc_ch4_armed = 1;
+    park_pressed = (key1_flag == 1
+            || (rc_ch4_armed && rc_ch4_pressed && !rc_ch4_last_pressed));
+    if(rc_ch4_armed && rc_ch4_pressed && !rc_ch4_last_pressed) rc_ch4_armed = 0;
     rc_ch4_last_pressed = rc_ch4_pressed;
     if(state ->length_index >=MAX_LENGTH_INDEX)return;
 
@@ -1429,6 +1438,7 @@ void recode_waypoint(guandao_state * state)
             park_record_stage = 0;
             park_start_record_ms = 0;
             rc_ch4_last_pressed = 0;
+            rc_ch4_armed = rc_ch4_pressed ? 0 : 1;
             gps_auto_has_point = 0;
         }
         state->recode_map[state->length_index] =state->current_state;
