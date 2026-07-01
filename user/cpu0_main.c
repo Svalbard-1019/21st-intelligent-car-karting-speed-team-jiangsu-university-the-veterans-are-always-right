@@ -174,7 +174,7 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,rstate=%d,pready=%d,pidx=%d,pcnt=%d,td100=%ld,tyaw10=%ld,app=%d,gate=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,gpr=%d,gpc=%d,gpi=%d,gpx100=%ld,gpy100=%ld,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,rstate=%d,pready=%d,pidx=%d,pcnt=%d,td100=%ld,tyaw10=%ld,app=%d,gate=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,gpr=%d,gpc=%d,gpi=%d,gpe=%d,gpx100=%ld,gpy100=%ld,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
                       (unsigned long)now_ms,
                       INS.current_point_index,
                       INS.length_index,
@@ -198,6 +198,7 @@ static void Serial_Debug_Update(void)
                       guandao_park_gps_debug_ready(),
                       guandao_park_gps_debug_count(),
                       guandao_park_gps_debug_reference(),
+                      guandao_park_gps_debug_error(),
                       (long)Serial_Debug_Scale(guandao_park_gps_debug_offset_x(), 100.0f),
                       (long)Serial_Debug_Scale(guandao_park_gps_debug_offset_y(), 100.0f),
                       (long)Serial_Debug_Scale(persuit_threshold, 100.0f),

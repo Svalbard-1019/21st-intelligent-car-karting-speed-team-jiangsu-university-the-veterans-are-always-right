@@ -330,6 +330,7 @@ uint8 guandao_park_gps_debug_count(void);
 int16 guandao_park_gps_debug_reference(void);
 float guandao_park_gps_debug_offset_x(void);
 float guandao_park_gps_debug_offset_y(void);
+uint8 guandao_park_gps_debug_error(void);
 /**
  * 接口说明：portion_1_reset()。清零内部状态和控制输出，用于重新进入测试/自动驾驶前恢复初始状态。
  * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
