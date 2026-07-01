@@ -105,9 +105,9 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_REVERSE_MIN_ROUTE_POINTS 5
 #define GUANDAO_PARK_ENTRY_DIST        0.15f
 #define GUANDAO_PARK_APPROACH_DIST     1.20f
-#define GUANDAO_PARK_APPROACH_SPEED_FAST 4.0f
-#define GUANDAO_PARK_APPROACH_SPEED_MID  2.5f
-#define GUANDAO_PARK_APPROACH_SPEED_SLOW 1.5f
+#define GUANDAO_PARK_APPROACH_SPEED_FAST 8.0f
+#define GUANDAO_PARK_APPROACH_SPEED_MID  6.0f
+#define GUANDAO_PARK_APPROACH_SPEED_SLOW 4.0f
 #define GUANDAO_PARK_APPROACH_LAT_KP   18.0f
 #define GUANDAO_PARK_APPROACH_YAW_KP   0.80f
 #define GUANDAO_PARK_APPROACH_STEER_LIMIT 25.0f
@@ -163,8 +163,17 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
 #define PORTION3_PURSUIT_THRESHOLD     0.25f
 #define PORTION3_FINAL_STOP_DIST       0.6f
+#define GUANDAO_SYSTEM_MS_WRAP         42950u
 
 static float guandao_normalize_angle(float angle);
+
+// system_getval_ms() is derived from a 32-bit 10 ns counter and wraps about every 42.95 s.
+// Plain uint32 subtraction on the divided millisecond value does not preserve that modulus.
+static uint32 guandao_elapsed_ms(uint32 now_ms, uint32 start_ms)
+{
+    if(now_ms >= start_ms) return now_ms - start_ms;
+    return (GUANDAO_SYSTEM_MS_WRAP - start_ms) + now_ms;
+}
 
 static int16 guandao_clamp_length(int16 length)
 {
@@ -246,7 +255,7 @@ static void guandao_parking_approach_update(float longitudinal, float lateral, f
     float steer_delta_limit;
     uint32 now_ms = system_getval_ms();
     uint32 elapsed_ms = (portion1_approach_steer_ms == 0) ? 20u
-            : (uint32)(now_ms - portion1_approach_steer_ms);
+            : guandao_elapsed_ms(now_ms, portion1_approach_steer_ms);
 
     if(elapsed_ms > 100u) elapsed_ms = 20u;
     if(longitudinal > -0.30f) speed = GUANDAO_PARK_APPROACH_SPEED_SLOW;
@@ -619,7 +628,7 @@ static uint8 guandao_taught_reverse_update(void)
 
     desired_servo = -target_steering;
     steer_elapsed_ms = (portion1_taught_reverse_steer_ms == 0) ? 20u
-            : (uint32)(now_ms - portion1_taught_reverse_steer_ms);
+            : guandao_elapsed_ms(now_ms, portion1_taught_reverse_steer_ms);
     if(steer_elapsed_ms > 100u) steer_elapsed_ms = 20u;
     steer_delta = desired_servo - portion1_reverse_steer_cmd;
     {
@@ -680,7 +689,7 @@ static uint8 guandao_taught_reverse_update(void)
             && fabsf(final_yaw_error) <= GUANDAO_REVERSE_PLAN_TOL_YAW)
     {
         if(portion1_taught_reverse_hold_ms == 0) portion1_taught_reverse_hold_ms = now_ms;
-        if((uint32)(now_ms - portion1_taught_reverse_hold_ms) >= GUANDAO_TAUGHT_REVERSE_HOLD_MS)
+        if(guandao_elapsed_ms(now_ms, portion1_taught_reverse_hold_ms) >= GUANDAO_TAUGHT_REVERSE_HOLD_MS)
         {
             return 1;
         }
@@ -940,7 +949,7 @@ void portion_1(void)
         out_servo = portion1_reverse_steer_cmd;
         guandao_debug_stop_reason = 6;
         conrtol_mode = GUANDAO;
-        if((uint32)(system_getval_ms() - portion1_reverse_wait_start_ms) >= GUANDAO_REVERSE_WAIT_MS)
+        if(guandao_elapsed_ms(system_getval_ms(), portion1_reverse_wait_start_ms) >= GUANDAO_REVERSE_WAIT_MS)
         {
             portion1_reverse_start_state = INS.current_state;
             portion1_reverse_segment_start_state = INS.current_state;
@@ -974,7 +983,7 @@ void portion_1(void)
     else if(portion1_reverse_state == 2)
     {
         uint8 reverse_finished = 0;
-        uint32 reverse_elapsed_ms = (uint32)(system_getval_ms() - portion1_reverse_run_start_ms);
+        uint32 reverse_elapsed_ms = guandao_elapsed_ms(system_getval_ms(), portion1_reverse_run_start_ms);
         uint32 reverse_max_ms = portion1_taught_reverse_ready
                 ? GUANDAO_TAUGHT_REVERSE_MAX_MS : GUANDAO_REVERSE_MAX_MS;
         float reverse_travelled = get_distance(INS.current_state, portion1_reverse_start_state);
@@ -1269,7 +1278,7 @@ void recode_waypoint(guandao_state * state)
             Buzzer_check(30);
         }
         else if(park_record_stage == 1
-                && (uint32)(system_getval_ms() - park_start_record_ms) >= GUANDAO_PARK_SECOND_MIN_MS
+                && guandao_elapsed_ms(system_getval_ms(), park_start_record_ms) >= GUANDAO_PARK_SECOND_MIN_MS
                 && state->length_index >= daoche_point_length + GUANDAO_PARK_SECOND_MIN_POINTS
                 && get_distance(state->current_state, daoche_start_state) >= GUANDAO_PARK_SECOND_MIN_DIST)
         {
@@ -1623,7 +1632,8 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        last_steer_limit_ms = system_getval_ms();
    }
    uint32 steer_now_ms = system_getval_ms();
-   uint32 steer_elapsed_ms = (last_steer_limit_ms == 0) ? 20u : (uint32)(steer_now_ms - last_steer_limit_ms);
+   uint32 steer_elapsed_ms = (last_steer_limit_ms == 0) ? 20u
+           : guandao_elapsed_ms(steer_now_ms, last_steer_limit_ms);
    if(steer_elapsed_ms > 100u) steer_elapsed_ms = 20u;
    float steer_delta_limit = steering_rate_limit * ((float)steer_elapsed_ms / 20.0f);
    float steer_delta = target_steering - last_target_steering;
@@ -1844,7 +1854,7 @@ void guandao_recode(guandao_state * state)
         key1_flag = 0;
         now_ms = system_getval_ms();
         if(key1_save_start_ms == 0) key1_save_start_ms = now_ms;
-        if((uint32)(now_ms - key1_save_start_ms) > 1500 && !key1_save_wait_release)
+        if(guandao_elapsed_ms(now_ms, key1_save_start_ms) > 1500 && !key1_save_wait_release)
         {
             // 第二次按键若直接长按保存，先登记当前倒车终点，再写 Flash。
             // 否则旧逻辑会在按键释放时才登记终点，导致 Flash 中 target_flag 仍为 0。
@@ -1878,7 +1888,7 @@ void guandao_recode(guandao_state * state)
     {
         now_ms = system_getval_ms();
         if(rc_ch3_start_ms == 0) rc_ch3_start_ms = now_ms;
-        if((uint32)(now_ms - rc_ch3_start_ms) > 1500 && !rc_ch3_wait_release)
+        if(guandao_elapsed_ms(now_ms, rc_ch3_start_ms) > 1500 && !rc_ch3_wait_release)
         {
             if(p == &INS && daoche_start_flag && !daoche_target_flag)
             {
