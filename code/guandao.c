@@ -58,6 +58,11 @@ float guandao_debug_distance = 0.0f;
 float guandao_debug_angle_diff = 0.0f;
 float guandao_debug_dist_final = 0.0f;
 uint8 guandao_debug_stop_reason = 0;
+uint8 guandao_debug_approach_active = 0;
+uint8 guandao_debug_entry_gate = 0;
+float guandao_debug_entry_long = 0.0f;
+float guandao_debug_entry_lat = 0.0f;
+float guandao_debug_entry_yaw = 0.0f;
 
 int16 daoche_target_length = 0;
 state_t daoche_start_state = {0.0f, 0.0f, 0.0f};
@@ -89,6 +94,9 @@ static int16 portion1_taught_reverse_index = 0;
 static uint8 portion1_taught_reverse_ready = 0;
 static uint32 portion1_taught_reverse_hold_ms = 0;
 static uint32 portion1_taught_reverse_steer_ms = 0;
+static uint8 portion1_approach_active = 0;
+static float portion1_approach_steer_cmd = 0.0f;
+static uint32 portion1_approach_steer_ms = 0;
 
 #define GUANDAO_START_SEARCH_POINTS    10
 #define GUANDAO_TRACE_SEARCH_POINTS    8
@@ -96,6 +104,18 @@ static uint32 portion1_taught_reverse_steer_ms = 0;
 #define GUANDAO_REVERSE_FINAL_DIST     0.55f
 #define GUANDAO_REVERSE_MIN_ROUTE_POINTS 5
 #define GUANDAO_PARK_ENTRY_DIST        0.15f
+#define GUANDAO_PARK_APPROACH_DIST     1.20f
+#define GUANDAO_PARK_APPROACH_SPEED_FAST 4.0f
+#define GUANDAO_PARK_APPROACH_SPEED_MID  2.5f
+#define GUANDAO_PARK_APPROACH_SPEED_SLOW 1.5f
+#define GUANDAO_PARK_APPROACH_LAT_KP   18.0f
+#define GUANDAO_PARK_APPROACH_YAW_KP   0.80f
+#define GUANDAO_PARK_APPROACH_STEER_LIMIT 25.0f
+#define GUANDAO_PARK_APPROACH_STEER_RATE 2.0f
+#define GUANDAO_PARK_GATE_LAT_LIMIT    0.45f
+#define GUANDAO_PARK_GATE_NEAR_LONG    0.08f
+#define GUANDAO_PARK_FINAL_GATE_LIMIT  0.45f
+#define GUANDAO_PARK_FRAME_POINTS      5
 #define GUANDAO_REVERSE_WAIT_MS        300u
 #define GUANDAO_REVERSE_DISTANCE       0.55f
 #define GUANDAO_REVERSE_MIN_MS         1800u
@@ -144,6 +164,8 @@ static uint32 portion1_taught_reverse_steer_ms = 0;
 #define PORTION3_PURSUIT_THRESHOLD     0.25f
 #define PORTION3_FINAL_STOP_DIST       0.6f
 
+static float guandao_normalize_angle(float angle);
+
 static int16 guandao_clamp_length(int16 length)
 {
     if(length < 0) return 0;
@@ -165,6 +187,88 @@ static state_t guandao_route_point(guandao_state *state, int index)
     if(index >= route_length) index = route_length - 1;
     if(state->plan_ready && state->planned_length > 0) return state->planned_map[index];
     return state->recode_map[index];
+}
+
+// Build a local parking frame from the taught points before the first parking marker.
+// dir points in the forward approach direction; right is its positive lateral direction.
+static uint8 guandao_parking_entry_frame(float *dir_x, float *dir_y, float *heading)
+{
+    int16 reference_index;
+    float dx;
+    float dy;
+    float length;
+
+    if(!daoche_start_flag || daoche_point_length <= 0) return 0;
+    reference_index = daoche_point_length - GUANDAO_PARK_FRAME_POINTS;
+    if(reference_index < 0) reference_index = 0;
+    dx = daoche_start_state.x - INS.recode_map[reference_index].x;
+    dy = daoche_start_state.y - INS.recode_map[reference_index].y;
+    length = hypotf(dx, dy);
+    if(length < 0.05f)
+    {
+        *heading = daoche_start_state.theta;
+        *dir_x = sinf(*heading / 180.0f * M_PI);
+        *dir_y = cosf(*heading / 180.0f * M_PI);
+        return 1;
+    }
+
+    *dir_x = dx / length;
+    *dir_y = dy / length;
+    *heading = atan2f(*dir_x, *dir_y) / M_PI * 180.0f;
+    return 1;
+}
+
+static uint8 guandao_parking_entry_errors(float *longitudinal, float *lateral,
+        float *yaw_error, uint8 *gate_passed)
+{
+    float dir_x;
+    float dir_y;
+    float heading;
+    float position_x;
+    float position_y;
+
+    if(!guandao_parking_entry_frame(&dir_x, &dir_y, &heading)) return 0;
+    position_x = INS.current_state.x - daoche_start_state.x;
+    position_y = INS.current_state.y - daoche_start_state.y;
+    *longitudinal = position_x * dir_x + position_y * dir_y;
+    *lateral = position_x * dir_y - position_y * dir_x;
+    *yaw_error = guandao_normalize_angle(heading - Yaw_1);
+    *gate_passed = (*longitudinal >= 0.0f) ? 1 : 0;
+    return 1;
+}
+
+static void guandao_parking_approach_update(float longitudinal, float lateral, float yaw_error)
+{
+    float speed = GUANDAO_PARK_APPROACH_SPEED_FAST;
+    float target_steering;
+    float desired_servo;
+    float steer_delta;
+    float steer_delta_limit;
+    uint32 now_ms = system_getval_ms();
+    uint32 elapsed_ms = (portion1_approach_steer_ms == 0) ? 20u
+            : (uint32)(now_ms - portion1_approach_steer_ms);
+
+    if(elapsed_ms > 100u) elapsed_ms = 20u;
+    if(longitudinal > -0.30f) speed = GUANDAO_PARK_APPROACH_SPEED_SLOW;
+    else if(longitudinal > -0.60f) speed = GUANDAO_PARK_APPROACH_SPEED_MID;
+
+    target_steering = GUANDAO_PARK_APPROACH_YAW_KP * yaw_error
+            - GUANDAO_PARK_APPROACH_LAT_KP * lateral;
+    Value_Limit_float(&target_steering,
+            -GUANDAO_PARK_APPROACH_STEER_LIMIT, GUANDAO_PARK_APPROACH_STEER_LIMIT);
+    desired_servo = -target_steering;
+    steer_delta = desired_servo - portion1_approach_steer_cmd;
+    steer_delta_limit = GUANDAO_PARK_APPROACH_STEER_RATE * ((float)elapsed_ms / 20.0f);
+    Value_Limit_float(&steer_delta, -steer_delta_limit, steer_delta_limit);
+    portion1_approach_steer_cmd += steer_delta;
+    Value_Limit_float(&portion1_approach_steer_cmd,
+            -GUANDAO_PARK_APPROACH_STEER_LIMIT, GUANDAO_PARK_APPROACH_STEER_LIMIT);
+    portion1_approach_steer_ms = now_ms;
+
+    out_v_l = speed;
+    out_v_r = speed;
+    out_servo = portion1_approach_steer_cmd;
+    guandao_debug_stop_reason = 12;
 }
 
 static int guandao_find_closest_index(guandao_state *state, int start_index, int end_index)
@@ -390,33 +494,21 @@ static uint8 guandao_reverse_execute_plan(void)
     return 0;
 }
 
-static state_t guandao_taught_reverse_transform_point(state_t source, state_t recorded_start,
-                                                       state_t actual_start, float heading_delta)
-{
-    state_t transformed;
-    float heading_rad = heading_delta / 180.0f * M_PI;
-    float heading_sin = sinf(heading_rad);
-    float heading_cos = cosf(heading_rad);
-    float dx = source.x - recorded_start.x;
-    float dy = source.y - recorded_start.y;
-
-    transformed.x = actual_start.x + dx * heading_cos + dy * heading_sin;
-    transformed.y = actual_start.y - dx * heading_sin + dy * heading_cos;
-    transformed.theta = guandao_normalize_angle(source.theta + heading_delta);
-    return transformed;
-}
-
 static void guandao_taught_reverse_prepare(void)
 {
-    state_t actual_start = INS.current_state;
-    float heading_delta;
     int16 source_start;
+    int16 search_end;
+    int16 best_index;
+    float best_distance;
 
     portion1_taught_reverse_ready = 0;
     portion1_taught_reverse_length = 0;
     portion1_taught_reverse_index = 0;
     portion1_taught_reverse_hold_ms = 0;
     portion1_taught_reverse_steer_ms = 0;
+    portion1_approach_active = 0;
+    portion1_approach_steer_cmd = 0.0f;
+    portion1_approach_steer_ms = 0;
 
     if(!daoche_start_flag || !daoche_target_flag) return;
     if(daoche_point_length < GUANDAO_REVERSE_MIN_ROUTE_POINTS) return;
@@ -424,26 +516,39 @@ static void guandao_taught_reverse_prepare(void)
     if(daoche_target_length > portion1_finally_length) return;
     if(daoche_target_length >= MAX_LENGTH_INDEX) return;
 
-    heading_delta = guandao_normalize_angle(Yaw_1 - daoche_start_state.theta);
     source_start = daoche_point_length;
     for(int16 source_index = source_start;
             source_index < daoche_target_length && portion1_taught_reverse_length < MAX_LENGTH_INDEX - 1;
             source_index++)
     {
+        // Keep the taught route in its recorded INS frame. Moving the whole route to the
+        // trigger pose also moves the final parking target by the same entry error.
         portion1_taught_reverse_map[portion1_taught_reverse_length]
-                = guandao_taught_reverse_transform_point(INS.recode_map[source_index],
-                        daoche_start_state, actual_start, heading_delta);
+                = INS.recode_map[source_index];
         portion1_taught_reverse_length++;
     }
 
-    portion1_taught_reverse_target = guandao_taught_reverse_transform_point(daoche_target_state,
-            daoche_start_state, actual_start, heading_delta);
+    portion1_taught_reverse_target = daoche_target_state;
     portion1_taught_reverse_map[portion1_taught_reverse_length] = portion1_taught_reverse_target;
     portion1_taught_reverse_length++;
 
     if(portion1_taught_reverse_length >= 3)
     {
-        portion1_taught_reverse_index = 1;
+        search_end = GUANDAO_TAUGHT_REVERSE_SEARCH;
+        if(search_end >= portion1_taught_reverse_length) search_end = portion1_taught_reverse_length - 1;
+        best_index = 0;
+        best_distance = get_distance(INS.current_state, portion1_taught_reverse_map[0]);
+        for(int16 i = 1; i <= search_end; i++)
+        {
+            float distance = get_distance(INS.current_state, portion1_taught_reverse_map[i]);
+            if(distance < best_distance)
+            {
+                best_distance = distance;
+                best_index = i;
+            }
+        }
+        portion1_taught_reverse_index = best_index;
+        if(portion1_taught_reverse_index == 0) portion1_taught_reverse_index = 1;
         portion1_taught_reverse_ready = 1;
     }
 }
@@ -458,6 +563,7 @@ static uint8 guandao_taught_reverse_update(void)
     float target_distance;
     float final_distance;
     float final_yaw_error;
+    uint8 final_gate_passed = 0;
     float target_angle;
     float motion_heading;
     float heading_error;
@@ -527,6 +633,20 @@ static uint8 guandao_taught_reverse_update(void)
 
     final_distance = get_distance(INS.current_state, portion1_taught_reverse_target);
     final_yaw_error = guandao_normalize_angle(portion1_taught_reverse_target.theta - Yaw_1);
+    if(portion1_taught_reverse_length > GUANDAO_PARK_FRAME_POINTS)
+    {
+        state_t final_reference = portion1_taught_reverse_map[
+                portion1_taught_reverse_length - 1 - GUANDAO_PARK_FRAME_POINTS];
+        float route_x = portion1_taught_reverse_target.x - final_reference.x;
+        float route_y = portion1_taught_reverse_target.y - final_reference.y;
+        float passed_x = INS.current_state.x - portion1_taught_reverse_target.x;
+        float passed_y = INS.current_state.y - portion1_taught_reverse_target.y;
+        if(route_x * route_x + route_y * route_y > 0.0001f
+                && route_x * passed_x + route_y * passed_y >= 0.0f)
+        {
+            final_gate_passed = 1;
+        }
+    }
     if(final_distance <= GUANDAO_REVERSE_FINE_DIST
             || portion1_taught_reverse_index >= portion1_taught_reverse_length - 2)
     {
@@ -548,6 +668,10 @@ static uint8 guandao_taught_reverse_update(void)
     // 航向未完全收敛时继续倒车可能越过目标并撞击立柱。
     if(portion1_taught_reverse_index >= portion1_taught_reverse_length - 2
             && final_distance <= GUANDAO_REVERSE_TARGET_DIST)
+    {
+        return 1;
+    }
+    if(final_gate_passed && final_distance <= GUANDAO_PARK_FINAL_GATE_LIMIT)
     {
         return 1;
     }
@@ -734,6 +858,14 @@ void portion_1_reset(void)
     portion1_taught_reverse_ready = 0;
     portion1_taught_reverse_hold_ms = 0;
     portion1_taught_reverse_steer_ms = 0;
+    portion1_approach_active = 0;
+    portion1_approach_steer_cmd = 0.0f;
+    portion1_approach_steer_ms = 0;
+    guandao_debug_approach_active = 0;
+    guandao_debug_entry_gate = 0;
+    guandao_debug_entry_long = 0.0f;
+    guandao_debug_entry_lat = 0.0f;
+    guandao_debug_entry_yaw = 0.0f;
     INS.length_index = guandao_clamp_length(INS.length_index);
     INS.current_point_index = 0;
     INS.planned_length = 0;
@@ -970,48 +1102,65 @@ void portion_1(void)
         uint8 reverse_ready = 0;
         uint8 final_stop_ready = 0;
         uint8 reverse_route_valid = 0;
-        uint8 reverse_entry_passed = 0;
-        float reverse_entry_distance = 10000.0f;
+        uint8 entry_gate_passed = 0;
+        float entry_longitudinal = 0.0f;
+        float entry_lateral = 0.0f;
+        float entry_yaw_error = 0.0f;
         pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
         active_route_length = guandao_route_length(&INS);
-        if(active_route_length > 0)
-        {
-            state_t reverse_entry = guandao_route_point(&INS, active_route_length - 1);
-            reverse_entry_distance = get_distance(INS.current_state, reverse_entry);
-            guandao_debug_dist_final = reverse_entry_distance;
-            if(active_route_length > 5)
-            {
-                state_t entry_reference = guandao_route_point(&INS, active_route_length - 6);
-                float route_x = reverse_entry.x - entry_reference.x;
-                float route_y = reverse_entry.y - entry_reference.y;
-                float passed_x = INS.current_state.x - reverse_entry.x;
-                float passed_y = INS.current_state.y - reverse_entry.y;
-                if(route_x * route_x + route_y * route_y > 0.0001f
-                        && route_x * passed_x + route_y * passed_y >= 0.0f)
-                {
-                    reverse_entry_passed = 1;
-                }
-            }
-        }
         reverse_route_valid = (daoche_point_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && active_route_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && daoche_point_length < portion1_finally_length);
+        if(reverse_route_valid
+                && guandao_parking_entry_errors(&entry_longitudinal, &entry_lateral,
+                        &entry_yaw_error, &entry_gate_passed))
+        {
+            guandao_debug_entry_long = entry_longitudinal;
+            guandao_debug_entry_lat = entry_lateral;
+            guandao_debug_entry_yaw = entry_yaw_error;
+            guandao_debug_entry_gate = entry_gate_passed;
+            guandao_debug_dist_final = get_distance(INS.current_state, daoche_start_state);
+
+            if(!portion1_approach_active
+                    && INS.current_point_index >= active_route_length - 30
+                    && entry_longitudinal >= -GUANDAO_PARK_APPROACH_DIST)
+            {
+                portion1_approach_active = 1;
+                portion1_approach_steer_cmd = out_servo;
+                portion1_approach_steer_ms = system_getval_ms();
+            }
+            guandao_debug_approach_active = portion1_approach_active;
+            if(portion1_approach_active)
+            {
+                if((entry_gate_passed && fabsf(entry_lateral) <= GUANDAO_PARK_GATE_LAT_LIMIT)
+                        || (fabsf(entry_longitudinal) <= GUANDAO_PARK_GATE_NEAR_LONG
+                            && fabsf(entry_lateral) <= 0.30f
+                            && fabsf(entry_yaw_error) <= 15.0f))
+                {
+                    reverse_ready = 1;
+                }
+                else if(entry_gate_passed && fabsf(entry_lateral) > GUANDAO_PARK_GATE_LAT_LIMIT)
+                {
+                    // The car crossed the entry line outside the safe corridor. Stop instead of
+                    // turning around to chase the point or starting a badly shifted reverse run.
+                    out_v_l = 0.0f;
+                    out_v_r = 0.0f;
+                    out_servo = 0.0f;
+                    guandao_debug_stop_reason = 13;
+                }
+                else
+                {
+                    guandao_parking_approach_update(entry_longitudinal,
+                            entry_lateral, entry_yaw_error);
+                }
+            }
+        }
         if(!reverse_route_valid
                 && active_route_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && INS.current_point_index >= active_route_length - 2
                 && guandao_debug_dist_final <= GUANDAO_REVERSE_FINAL_DIST)
         {
             final_stop_ready = 1;
-        }
-        if(reverse_route_valid)
-        {
-            // 必须已经追到路线末段，并真正到达记录时的第一停车位姿附近。
-            if(INS.current_point_index >= active_route_length - 2
-                    && (reverse_entry_distance <= GUANDAO_PARK_ENTRY_DIST
-                        || (reverse_entry_passed && reverse_entry_distance <= 0.45f)))
-            {
-                reverse_ready = 1;
-            }
         }
         if(reverse_ready || final_stop_ready)
         {
