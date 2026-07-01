@@ -105,9 +105,9 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_REVERSE_MIN_ROUTE_POINTS 5
 #define GUANDAO_PARK_ENTRY_DIST        0.15f
 #define GUANDAO_PARK_APPROACH_DIST     1.20f
-#define GUANDAO_PARK_APPROACH_SPEED_FAST 8.0f
-#define GUANDAO_PARK_APPROACH_SPEED_MID  6.0f
-#define GUANDAO_PARK_APPROACH_SPEED_SLOW 4.0f
+#define GUANDAO_PARK_APPROACH_SPEED_FAST 10.0f
+#define GUANDAO_PARK_APPROACH_SPEED_MID  8.0f
+#define GUANDAO_PARK_APPROACH_SPEED_SLOW 5.0f
 #define GUANDAO_PARK_APPROACH_LAT_KP   18.0f
 #define GUANDAO_PARK_APPROACH_YAW_KP   0.80f
 #define GUANDAO_PARK_APPROACH_STEER_LIMIT 25.0f
@@ -146,8 +146,8 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_REVERSE_FORWARD_SPEED  5.0f
 #define GUANDAO_REVERSE_PLAN_TOL_DIST  0.16f
 #define GUANDAO_REVERSE_PLAN_TOL_YAW   6.0f
-#define GUANDAO_TAUGHT_REVERSE_SPEED   -3.0f
-#define GUANDAO_TAUGHT_REVERSE_FINE_SPEED -2.0f
+#define GUANDAO_TAUGHT_REVERSE_SPEED   -4.0f
+#define GUANDAO_TAUGHT_REVERSE_FINE_SPEED -3.0f
 #define GUANDAO_TAUGHT_REVERSE_LOOKAHEAD 0.35f
 #define GUANDAO_TAUGHT_REVERSE_POINT_DIST 0.20f
 #define GUANDAO_TAUGHT_REVERSE_SEARCH  6
@@ -156,7 +156,7 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_TAUGHT_REVERSE_HOLD_MS 300u
 // 低速教学倒车的弯线路程明显长于起终点直线距离；实测 18 s 仍会在距目标约 0.23 m 时超时。
 // 末端另有 12 cm 位置停车保护，因此延长运行时间而不放宽停车边界。
-#define GUANDAO_TAUGHT_REVERSE_MAX_MS  24000u
+#define GUANDAO_TAUGHT_REVERSE_MAX_MS  34000u
 #define GUANDAO_PARK_SECOND_MIN_MS      1000u
 #define GUANDAO_PARK_SECOND_MIN_DIST    0.30f
 #define GUANDAO_PARK_SECOND_MIN_POINTS  2
@@ -657,7 +657,7 @@ static uint8 guandao_taught_reverse_update(void)
         }
     }
     if(final_distance <= GUANDAO_REVERSE_FINE_DIST
-            || portion1_taught_reverse_index >= portion1_taught_reverse_length - 2)
+            || portion1_taught_reverse_index >= portion1_taught_reverse_length - 1)
     {
         reverse_speed = GUANDAO_TAUGHT_REVERSE_FINE_SPEED;
     }
