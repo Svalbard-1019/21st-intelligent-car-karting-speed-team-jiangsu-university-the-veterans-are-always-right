@@ -74,9 +74,8 @@ extern Encoder_t Steer_ecd;
 
 //宏定义
 #define l_ecdcounter()    encoder_get_count(ENCODER_LEFT)
-// TIM2 正交模式的驱动读数会自动 /4；TIM5 方向模式需手动做同样归一化。
-#define RIGHT_ENCODER_COUNT_DIV       (4)
-#define r_ecdcounter()    ((int16)(encoder_get_count(ENCODER_RIGHT) / RIGHT_ENCODER_COUNT_DIV))
+// 实车对比表明 TIM5 原始计数已与 TIM2 归一化读数接近，不再额外除以 4。
+#define r_ecdcounter()    encoder_get_count(ENCODER_RIGHT)
 #define BUZZER_PIN  (P33_10)      //蜂鸣器
 
 #define KEY1                    (P20_6)    //按键引脚配置   //P20_6  //P11_3
