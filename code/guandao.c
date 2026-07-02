@@ -166,8 +166,6 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_PARK_SECOND_MIN_MS      1000u
 #define GUANDAO_PARK_SECOND_MIN_DIST    0.30f
 #define GUANDAO_PARK_SECOND_MIN_POINTS  2
-#define GUANDAO_PARK_FIRST_MIN_POINTS   10
-#define GUANDAO_PARK_FIRST_MIN_DIST     1.0f
 #define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
 #define PORTION3_PURSUIT_THRESHOLD     0.25f
 #define PORTION3_FINAL_STOP_DIST       0.6f
@@ -1439,15 +1437,6 @@ void recode_waypoint(guandao_state * state)
         key1_flag =0;
         if(park_record_stage == 0)
         {
-            /* Reject remote/key glitches near the recording origin.  A first
-             * parking marker at index 1 would truncate autonomous driving to
-             * two points and make the vehicle appear unable to start. */
-            if(state->length_index < GUANDAO_PARK_FIRST_MIN_POINTS
-                    || get_distance(state->current_state, state->recode_map[0])
-                            < GUANDAO_PARK_FIRST_MIN_DIST)
-            {
-                return;
-            }
             state->recode_map[state->length_index] =state->current_state;
             daoche_start_state = state->current_state;
             daoche_start_state.theta = Yaw_1;
