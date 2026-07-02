@@ -115,7 +115,6 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_PARK_GATE_LAT_LIMIT    0.45f
 #define GUANDAO_PARK_GATE_NEAR_LONG    0.08f
 #define GUANDAO_PARK_FINAL_GATE_LIMIT  0.45f
-#define GUANDAO_PARK_FINAL_YAW_LIMIT   10.0f
 #define GUANDAO_PARK_FRAME_POINTS      5
 #define GUANDAO_REVERSE_WAIT_MS        300u
 #define GUANDAO_REVERSE_GPS_WAIT_MS    1500u
@@ -830,15 +829,11 @@ static uint8 guandao_taught_reverse_update(void)
     // 障碍物附近以停车位置优先：教学路径已经走到末端且进入 12 cm 范围就结束。
     // 航向未完全收敛时继续倒车可能越过目标并撞击立柱。
     if(portion1_taught_reverse_index >= portion1_taught_reverse_length - 2
-            && final_distance <= GUANDAO_REVERSE_TARGET_DIST
-            && fabsf(final_yaw_error) <= GUANDAO_PARK_FINAL_YAW_LIMIT)
+            && final_distance <= GUANDAO_REVERSE_TARGET_DIST)
     {
         return 1;
     }
-    if(final_gate_passed
-            && portion1_taught_reverse_index >= portion1_taught_reverse_length - 2
-            && final_distance <= GUANDAO_PARK_FINAL_GATE_LIMIT
-            && fabsf(final_yaw_error) <= GUANDAO_PARK_FINAL_YAW_LIMIT)
+    if(final_gate_passed && final_distance <= GUANDAO_PARK_FINAL_GATE_LIMIT)
     {
         return 1;
     }
