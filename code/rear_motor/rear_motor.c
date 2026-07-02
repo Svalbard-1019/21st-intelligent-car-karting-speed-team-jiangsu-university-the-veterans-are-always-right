@@ -45,8 +45,7 @@ static int32  encoder_100ms_last = 0;
 static volatile uint32 encoder_sample_count = 0;
 static uint32 last_encoder_sample_count = 0;
 static uint8  encoder_div = 0;
-static int16  last_encoder_count_l = 0;
-static int16  last_encoder_count_r = 0;
+static int16  last_encoder_count = 0;
 static uint8  encoder_first_read = 1;
 
 /* PID 状态 */
@@ -118,8 +117,7 @@ void rear_motor_init(void)
     encoder_sample_count = 0;
     last_encoder_sample_count = 0;
     encoder_div = 0;
-    last_encoder_count_l = encoder_get_count(ENCODER_LEFT);
-    last_encoder_count_r = (int16)(-encoder_get_count(ENCODER_RIGHT));
+    last_encoder_count = encoder_get_count(TIM2_ENCODER);
     encoder_first_read = 0;
     integral    = 0.0f;
     last_error  = 0.0f;
@@ -145,8 +143,7 @@ void rear_motor_stop(void)
     encoder_100ms_last = 0;
     encoder_div = 0;
     encoder_10ms = 0;
-    last_encoder_count_l = encoder_get_count(ENCODER_LEFT);
-    last_encoder_count_r = (int16)(-encoder_get_count(ENCODER_RIGHT));
+    last_encoder_count = encoder_get_count(TIM2_ENCODER);
     encoder_first_read = 0;
 
     pwm_set_duty(PWM_L, 0);
@@ -191,36 +188,22 @@ void rear_motor_set_target_mps(float mps)
  */
 void rear_motor_encoder_update_10ms(void)
 {
-    int16 current_count_l = encoder_get_count(ENCODER_LEFT);
-    int16 current_count_r = (int16)(-encoder_get_count(ENCODER_RIGHT));
-    int16 delta_l = 0;
-    int16 delta_r = 0;
+    int16 current_count = encoder_get_count(TIM2_ENCODER);
 
     if(encoder_first_read)
     {
-        last_encoder_count_l = current_count_l;
-        last_encoder_count_r = current_count_r;
+        last_encoder_count = current_count;
         encoder_10ms = 0;
         encoder_first_read = 0;
     }
     else
     {
-        delta_l = (int16)calculate_delta(current_count_l, last_encoder_count_l);
-        delta_r = (int16)calculate_delta(current_count_r, last_encoder_count_r);
-        if(delta_l > REAR_ENCODER_DELTA_ABS_MAX || delta_l < -REAR_ENCODER_DELTA_ABS_MAX)
+        encoder_10ms = (int16)calculate_delta(current_count, last_encoder_count);
+        if(encoder_10ms > REAR_ENCODER_DELTA_ABS_MAX || encoder_10ms < -REAR_ENCODER_DELTA_ABS_MAX)
         {
-            delta_l = 0;
+            encoder_10ms = 0;
         }
-        if(delta_r > REAR_ENCODER_DELTA_ABS_MAX || delta_r < -REAR_ENCODER_DELTA_ABS_MAX)
-        {
-            delta_r = 0;
-        }
-
-        /* Both encoders are normalized to positive counts while driving
-         * forward.  Their mean represents rear-axle centre speed. */
-        encoder_10ms = (int16)(((int32)delta_l + (int32)delta_r) / 2);
-        last_encoder_count_l = current_count_l;
-        last_encoder_count_r = current_count_r;
+        last_encoder_count = current_count;
     }
 
     encoder_sample_count++;
