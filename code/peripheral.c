@@ -344,8 +344,9 @@ void Encoder_Get(Encoder_t *count)
 {
 
     count->left_counter = l_ecdcounter();                  // 获取左编码器计数
-    // 左右编码器机械安装方向相反，统一约定车辆前进时两侧计数均为正。
-    count->right_counter = (int16)(-r_ecdcounter());       // 获取右编码器计数并反向
+    /* 右编码器实测存在方向和倍率不稳定，科目一暂时只信任左轮。
+     * 将左轮计数镜像为右轮反馈，使位姿积分仍按后轴中心接口运行。 */
+    count->right_counter = count->left_counter;
     int32 raw_delta_l = calculate_delta(count->left_counter, count->last_ecdcount_l);
     int32 raw_delta_r = calculate_delta(count->right_counter, count->last_ecdcount_r);
     if(raw_delta_l > ENCODER_DELTA_ABS_MAX || raw_delta_l < -ENCODER_DELTA_ABS_MAX)
