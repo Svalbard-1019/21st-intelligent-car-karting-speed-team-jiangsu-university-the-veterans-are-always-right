@@ -324,9 +324,6 @@ void Encoder_count_init(Encoder_t *count)
 void Encoder_Init(void)
 {
     encoder_quad_init(ENCODER_LEFT, ENCODER_LEFT_A, ENCODER_LEFT_B);
-    // GPT12 的 TIM5 不支持 TIM2/3/4 那种完整正交边沿采集。
-    // 用 A 相作脉冲、B 相作方向输入，可稳定获得右轮正反向计数。
-    encoder_dir_init(ENCODER_RIGHT, ENCODER_RIGHT_A, ENCODER_RIGHT_B);
 
 }
 

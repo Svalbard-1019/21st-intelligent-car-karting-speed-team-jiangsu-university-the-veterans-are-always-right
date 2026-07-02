@@ -1046,7 +1046,6 @@ void portion_1_reset(void)
     Encoder_count_init(&guandao_ecd);
     Encoder_count_init(&Speed_ecd);
     encoder_clear_count(ENCODER_LEFT);
-    encoder_clear_count(ENCODER_RIGHT);
     rear_motor_stop();
 
     if(INS.length_index > 1)
@@ -1088,11 +1087,14 @@ void portion_1(void)
         {
             INS.length_index = portion1_finally_length;            // 没有停车点时跑完整INS路线
         }
-        guandao_build_smooth_plan(&INS);
+        /* Keep subject-one forward tracking identical to the proven kmy
+         * baseline: follow the recorded points directly. */
+        INS.plan_ready = 0;
+        INS.planned_length = 0;
         INS.current_point_index = 0;
-        if(INS.planned_length > 1)
+        if(INS.length_index > 1)
         {
-            int end_index = INS.planned_length - 1;
+            int end_index = INS.length_index - 1;
             if(end_index > GUANDAO_START_SEARCH_POINTS) end_index = GUANDAO_START_SEARCH_POINTS;
             INS.current_point_index = guandao_find_closest_index(&INS, 1, end_index);
         }
@@ -1732,7 +1734,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    //限幅
    Value_Limit_float(&target_steering ,-MAX_STEERING_RAD,MAX_STEERING_RAD);
 
-   slip_cheak(&guandao_ecd,target_steering);
+//   slip_cheak(&guandao_ecd,target_steering);
 
    float dist_to_final = get_distance(state->current_state, guandao_route_point(state, route_length - 1));
    guandao_debug_dist_final = dist_to_final;
