@@ -113,6 +113,7 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_PARK_APPROACH_STEER_LIMIT 25.0f
 #define GUANDAO_PARK_APPROACH_STEER_RATE 2.0f
 #define GUANDAO_PARK_GATE_LAT_LIMIT    0.45f
+#define GUANDAO_PARK_GATE_ABORT_LIMIT  1.20f
 #define GUANDAO_PARK_GATE_NEAR_LONG    0.08f
 #define GUANDAO_PARK_FINAL_GATE_LIMIT  0.45f
 #define GUANDAO_PARK_FINAL_YAW_LIMIT   10.0f
@@ -1312,7 +1313,8 @@ void portion_1(void)
                 {
                     reverse_ready = 1;
                 }
-                else if(entry_gate_passed && fabsf(entry_lateral) > GUANDAO_PARK_GATE_LAT_LIMIT)
+                else if(entry_gate_passed
+                        && fabsf(entry_lateral) > GUANDAO_PARK_GATE_ABORT_LIMIT)
                 {
                     // The car crossed the entry line outside the safe corridor. Stop instead of
                     // turning around to chase the point or starting a badly shifted reverse run.
