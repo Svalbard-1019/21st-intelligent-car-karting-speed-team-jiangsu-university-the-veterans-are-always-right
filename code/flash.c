@@ -48,6 +48,9 @@ float kd;
 #define FLASH_FINAL_DSTS_DEFAULT         (3.0f)
 #define FLASH_FINAL_DSTS_MIN             (0.3f)
 #define FLASH_FINAL_DSTS_MAX             (20.0f)
+#define FLASH_PREVIEW_STEPS_DEFAULT      (2)
+#define FLASH_PREVIEW_STEPS_MIN          (1)
+#define FLASH_PREVIEW_STEPS_MAX          (20)
 
 static int16 flash_clamp_route_length(int16 length)
 {
@@ -112,6 +115,10 @@ void Flash_Read_pid(void)
         {
             control[j] = flash_union_buffer[i].int16_type;
         }
+        if(control[2] < FLASH_PREVIEW_STEPS_MIN || control[2] > FLASH_PREVIEW_STEPS_MAX)
+        {
+            control[2] = FLASH_PREVIEW_STEPS_DEFAULT;
+        }
         base_speed = (float)control[0];
         daoche_speed = (float)control[1];
         preview_spets = control[2];
@@ -133,6 +140,10 @@ void Flash_Write_pid(void)
 {
     flash_buffer_clear();
     flash_sanitize_runtime_params();
+    if(control[2] < FLASH_PREVIEW_STEPS_MIN || control[2] > FLASH_PREVIEW_STEPS_MAX)
+    {
+        control[2] = FLASH_PREVIEW_STEPS_DEFAULT;
+    }
 
     MoterPID_L.Kp = speed_pid[0];
     MoterPID_R.Kp = speed_pid[0];
