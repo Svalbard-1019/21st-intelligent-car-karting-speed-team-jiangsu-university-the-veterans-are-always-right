@@ -132,10 +132,6 @@ static uint32 portion1_approach_steer_ms = 0;
 #define GUANDAO_CURVE_SPEED_RATIO      0.70f
 #define GUANDAO_VERY_HIGH_SPEED_GAIN   1.20f
 #define GUANDAO_VERY_HIGH_CMD_LIMIT    28.0f
-#define GUANDAO_2MPS_SPEED_GAIN        1.45f
-#define GUANDAO_2MPS_CMD_LIMIT         32.0f
-#define GUANDAO_2MPS_STEER_RATE        2.2f
-#define GUANDAO_2MPS_CURVE_SPEED_RATIO 0.60f
 #define GUANDAO_STEER_RATE_LOW         3.0f
 #define GUANDAO_STEER_RATE_HIGH        1.5f
 #define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
@@ -1690,14 +1686,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     {
         steering_gain = GUANDAO_HIGH_SPEED_GAIN;
         steering_limit = GUANDAO_HIGH_SPEED_CMD_LIMIT;
-        if(base_speed >= 20.0f)
-        {
-            steering_gain = GUANDAO_2MPS_SPEED_GAIN;
-            steering_limit = GUANDAO_2MPS_CMD_LIMIT;
-            if(steer_preview_steps < 5) steer_preview_steps = 5;
-            steering_rate_limit = GUANDAO_2MPS_STEER_RATE;
-        }
-        else if(base_speed >= 15.0f)
+        if(base_speed >= 15.0f)
         {
             steering_gain = GUANDAO_VERY_HIGH_SPEED_GAIN;
             steering_limit = GUANDAO_VERY_HIGH_CMD_LIMIT;
@@ -1776,14 +1765,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        v_center = base_speed * curve_scale;
        if(v_center < MIN_SPEED) v_center = MIN_SPEED;
    }
-   if(base_speed >= 20.0f && (fabsf(angle_diff) > 25.0f || fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE))
-   {
-       if(v_center > base_speed * GUANDAO_2MPS_CURVE_SPEED_RATIO)
-       {
-           v_center = base_speed * GUANDAO_2MPS_CURVE_SPEED_RATIO;
-       }
-   }
-   else if(base_speed >= 15.0f && (fabsf(angle_diff) > 25.0f || fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE))
+   if(base_speed >= 15.0f && (fabsf(angle_diff) > 25.0f || fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE))
    {
        if(v_center > base_speed * GUANDAO_CURVE_SPEED_RATIO)
        {
