@@ -174,7 +174,7 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,rstate=%d,pready=%d,pidx=%d,pcnt=%d,td100=%ld,tyaw10=%ld,app=%d,gate=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,rstate=%d,pready=%d,pidx=%d,pcnt=%d,td100=%ld,tyaw10=%ld,app=%d,gate=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,steerA10=%ld,encL=%ld,gyroRaw=%d,gyroOff100=%ld,gpsLat1e7=%ld,gpsLon1e7=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
                       (unsigned long)now_ms,
                       INS.current_point_index,
                       INS.length_index,
@@ -200,6 +200,12 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(INS.current_state.x, 100.0f),
                       (long)Serial_Debug_Scale(INS.current_state.y, 100.0f),
                       (long)Serial_Debug_Scale(Yaw_1, 10.0f),
+                      (long)Serial_Debug_Scale((float)angle, 10.0f),
+                      (long)guandao_ecd.left_counter,
+                      imu963ra_gyro_z,
+                      (long)Serial_Debug_Scale(Gyro_Offset.Zdata, 100.0f),
+                      (long)(gnss.latitude * 10000000.0),
+                      (long)(gnss.longitude * 10000000.0),
                       (long)Serial_Debug_Scale(out_v_l, 10.0f),
                       (long)Serial_Debug_Scale(out_v_r, 10.0f),
                       (long)Serial_Debug_Scale(out_servo, 10.0f),
