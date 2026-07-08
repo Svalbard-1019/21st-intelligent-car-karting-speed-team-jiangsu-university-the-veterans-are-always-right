@@ -538,6 +538,166 @@ static void Rack_Test_Reset_Targets(void)
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
+
+#define RACK_SERIAL_CMD_NONE       (0u)
+#define RACK_SERIAL_CMD_NEXT       (1u)
+#define RACK_SERIAL_CMD_PREV       (2u)
+#define RACK_SERIAL_CMD_INC        (3u)
+#define RACK_SERIAL_CMD_DEC        (4u)
+#define RACK_SERIAL_CMD_REDRAW     (5u)
+#define RACK_SERIAL_CMD_HELP       (6u)
+#define RACK_SERIAL_PERIOD_MS      (200u)
+
+static long Rack_Serial_Scale(float value, float scale)
+{
+    if(value >= 0.0f)
+    {
+        return (long)(value * scale + 0.5f);
+    }
+    return (long)(value * scale - 0.5f);
+}
+
+static void Rack_Test_Print_Serial_Help(void)
+{
+    printf("\r\nRackTest serial keys:\r\n");
+    printf("  s/2/n: next stage\r\n");
+    printf("  w/8/p: prev stage\r\n");
+    printf("  d/6/+: increase target\r\n");
+    printf("  a/4/-: decrease target\r\n");
+    printf("  r: redraw\r\n");
+    printf("  h: help\r\n");
+}
+
+static uint8 Rack_Test_Read_Serial_Key(void)
+{
+    uint8 buffer[16];
+    uint32 len = debug_read_ring_buffer(buffer, sizeof(buffer));
+    uint32 i;
+
+    for(i = 0; i < len; i++)
+    {
+        switch(buffer[i])
+        {
+            case 's':
+            case 'S':
+            case '2':
+            case 'n':
+            case 'N':
+                return RACK_SERIAL_CMD_NEXT;
+            case 'w':
+            case 'W':
+            case '8':
+            case 'p':
+            case 'P':
+                return RACK_SERIAL_CMD_PREV;
+            case 'd':
+            case 'D':
+            case '6':
+            case '+':
+            case '=':
+                return RACK_SERIAL_CMD_INC;
+            case 'a':
+            case 'A':
+            case '4':
+            case '-':
+            case '_':
+                return RACK_SERIAL_CMD_DEC;
+            case 'r':
+            case 'R':
+                return RACK_SERIAL_CMD_REDRAW;
+            case 'h':
+            case 'H':
+            case '?':
+                return RACK_SERIAL_CMD_HELP;
+            default:
+                break;
+        }
+    }
+
+    return RACK_SERIAL_CMD_NONE;
+}
+
+static void Rack_Test_Print_Serial(uint8 force)
+{
+    static uint32 last_ms = 0;
+    static uint8 last_stage = 0xff;
+    static int16 last_speed_target = 0x7fff;
+    static int32 last_steer_target = 0x7fffffff;
+    uint32 now_ms = system_getval_ms();
+    static char line[320];
+    int len;
+
+    if(!force
+            && rack_test_stage == last_stage
+            && rack_test_speed_target == last_speed_target
+            && rack_test_steer_target == last_steer_target
+            && (uint32)(now_ms - last_ms) < RACK_SERIAL_PERIOD_MS)
+    {
+        return;
+    }
+
+    last_ms = now_ms;
+    last_stage = rack_test_stage;
+    last_speed_target = rack_test_speed_target;
+    last_steer_target = rack_test_steer_target;
+
+    len = sprintf(line,
+                  "RACK,t=%lu,stage=%u,yaw10=%ld,encL=%ld,encR=%ld,steerT=%ld,steerA=%ld,steerO=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld,tgtYaw10=%ld,yawErr10=%ld,straightSteer10=%ld\r\n",
+                  (unsigned long)now_ms,
+                  rack_test_stage,
+                  Rack_Serial_Scale(Yaw_1, 10.0f),
+                  (long)Speed_ecd.left_counter,
+                  (long)Speed_ecd.right_counter,
+                  (long)rack_test_steer_target,
+                  (long)angle,
+                  (long)angle_speed,
+                  Rack_Serial_Scale(rear_motor_get_target_mps(), 100.0f),
+                  Rack_Serial_Scale(rear_motor_get_speed_mps(), 100.0f),
+                  rear_motor_get_pwm(),
+                  rear_motor_get_encoder_10ms(),
+                  (long)rear_motor_get_encoder_100ms(),
+                  Rack_Serial_Scale(rack_straight_target_yaw, 10.0f),
+                  Rack_Serial_Scale(rack_straight_yaw_error, 10.0f),
+                  Rack_Serial_Scale(rack_straight_steer_target, 10.0f));
+    if(len > 0)
+    {
+        printf("%s", line);
+    }
+}
+
+static void Rack_Test_Handle_Serial_Command(uint8 command)
+{
+    if(command == RACK_SERIAL_CMD_NEXT)
+    {
+        rack_test_stage++;
+        if(rack_test_stage > 3) rack_test_stage = 0;
+        Rack_Test_Reset_Targets();
+    }
+    else if(command == RACK_SERIAL_CMD_PREV)
+    {
+        if(rack_test_stage == 0) rack_test_stage = 3;
+        else rack_test_stage--;
+        Rack_Test_Reset_Targets();
+    }
+    else if(command == RACK_SERIAL_CMD_INC)
+    {
+        if(rack_test_stage == 1)
+            rack_test_steer_target += 10;
+        else if(rack_test_stage == 2 || rack_test_stage == 3)
+            rear_motor_set_target_mps(rear_motor_get_target_mps() + 0.5f);
+    }
+    else if(command == RACK_SERIAL_CMD_DEC)
+    {
+        if(rack_test_stage == 1)
+            rack_test_steer_target -= 10;
+        else if(rack_test_stage == 2 || rack_test_stage == 3)
+            rear_motor_set_target_mps(rear_motor_get_target_mps() - 0.5f);
+    }
+    else if(command == RACK_SERIAL_CMD_HELP)
+    {
+        Rack_Test_Print_Serial_Help();
+    }
+}
 void Rack_Straight_Reset(void)
 {
     rack_straight_target_yaw = Yaw_1;
@@ -581,9 +741,13 @@ void Rack_Straight_Update(void)
  */
 void Rack_Test_Run(void)
 {
+    uint8 serial_command = RACK_SERIAL_CMD_NONE;
+
     // Rack Test 不经过 guandao 的 update_state()，需要在这里主动刷新双编码器。
     // 传感器页显示累计原始计数，避免主循环高频读取时瞬时增量很快滤波到 0。
     Encoder_Get(&Speed_ecd);
+    serial_command = Rack_Test_Read_Serial_Key();
+    Rack_Test_Handle_Serial_Command(serial_command);
 
     if(key1_flag == 1)
     {
@@ -655,6 +819,8 @@ void Rack_Test_Run(void)
         ips200_show_string(X(1), Y(7), "Steer");      ips200_show_float(X(10), Y(7), rack_straight_steer_target, 3, 2);
         ips200_show_string(X(1), Y(8), "PWM");        ips200_show_int(X(10), Y(8), rear_motor_get_pwm(), 5);
     }
+
+    Rack_Test_Print_Serial(serial_command == RACK_SERIAL_CMD_REDRAW || serial_command == RACK_SERIAL_CMD_HELP);
 }
 /**
  * 函数说明：GPS_Init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
