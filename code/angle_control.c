@@ -102,7 +102,6 @@ void angle_control_init(void) {
     encoder_quad_init(ANGLE_ENCODER, ANGLE_ENCODER_A_PIN, ANGLE_ENCODER_B_PIN);
 
     PID_Init(&angle_ctrl.pid, ANGLE_DEFAULT_KP, ANGLE_DEFAULT_KI, ANGLE_DEFAULT_KD, ANGLE_OUTPUT_MAX);
-    angle_ctrl.pid.IntegralMax = ANGLE_INTEGRAL_MAX;
     angle_ctrl.target_angle = 0;
     angle_ctrl.current_angle = 0;
     angle_ctrl.encoder_zero_count = 0;
@@ -166,9 +165,6 @@ void angle_control_update(void) {
         (angle_ctrl.target_angle - angle_ctrl.current_angle > -ANGLE_DEAD_BAND)) {
         pid_output = 0;
         angle_ctrl.pid.Integral = 0;
-    } else if(pid_output != 0.0f) {
-        pid_output += (pid_output > 0.0f) ? ANGLE_GRAVITY_FF : -ANGLE_GRAVITY_FF;
-        Value_Limit_float(&pid_output, -ANGLE_OUTPUT_MAX, ANGLE_OUTPUT_MAX);
     }
 
     angle_motor_set_pwm((int32)pid_output);

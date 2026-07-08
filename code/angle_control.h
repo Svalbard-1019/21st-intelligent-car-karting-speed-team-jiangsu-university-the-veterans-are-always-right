@@ -44,13 +44,11 @@
 #define ANGLE_GEAR_RATIO    300                    // 减速比
 #define ANGLE_MAX_DEGREE    60                     // 最大目标角度
 #define ANGLE_MIN_DEGREE    -60                    // 最小目标角度
-#define ANGLE_DEFAULT_KP    600.0f
-#define ANGLE_DEFAULT_KI    14.0f
-#define ANGLE_DEFAULT_KD    26.0f
-#define ANGLE_GRAVITY_FF    60.0f
+#define ANGLE_DEFAULT_KP    200.0f
+#define ANGLE_DEFAULT_KI    4.0f
+#define ANGLE_DEFAULT_KD    10.0f
 #define ANGLE_OUTPUT_MAX    10000
-#define ANGLE_INTEGRAL_MAX  1000.0f
-#define ANGLE_DEAD_BAND     0.2f
+#define ANGLE_DEAD_BAND     0.1f
 
 /**
  * 结构体说明：用于集中保存本模块的一组状态量/参数，字段通常会被初始化函数清零，并在周期函数中持续更新。
