@@ -98,6 +98,18 @@ static uint8 portion1_approach_active = 0;
 static float portion1_approach_steer_cmd = 0.0f;
 static uint32 portion1_approach_steer_ms = 0;
 
+static void guandao_record_park_target_now(guandao_state *state)
+{
+    if(state != &INS || !daoche_start_flag || daoche_target_flag) return;
+
+    daoche_target_state = state->current_state;
+    daoche_target_state.theta = Yaw_1;
+    daoche_target_length = state->length_index;
+    daoche_target_flag = 1;
+    daoche_flash_cheack = 1;
+    park_record_stage = 2;
+}
+
 #define GUANDAO_START_SEARCH_POINTS    10
 #define GUANDAO_TRACE_SEARCH_POINTS    8
 #define GUANDAO_REVERSE_TRIGGER_DIST   0.35f
@@ -2034,11 +2046,7 @@ void guandao_recode(guandao_state * state)
         {
             // 第二次按键若直接长按保存，先登记当前倒车终点，再写 Flash。
             // 否则旧逻辑会在按键释放时才登记终点，导致 Flash 中 target_flag 仍为 0。
-            if(p == &INS && daoche_start_flag && !daoche_target_flag)
-            {
-                key4_flag = 1;
-                recode_waypoint(p);
-            }
+            guandao_record_park_target_now(p);
             Flash_Store_Mode(route_setting_choice);
             Buzzer_check(200);
             key1_save_wait_release = 1;
@@ -2066,11 +2074,7 @@ void guandao_recode(guandao_state * state)
         if(rc_ch3_start_ms == 0) rc_ch3_start_ms = now_ms;
         if(guandao_elapsed_ms(now_ms, rc_ch3_start_ms) > 1500 && !rc_ch3_wait_release)
         {
-            if(p == &INS && daoche_start_flag && !daoche_target_flag)
-            {
-                key4_flag = 1;
-                recode_waypoint(p);
-            }
+            guandao_record_park_target_now(p);
             Flash_Store_Mode(route_setting_choice);
             Buzzer_check(200);
             rc_ch3_wait_release = 1;
