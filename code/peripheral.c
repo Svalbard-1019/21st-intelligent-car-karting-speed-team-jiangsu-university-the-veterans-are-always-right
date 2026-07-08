@@ -39,6 +39,7 @@ Encoder_t Speed_ecd;
 Encoder_t guandao_ecd;
 Encoder_t Steer_ecd;
 #define ENCODER_DELTA_ABS_MAX       (200)
+#define GUANDAO_ENCODER_DIRECTION   (-1)
 uint8 rack_test_stage = 0;
 int16 rack_test_speed_target = 0;
 int32 rack_test_steer_target = 0;
@@ -344,8 +345,8 @@ void Encoder_Get(Encoder_t *count)
     /* 右编码器实测存在方向和倍率不稳定，科目一暂时只信任左轮。
      * 将左轮计数镜像为右轮反馈，使位姿积分仍按后轴中心接口运行。 */
     count->right_counter = count->left_counter;
-    int32 raw_delta_l = calculate_delta(count->left_counter, count->last_ecdcount_l);
-    int32 raw_delta_r = calculate_delta(count->right_counter, count->last_ecdcount_r);
+    int32 raw_delta_l = (int32)GUANDAO_ENCODER_DIRECTION * calculate_delta(count->left_counter, count->last_ecdcount_l);
+    int32 raw_delta_r = (int32)GUANDAO_ENCODER_DIRECTION * calculate_delta(count->right_counter, count->last_ecdcount_r);
     if(raw_delta_l > ENCODER_DELTA_ABS_MAX || raw_delta_l < -ENCODER_DELTA_ABS_MAX)
     {
         count->delta_l = 0;

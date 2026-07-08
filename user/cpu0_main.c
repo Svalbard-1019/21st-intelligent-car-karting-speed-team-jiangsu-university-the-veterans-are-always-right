@@ -140,7 +140,7 @@ static void Serial_Debug_Update(void)
         guandao_state *record_state = Get_Record_Display_State();
 
         len = sprintf(line,
-                      "REC,t=%lu,route=%d,len=%d,gpslen=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,lastx100=%ld,lasty100=%ld,lastth10=%ld,encL=%d,encR=%d,key1=%d,ch1=%d,ch2=%d,ch3=%d,ch4=%d,gps=%d,sat=%d,gflag=%d,parkS=%d,parkT=%d,parkE=%d\r\n",
+                      "REC,t=%lu,route=%d,len=%d,gpslen=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,lastx100=%ld,lasty100=%ld,lastth10=%ld,encL=%d,encR=%d,key1=%d,key4=%d,ch1=%d,ch2=%d,ch3=%d,ch4=%d,gps=%d,sat=%d,gflag=%d,parkS=%d,parkT=%d,parkE=%d\r\n",
                       (unsigned long)now_ms,
                       route_setting_choice,
                       record_state->length_index,
@@ -156,6 +156,7 @@ static void Serial_Debug_Update(void)
                       guandao_ecd.delta_l,
                       guandao_ecd.delta_r,
                       gpio_get_level(KEY1),
+                      gpio_get_level(KEY4),
                       x6f_out[0],
                       x6f_out[1],
                       x6f_out[2],
