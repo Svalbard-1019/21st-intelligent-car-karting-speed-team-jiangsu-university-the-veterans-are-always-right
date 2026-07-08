@@ -102,6 +102,7 @@ void angle_control_init(void) {
     encoder_quad_init(ANGLE_ENCODER, ANGLE_ENCODER_A_PIN, ANGLE_ENCODER_B_PIN);
 
     PID_Init(&angle_ctrl.pid, ANGLE_DEFAULT_KP, ANGLE_DEFAULT_KI, ANGLE_DEFAULT_KD, ANGLE_OUTPUT_MAX);
+    angle_ctrl.pid.IntegralMax = ANGLE_INTEGRAL_MAX;
     angle_ctrl.target_angle = 0;
     angle_ctrl.current_angle = 0;
     angle_ctrl.encoder_zero_count = 0;
