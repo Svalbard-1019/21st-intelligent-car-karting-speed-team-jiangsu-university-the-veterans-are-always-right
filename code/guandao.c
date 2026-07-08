@@ -1391,9 +1391,9 @@ void recode_waypoint(guandao_state * state)
 
     /* Ignore a CH4 high level already present when record mode starts.  The
      * operator must release CH4 once before a new rising edge can mark a
-     * parking point; the physical KEY1 remains immediately available. */
+     * parking point; the physical KEY4 remains immediately available. */
     if(!rc_ch4_pressed) rc_ch4_armed = 1;
-    park_pressed = (key1_flag == 1
+    park_pressed = (key4_flag == 1
             || (rc_ch4_armed && rc_ch4_pressed && !rc_ch4_last_pressed));
     if(rc_ch4_armed && rc_ch4_pressed && !rc_ch4_last_pressed) rc_ch4_armed = 0;
     rc_ch4_last_pressed = rc_ch4_pressed;
@@ -1438,7 +1438,7 @@ void recode_waypoint(guandao_state * state)
     if(state->length_index >= MAX_LENGTH_INDEX)return;
     if(state == &INS && park_pressed)
     {
-        key1_flag =0;
+        key4_flag =0;
         if(park_record_stage == 0)
         {
             state->recode_map[state->length_index] =state->current_state;
@@ -2023,11 +2023,11 @@ void guandao_recode(guandao_state * state)
     gps_recode_average_update(p);
 
 
-    // KEY1 为上拉输入：未按=1，按下=0。
-    // 按住超过 1.5s 保存路线；短按松开后才交给 recode_waypoint() 记录停车点。
-    if(gpio_get_level(KEY1) == 0)
+    // KEY4 is used instead of the broken KEY1: released=1, pressed=0.
+    // Hold longer than 1.5s to save; short release marks the parking point.
+    if(gpio_get_level(KEY4) == 0)
     {
-        key1_flag = 0;
+        key4_flag = 0;
         now_ms = system_getval_ms();
         if(key1_save_start_ms == 0) key1_save_start_ms = now_ms;
         if(guandao_elapsed_ms(now_ms, key1_save_start_ms) > 1500 && !key1_save_wait_release)
@@ -2036,7 +2036,7 @@ void guandao_recode(guandao_state * state)
             // 否则旧逻辑会在按键释放时才登记终点，导致 Flash 中 target_flag 仍为 0。
             if(p == &INS && daoche_start_flag && !daoche_target_flag)
             {
-                key1_flag = 1;
+                key4_flag = 1;
                 recode_waypoint(p);
             }
             Flash_Store_Mode(route_setting_choice);
@@ -2049,7 +2049,7 @@ void guandao_recode(guandao_state * state)
     {
         if(key1_save_start_ms != 0 && key1_save_wait_release == 0)
         {
-            key1_flag = 1;                 // 短按松开后才记录停车点
+            key4_flag = 1;                 // Short release records the parking point.
         }
         key1_save_start_ms = 0;
         if(key1_save_wait_release)
@@ -2068,7 +2068,7 @@ void guandao_recode(guandao_state * state)
         {
             if(p == &INS && daoche_start_flag && !daoche_target_flag)
             {
-                key1_flag = 1;
+                key4_flag = 1;
                 recode_waypoint(p);
             }
             Flash_Store_Mode(route_setting_choice);
@@ -2116,6 +2116,7 @@ void guandao_record_session_reset(void)
     daoche_flash_cheack = 0;
     daoche_flag = 0;
     key1_flag = 0;
+    key4_flag = 0;
 }
 /*这是一个路径生成器函数，
  * 用于自动构建一个对称的8段式复杂路径。
