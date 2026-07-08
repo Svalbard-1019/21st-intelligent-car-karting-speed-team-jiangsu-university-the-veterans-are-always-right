@@ -323,7 +323,7 @@ void Encoder_count_init(Encoder_t *count)
  */
 void Encoder_Init(void)
 {
-    encoder_quad_init(ENCODER_LEFT, ENCODER_LEFT_A, ENCODER_LEFT_B);
+    encoder_dir_init(ENCODER_LEFT, ENCODER_LEFT_A, ENCODER_LEFT_B);
 
 }
 
