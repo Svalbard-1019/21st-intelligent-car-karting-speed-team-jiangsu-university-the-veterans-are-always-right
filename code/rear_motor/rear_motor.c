@@ -42,6 +42,7 @@ static int16  current_pwm     = 0;
 static int16  encoder_10ms    = 0;
 static int32  encoder_100ms   = 0;
 static int32  encoder_100ms_last = 0;
+static int32  total_encoder_pulses = 0;
 static volatile uint32 encoder_sample_count = 0;
 static uint32 last_encoder_sample_count = 0;
 static uint8  encoder_div = 0;
@@ -114,6 +115,7 @@ void rear_motor_init(void)
     encoder_10ms  = 0;
     encoder_100ms = 0;
     encoder_100ms_last = 0;
+    total_encoder_pulses = 0;
     encoder_sample_count = 0;
     last_encoder_sample_count = 0;
     encoder_div = 0;
@@ -198,7 +200,7 @@ void rear_motor_encoder_update_10ms(void)
     }
     else
     {
-        encoder_10ms = (int16)calculate_delta(current_count, last_encoder_count);
+        encoder_10ms = (int16)((int32)REAR_ENCODER_FEEDBACK_DIRECTION * (int32)calculate_delta(current_count, last_encoder_count));
         if(encoder_10ms > REAR_ENCODER_DELTA_ABS_MAX || encoder_10ms < -REAR_ENCODER_DELTA_ABS_MAX)
         {
             encoder_10ms = 0;
@@ -207,6 +209,7 @@ void rear_motor_encoder_update_10ms(void)
     }
 
     encoder_sample_count++;
+    total_encoder_pulses += (int32)encoder_10ms;
 }
 
 /* 主循环调用: 有新10ms编码器样本才处理, 每100ms更新一次PID */
@@ -227,7 +230,6 @@ void rear_motor_pid_update_100ms(void)
     }
 
     last_encoder_sample_count = encoder_sample_count;
-    actual_mps = (float)((int32)encoder_10ms * 10) / REAR_EFFECTIVE_PPR * REAR_WHEEL_CIRCUM_M / 0.1f;
     encoder_100ms += (int32)encoder_10ms;
     encoder_div++;
 
@@ -238,6 +240,7 @@ void rear_motor_pid_update_100ms(void)
 
     encoder_div = 0;
     encoder_100ms_last = encoder_100ms;
+    actual_mps = (float)encoder_100ms * REAR_DISTANCE_PER_PULSE_M * REAR_SPEED_CALIBRATION_FACTOR / 0.1f;
 
     if(target_mps == 0.0f)
     {
@@ -246,7 +249,7 @@ void rear_motor_pid_update_100ms(void)
         return;
     }
 
-    float target_pulses = target_mps * REAR_EFFECTIVE_PPR / REAR_WHEEL_CIRCUM_M * 0.1f;
+    float target_pulses = target_mps * 0.1f / REAR_DISTANCE_PER_PULSE_M;
     float error = target_pulses - (float)encoder_100ms;
 
     if(error < REAR_INTEGRAL_THRESHOLD && error > -REAR_INTEGRAL_THRESHOLD)
@@ -326,3 +329,15 @@ int16  rear_motor_get_encoder_10ms(void)    { return encoder_10ms; }
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 int32  rear_motor_get_encoder_100ms(void)   { return encoder_100ms_last; }
+
+int32  rear_motor_get_total_encoder_pulses(void) { return total_encoder_pulses; }
+
+float  rear_motor_get_total_distance_m(void)
+{
+    return (float)total_encoder_pulses * REAR_DISTANCE_PER_PULSE_M;
+}
+
+void   rear_motor_clear_odometer(void)
+{
+    total_encoder_pulses = 0;
+}

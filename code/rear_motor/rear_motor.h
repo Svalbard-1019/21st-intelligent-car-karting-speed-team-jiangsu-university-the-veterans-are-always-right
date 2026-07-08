@@ -32,6 +32,10 @@
 #define REAR_ENCODER_PPR             1024
 #define REAR_EFFECTIVE_PPR           ((float)REAR_ENCODER_PPR * REAR_GEAR_RATIO)
 #define REAR_WHEEL_CIRCUM_M          (3.14159265358979323846f * REAR_WHEEL_DIAMETER_M)
+#define REAR_ODOMETER_PULSES_PER_WHEEL_REV  2122.0f
+#define REAR_DISTANCE_PER_PULSE_M    (REAR_WHEEL_CIRCUM_M / REAR_ODOMETER_PULSES_PER_WHEEL_REV)
+#define REAR_ENCODER_FEEDBACK_DIRECTION (-1)
+#define REAR_SPEED_CALIBRATION_FACTOR 0.7557f
 
 /* PID 参数: 载人旧工程参数 (当前科目一测试使用) */
 #define REAR_KP                 10.0f
@@ -164,5 +168,11 @@ int16  rear_motor_get_encoder_10ms(void);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 int32  rear_motor_get_encoder_100ms(void);
+
+int32  rear_motor_get_total_encoder_pulses(void);
+
+float  rear_motor_get_total_distance_m(void);
+
+void   rear_motor_clear_odometer(void);
 
 #endif /* CODE_REAR_MOTOR_H_ */

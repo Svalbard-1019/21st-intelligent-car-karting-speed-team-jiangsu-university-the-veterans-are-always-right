@@ -165,6 +165,9 @@ void angle_control_update(void) {
         (angle_ctrl.target_angle - angle_ctrl.current_angle > -ANGLE_DEAD_BAND)) {
         pid_output = 0;
         angle_ctrl.pid.Integral = 0;
+    } else if(pid_output != 0.0f) {
+        pid_output += (pid_output > 0.0f) ? ANGLE_GRAVITY_FF : -ANGLE_GRAVITY_FF;
+        Value_Limit_float(&pid_output, -ANGLE_OUTPUT_MAX, ANGLE_OUTPUT_MAX);
     }
 
     angle_motor_set_pwm((int32)pid_output);
@@ -180,13 +183,13 @@ void angle_control_update(void) {
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
-void angle_control_set_target(int32 target_angle) {
+void angle_control_set_target(float target_angle) {
     if (target_angle > ANGLE_MAX_DEGREE) {
         angle_ctrl.target_angle = ANGLE_MAX_DEGREE;
     } else if (target_angle < ANGLE_MIN_DEGREE) {
         angle_ctrl.target_angle = ANGLE_MIN_DEGREE;
     } else {
-        angle_ctrl.target_angle = (float)target_angle;
+        angle_ctrl.target_angle = target_angle;
     }
 }
 
@@ -214,6 +217,18 @@ void angle_control_rotate_relative(int32 delta_angle) {
  */
 int32 angle_control_get_current_angle(void) {
     return (int32)angle_ctrl.current_angle;
+}
+
+float angle_control_get_target_angle(void) {
+    return angle_ctrl.target_angle;
+}
+
+float angle_control_get_current_angle_float(void) {
+    return angle_ctrl.current_angle;
+}
+
+int32 angle_control_get_output_pwm(void) {
+    return (int32)angle_ctrl.pid.Output;
 }
 
 /**

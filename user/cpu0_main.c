@@ -126,7 +126,7 @@ static void Serial_Debug_Update(void)
 {
     static uint32 last_ms = 0;
     uint32 now_ms = system_getval_ms();
-    static char line[512];
+    static char line[640];
     int len;
 
     if(now_ms - last_ms < SERIAL_DEBUG_PERIOD_MS)
@@ -174,7 +174,7 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,rstate=%d,pready=%d,pidx=%d,pcnt=%d,td100=%ld,tyaw10=%ld,app=%d,gate=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,steerA10=%ld,encL=%ld,gyroRaw=%d,gyroOff100=%ld,gpsLat1e7=%ld,gpsLon1e7=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,rstate=%d,pready=%d,pidx=%d,pcnt=%d,td100=%ld,tyaw10=%ld,app=%d,gate=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,steerA10=%ld,encL=%ld,gyroRaw=%d,gyroOff100=%ld,gpsLat1e7=%ld,gpsLon1e7=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld,totalPulse=%ld,dist100=%ld\r\n",
                       (unsigned long)now_ms,
                       INS.current_point_index,
                       INS.length_index,
@@ -213,7 +213,9 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
                       rear_motor_get_pwm(),
                       rear_motor_get_encoder_10ms(),
-                      (long)rear_motor_get_encoder_100ms());
+                      (long)rear_motor_get_encoder_100ms(),
+                      (long)rear_motor_get_total_encoder_pulses(),
+                      (long)Serial_Debug_Scale(rear_motor_get_total_distance_m(), 100.0f));
         if(len > 0)
         {
             Serial_Debug_Write(line);
@@ -250,7 +252,7 @@ static void Serial_Debug_Update(void)
         angle_plan(&angle_error);
 
         len = sprintf(line,
-                      "P3AUTO,t=%lu,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      "P3AUTO,t=%lu,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld,totalPulse=%ld,dist100=%ld\r\n",
                       (unsigned long)now_ms,
                       portion_3.current_point_index,
                       portion_3.length_index,
@@ -275,7 +277,9 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
                       rear_motor_get_pwm(),
                       rear_motor_get_encoder_10ms(),
-                      (long)rear_motor_get_encoder_100ms());
+                      (long)rear_motor_get_encoder_100ms(),
+                      (long)rear_motor_get_total_encoder_pulses(),
+                      (long)Serial_Debug_Scale(rear_motor_get_total_distance_m(), 100.0f));
         if(len > 0)
         {
             Serial_Debug_Write(line);
