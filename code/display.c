@@ -46,6 +46,7 @@ Mode_Choice main_mode = Mode_IDLE;
 #define SERIAL_MENU_CMD_BACK      (4u)
 
 static uint8 serial_menu_redraw_request = 1;
+static uint8 serial_control_edit_flag = 0;
 
 static uint8 Serial_Menu_Read_Key(void);
 static void Serial_Menu_Print_Page(void);
@@ -175,8 +176,16 @@ static void Serial_Menu_Print_Page(void)
         Serial_Menu_Print_Item(2, "Base_Speed");
         Serial_Menu_Print_Item(3, "Daoche_Speed");
         Serial_Menu_Print_Item(4, "Preview_Spets");
-        printf("Base=%d Daoche=%d Preview=%d RunMps_x10=%d\r\n",
-               control[0], control[1], control[2], control[0]);
+        printf("Base=%d Daoche=%d Preview=%d RunMps_x10=%d Edit=%u\r\n",
+               control[0], control[1], control[2], control[0], serial_control_edit_flag);
+        if(serial_control_edit_flag)
+        {
+            printf("EDIT: w/8=-1, s/2=+1, d/6=+10, a/4=done\r\n");
+        }
+        else
+        {
+            printf("SELECT: w/s move, d enter edit, a back\r\n");
+        }
     }
     else
     {
@@ -238,6 +247,10 @@ static void Serial_Menu_Redraw_If_Needed(void)
     static MOTER_control_mode last_control_mode = IDLE;
     static uint8 last_route_setting_choice = 0xff;
     static uint8 last_cargo_flag = 0xff;
+    static int16 last_control0 = 0x7fff;
+    static int16 last_control1 = 0x7fff;
+    static int16 last_control2 = 0x7fff;
+    static uint8 last_serial_control_edit_flag = 0xff;
 
     if(serial_menu_redraw_request
             || last_key_mode1 != key_mode1
@@ -245,7 +258,11 @@ static void Serial_Menu_Redraw_If_Needed(void)
             || last_main_mode != main_mode
             || last_control_mode != conrtol_mode
             || last_route_setting_choice != route_setting_choice
-            || last_cargo_flag != CarGo_Flag)
+            || last_cargo_flag != CarGo_Flag
+            || last_control0 != control[0]
+            || last_control1 != control[1]
+            || last_control2 != control[2]
+            || last_serial_control_edit_flag != serial_control_edit_flag)
     {
         serial_menu_redraw_request = 0;
         last_key_mode1 = key_mode1;
@@ -254,6 +271,10 @@ static void Serial_Menu_Redraw_If_Needed(void)
         last_control_mode = conrtol_mode;
         last_route_setting_choice = route_setting_choice;
         last_cargo_flag = CarGo_Flag;
+        last_control0 = control[0];
+        last_control1 = control[1];
+        last_control2 = control[2];
+        last_serial_control_edit_flag = serial_control_edit_flag;
         Serial_Menu_Print_Page();
     }
 }
@@ -619,6 +640,9 @@ void Menu_Control_P(void)
 {
     static uint8 edit_flag = 0;
     int16 *target;
+    uint8 value_changed = 0;
+
+    serial_control_edit_flag = edit_flag;
 
     ips200_show_string( X(10) ,Y(0) ,"Control_P");
     ips200_show_string( X(3) ,Y(2) ,"Base_Speed");
@@ -640,17 +664,29 @@ void Menu_Control_P(void)
         key_mode1 =(key_mode1 > 4) ? 2  : key_mode1;
         key_mode1 =(key_mode1 < 2) ? 4  : key_mode1;
 
-        if(key_value == 3){edit_flag = 1; ips200_clear();}
+        if(key_value == 3)
+        {
+            edit_flag = 1;
+            serial_control_edit_flag = edit_flag;
+            serial_menu_redraw_request = 1;
+            ips200_clear();
+        }
         if(key_value == 4){key_mode2 = 3;ips200_clear();}
     }
     else
     {
         target = &control[key_mode1 - 2];
 
-        if(key_value == 1)*target += 1;
-        else if(key_value == 2)*target -= 1;
-        else if(key_value == 3)*target += 10;
-        else if(key_value == 4){edit_flag = 0; ips200_clear();}
+        if(key_value == 1){*target += 1; value_changed = 1;}
+        else if(key_value == 2){*target -= 1; value_changed = 1;}
+        else if(key_value == 3){*target += 10; value_changed = 1;}
+        else if(key_value == 4)
+        {
+            edit_flag = 0;
+            serial_control_edit_flag = edit_flag;
+            serial_menu_redraw_request = 1;
+            ips200_clear();
+        }
 
         if(key_mode1 == 2)
         {
@@ -667,7 +703,17 @@ void Menu_Control_P(void)
             if(control[2] < 1) control[2] = 1;
             if(control[2] > 20) control[2] = 20;
         }
+
+        if(value_changed)
+        {
+            base_speed = (float)control[0];
+            daoche_speed = (float)control[1];
+            preview_spets = control[2];
+            serial_menu_redraw_request = 1;
+        }
     }
+
+    serial_control_edit_flag = edit_flag;
 }
 
 //
