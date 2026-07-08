@@ -51,127 +51,6 @@ Mode_Choice main_mode = Mode_IDLE;
 
 static float battery_voltage = 0.0f;
 
-#define SCREENLESS_HOLD_MS         (1200u)
-
-static void Screenless_Clear_Key_Flags(void)
-{
-    key1_flag = 0;
-    key2_flag = 0;
-    key3_flag = 0;
-    key4_flag = 0;
-    key_value = 0;
-    key_val = 0;
-}
-
-static void Screenless_Enter_Recode(void)
-{
-    route_setting_choice = 0;
-    main_mode = Guandao_Recode_Mode;
-    conrtol_mode = YAOKONG;
-    CarGo_Flag = 1;
-    Screenless_Clear_Key_Flags();
-    Buzzer_check(80);
-}
-
-static void Screenless_Enter_Auto(void)
-{
-    route_setting_choice = 0;
-    daoche_speed = (float)control[1];
-    portion_1_reset();
-    main_mode = Guandao_portion_1;
-    conrtol_mode = GUANDAO;
-    CarGo_Flag = 1;
-    Screenless_Clear_Key_Flags();
-    Buzzer_check(80);
-}
-
-static void Screenless_Enter_Rack_Test(void)
-{
-    main_mode = Rack_Test_Mode;
-    conrtol_mode = RACK_TEST;
-    rack_test_stage = 0;
-    rack_test_speed_target = 0;
-    rack_test_steer_target = 0;
-    Rack_Straight_Reset();
-    MoterPID_L.Kp = 0.5f;
-    MoterPID_R.Kp = 0.5f;
-    MoterPID_L.Ki = 1.0f;
-    MoterPID_R.Ki = 1.0f;
-    MoterPID_L.Kd = 0.0f;
-    MoterPID_R.Kd = 0.0f;
-    CarGo_Flag = 1;
-    Screenless_Clear_Key_Flags();
-    Buzzer_check(80);
-}
-
-static void Screenless_Enter_Idle(void)
-{
-    main_mode = Mode_IDLE;
-    conrtol_mode = IDLE;
-    CarGo_Flag = 1;
-    Screenless_Clear_Key_Flags();
-    Buzzer_check(200);
-}
-
-static uint8 Screenless_Mode_Check(void)
-{
-    static uint32 key1_start_ms = 0;
-    static uint32 key2_start_ms = 0;
-    static uint32 key3_start_ms = 0;
-    static uint32 key4_start_ms = 0;
-    uint32 now_ms = system_getval_ms();
-
-    if(gpio_get_level(KEY1) == 0)
-    {
-        if(key1_start_ms == 0) key1_start_ms = now_ms;
-        else if((uint32)(now_ms - key1_start_ms) >= SCREENLESS_HOLD_MS)
-        {
-            Screenless_Enter_Recode();
-            key1_start_ms = 0;
-            return 1;
-        }
-    }
-    else key1_start_ms = 0;
-
-    if(gpio_get_level(KEY2) == 0)
-    {
-        if(key2_start_ms == 0) key2_start_ms = now_ms;
-        else if((uint32)(now_ms - key2_start_ms) >= SCREENLESS_HOLD_MS)
-        {
-            Screenless_Enter_Auto();
-            key2_start_ms = 0;
-            return 1;
-        }
-    }
-    else key2_start_ms = 0;
-
-    if(gpio_get_level(KEY3) == 0)
-    {
-        if(key3_start_ms == 0) key3_start_ms = now_ms;
-        else if((uint32)(now_ms - key3_start_ms) >= SCREENLESS_HOLD_MS)
-        {
-            Screenless_Enter_Rack_Test();
-            key3_start_ms = 0;
-            return 1;
-        }
-    }
-    else key3_start_ms = 0;
-
-    if(gpio_get_level(KEY4) == 0)
-    {
-        if(key4_start_ms == 0) key4_start_ms = now_ms;
-        else if((uint32)(now_ms - key4_start_ms) >= SCREENLESS_HOLD_MS)
-        {
-            Screenless_Enter_Idle();
-            key4_start_ms = 0;
-            return 1;
-        }
-    }
-    else key4_start_ms = 0;
-
-    return 0;
-}
-
 /** Read A11 and return the filtered battery voltage in volts. */
 static float Battery_Voltage_Read(void)
 {
@@ -227,11 +106,6 @@ void Menu_Contral(void)
 
 
         key_value = Key_Get();                                          //按键采集
-        if(Screenless_Mode_Check())
-        {
-            ips200_clear();
-            break;
-        }
         if(key_mode2 == 1)          Menu_Main();              //界面选择配置
         else if(key_mode2 == 2)  Menu_1();
         else if(key_mode2 == 3)  Menu_Parameter();
