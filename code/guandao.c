@@ -157,6 +157,8 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_EARLY_TURN_LOOKAHEAD   28
 #define GUANDAO_EARLY_TURN_ANGLE       28.0f
 #define GUANDAO_EARLY_TURN_SPEED_RATIO 0.60f
+#define GUANDAO_EARLY_STEER_GAIN       0.22f
+#define GUANDAO_EARLY_STEER_MAX        14.0f
 #define GUANDAO_EARLY_TURN_FINAL_DIST  6.0f
 #define GUANDAO_FRONT_TARGET_ANGLE     100.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
@@ -548,6 +550,26 @@ static float guandao_accum_route_turn(guandao_state *state, int start_index, int
         float yaw_in = guandao_segment_yaw(guandao_route_point(state, i - 1), guandao_route_point(state, i));
         float yaw_out = guandao_segment_yaw(guandao_route_point(state, i), guandao_route_point(state, i + 1));
         turn_sum += fabsf(guandao_normalize_angle(yaw_out - yaw_in));
+    }
+
+    return turn_sum;
+}
+
+static float guandao_signed_accum_route_turn(guandao_state *state, int start_index, int lookahead)
+{
+    float turn_sum = 0.0f;
+    int16 route_length = guandao_route_length(state);
+    int end_index = start_index + lookahead;
+
+    if(route_length < 3) return 0.0f;
+    if(start_index < 1) start_index = 1;
+    if(end_index > route_length - 2) end_index = route_length - 2;
+
+    for(int i = start_index; i <= end_index; i++)
+    {
+        float yaw_in = guandao_segment_yaw(guandao_route_point(state, i - 1), guandao_route_point(state, i));
+        float yaw_out = guandao_segment_yaw(guandao_route_point(state, i), guandao_route_point(state, i + 1));
+        turn_sum += guandao_normalize_angle(yaw_out - yaw_in);
     }
 
     return turn_sum;
@@ -1638,6 +1660,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float upcoming_turn = 0.0f;
     float local_turn = 0.0f;
     float early_turn = 0.0f;
+    float early_turn_signed = 0.0f;
     float dist_to_final = 0.0f;
 
     guandao_debug_stop_reason = 0;
@@ -1752,6 +1775,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     local_turn = guandao_max_route_turn(state, state->current_point_index, 18);
     upcoming_turn = local_turn;
     early_turn = guandao_accum_route_turn(state, state->current_point_index, GUANDAO_EARLY_TURN_LOOKAHEAD);
+    early_turn_signed = guandao_signed_accum_route_turn(state, state->current_point_index, GUANDAO_EARLY_TURN_LOOKAHEAD);
     if(early_turn > upcoming_turn) upcoming_turn = early_turn;
     if(local_turn >= GUANDAO_SHARP_TURN_ANGLE)
     {
@@ -1788,6 +1812,13 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    else if(fabsf(angle_diff) <=90)
    {
        target_steering = steering_gain*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
+   }
+   if(base_speed >= 15.0f && dist_to_final > GUANDAO_EARLY_TURN_FINAL_DIST
+           && early_turn > GUANDAO_EARLY_TURN_ANGLE)
+   {
+       float early_steer = early_turn_signed * GUANDAO_EARLY_STEER_GAIN;
+       Value_Limit_float(&early_steer, -GUANDAO_EARLY_STEER_MAX, GUANDAO_EARLY_STEER_MAX);
+       target_steering += early_steer;
    }
    guandao_debug_steer_raw = target_steering;
    ips200_show_float(X(10),  Y(9),target_steering ,5 ,5);
