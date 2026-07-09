@@ -35,7 +35,7 @@
 // ============================== 科目一惯导参数 ==============================
 // ONE_TICK_DISTANCE：后轮编码器每个计数对应的车辆前进距离，单位 m。
 // 左右后轮编码器的脉冲距离标定值，直接影响记录距离、自动驾驶里程和打滑检测。
-#define ONE_TICK_DISTANCE                      0.000378f
+#define ONE_TICK_DISTANCE                      0.000473f
 #define MAX_LENGTH_INDEX                       400        // 单条路线最多保存点数，Flash 写入也按这个上限组织
 #define MAX_GPS_RECODE                         100        // GPS 辅助校验点数量上限
 #define M_PI                                   3.14159265358979323846f
