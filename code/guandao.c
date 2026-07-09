@@ -152,16 +152,17 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_VERY_HIGH_CMD_LIMIT    35.0f
 #define GUANDAO_STEER_RATE_LOW         3.0f
 #define GUANDAO_STEER_RATE_HIGH        2.5f
+#define GUANDAO_STEER_RATE_SHARP       6.0f
 #define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
 #define GUANDAO_SHARP_TURN_ANGLE       40.0f
 #define GUANDAO_EARLY_TURN_LOOKAHEAD   28
 #define GUANDAO_EARLY_TURN_ANGLE       28.0f
 #define GUANDAO_EARLY_TURN_SPEED_RATIO 0.60f
-#define GUANDAO_EARLY_STEER_GAIN       0.22f
-#define GUANDAO_EARLY_STEER_MAX        14.0f
+#define GUANDAO_EARLY_STEER_GAIN       0.16f
+#define GUANDAO_EARLY_STEER_MAX        8.0f
 #define GUANDAO_EARLY_STEER_RATE       2.0f
 #define GUANDAO_EARLY_STEER_FILTER     0.25f
-#define GUANDAO_EARLY_TURN_FINAL_POINTS 30
+#define GUANDAO_EARLY_TURN_FINAL_POINTS 70
 #define GUANDAO_FRONT_TARGET_ANGLE     100.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
 #define GUANDAO_REVERSE_TARGET_DIST    0.12f
@@ -1786,7 +1787,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     {
         if(steer_preview_steps > 3) steer_preview_steps = 3;
         if(curve_preview_steps > 6) curve_preview_steps = 6;
-        steering_rate_limit = GUANDAO_STEER_RATE_LOW;
+        steering_rate_limit = GUANDAO_STEER_RATE_SHARP;
         steering_limit = GUANDAO_STEERING_CMD_LIMIT;
     }
     if(curve_preview_steps < steer_preview_steps + 3)
