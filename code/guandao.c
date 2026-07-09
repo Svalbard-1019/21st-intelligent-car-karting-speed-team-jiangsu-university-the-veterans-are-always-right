@@ -1714,7 +1714,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
         {
             steering_gain = GUANDAO_VERY_HIGH_SPEED_GAIN;
             steering_limit = GUANDAO_VERY_HIGH_CMD_LIMIT;
-            if(steer_preview_steps < 8) steer_preview_steps = 8;
+            if(steer_preview_steps < 4) steer_preview_steps = 4;
             steering_rate_limit = GUANDAO_STEER_RATE_HIGH;
         }
         else if(base_speed >= 10.0f)
