@@ -158,11 +158,12 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_EARLY_TURN_LOOKAHEAD   28
 #define GUANDAO_EARLY_TURN_ANGLE       28.0f
 #define GUANDAO_EARLY_TURN_SPEED_RATIO 0.60f
-#define GUANDAO_EARLY_STEER_GAIN       0.16f
-#define GUANDAO_EARLY_STEER_MAX        8.0f
-#define GUANDAO_EARLY_STEER_RATE       2.0f
-#define GUANDAO_EARLY_STEER_FILTER     0.25f
-#define GUANDAO_EARLY_TURN_FINAL_POINTS 70
+#define GUANDAO_EARLY_STEER_GAIN       0.18f
+#define GUANDAO_EARLY_STEER_MIN        8.0f
+#define GUANDAO_EARLY_STEER_MAX        12.0f
+#define GUANDAO_EARLY_STEER_RATE       2.5f
+#define GUANDAO_EARLY_STEER_FILTER     0.35f
+#define GUANDAO_EARLY_TURN_FINAL_POINTS 110
 #define GUANDAO_FRONT_TARGET_ANGLE     100.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
 #define GUANDAO_REVERSE_TARGET_DIST    0.12f
@@ -1823,8 +1824,18 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    if(base_speed >= 15.0f && state->current_point_index < route_length - GUANDAO_EARLY_TURN_FINAL_POINTS
            && early_turn > GUANDAO_EARLY_TURN_ANGLE)
    {
+       float early_sign = early_turn_signed;
+       if(fabsf(early_sign) < 1.0f) early_sign = preview_alpha2;
        early_steer_target = early_turn_signed * GUANDAO_EARLY_STEER_GAIN;
        Value_Limit_float(&early_steer_target, -GUANDAO_EARLY_STEER_MAX, GUANDAO_EARLY_STEER_MAX);
+       if(early_sign > 0.0f && early_steer_target < GUANDAO_EARLY_STEER_MIN)
+       {
+           early_steer_target = GUANDAO_EARLY_STEER_MIN;
+       }
+       else if(early_sign < 0.0f && early_steer_target > -GUANDAO_EARLY_STEER_MIN)
+       {
+           early_steer_target = -GUANDAO_EARLY_STEER_MIN;
+       }
    }
    float early_steer_delta = early_steer_target - early_steer_filtered;
    Value_Limit_float(&early_steer_delta, -GUANDAO_EARLY_STEER_RATE, GUANDAO_EARLY_STEER_RATE);
