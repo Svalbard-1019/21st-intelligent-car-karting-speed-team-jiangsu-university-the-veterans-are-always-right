@@ -159,7 +159,7 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_EARLY_TURN_SPEED_RATIO 0.60f
 #define GUANDAO_EARLY_STEER_GAIN       0.22f
 #define GUANDAO_EARLY_STEER_MAX        14.0f
-#define GUANDAO_EARLY_TURN_FINAL_DIST  6.0f
+#define GUANDAO_EARLY_TURN_FINAL_POINTS 30
 #define GUANDAO_FRONT_TARGET_ANGLE     100.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
 #define GUANDAO_REVERSE_TARGET_DIST    0.12f
@@ -1813,7 +1813,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    {
        target_steering = steering_gain*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
    }
-   if(base_speed >= 15.0f && dist_to_final > GUANDAO_EARLY_TURN_FINAL_DIST
+   if(base_speed >= 15.0f && state->current_point_index < route_length - GUANDAO_EARLY_TURN_FINAL_POINTS
            && early_turn > GUANDAO_EARLY_TURN_ANGLE)
    {
        float early_steer = early_turn_signed * GUANDAO_EARLY_STEER_GAIN;
@@ -1862,7 +1862,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
            v_center = base_speed * GUANDAO_CURVE_SPEED_RATIO;
        }
    }
-   if(base_speed >= 15.0f && dist_to_final > GUANDAO_EARLY_TURN_FINAL_DIST
+   if(base_speed >= 15.0f && state->current_point_index < route_length - GUANDAO_EARLY_TURN_FINAL_POINTS
            && early_turn > GUANDAO_EARLY_TURN_ANGLE)
    {
        if(v_center > base_speed * GUANDAO_EARLY_TURN_SPEED_RATIO)
