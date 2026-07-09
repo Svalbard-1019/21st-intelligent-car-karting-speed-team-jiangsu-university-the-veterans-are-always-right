@@ -101,7 +101,7 @@ void angle_control_init(void) {
 
     encoder_quad_init(ANGLE_ENCODER, ANGLE_ENCODER_A_PIN, ANGLE_ENCODER_B_PIN);
 
-    PID_Init(&angle_ctrl.pid, ANGLE_DEFAULT_KP, ANGLE_DEFAULT_KI, ANGLE_DEFAULT_KD, ANGLE_OUTPUT_MAX);
+    PID_Init(&angle_ctrl.pid, ANGLE_DEFAULT_KP, ANGLE_DEFAULT_KI, ANGLE_DEFAULT_KD, ANGLE_OUTPUT_MAX, ANGLE_INTEGRAL_MAX);
     angle_ctrl.target_angle = 0;
     angle_ctrl.current_angle = 0;
     angle_ctrl.encoder_zero_count = 0;
@@ -161,10 +161,13 @@ void angle_control_update(void) {
 
     pid_output = PID_Compute(&angle_ctrl.pid, angle_ctrl.target_angle, angle_ctrl.current_angle);
 
-    if ((angle_ctrl.target_angle - angle_ctrl.current_angle < ANGLE_DEAD_BAND) &&
-        (angle_ctrl.target_angle - angle_ctrl.current_angle > -ANGLE_DEAD_BAND)) {
+    float error = angle_ctrl.target_angle - angle_ctrl.current_angle;
+    if (error < ANGLE_DEAD_BAND && error > -ANGLE_DEAD_BAND) {
         pid_output = 0;
         angle_ctrl.pid.Integral = 0;
+    } else {
+        // 前馈：正比于目标角，克服静摩擦，减小稳态误差
+        pid_output += ANGLE_FF_GAIN * angle_ctrl.target_angle;
     }
 
     angle_motor_set_pwm((int32)pid_output);

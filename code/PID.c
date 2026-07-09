@@ -41,12 +41,12 @@
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
-void PID_Init(PID_TypeDef *pid, float kp, float ki, float kd, float max_output) {
+void PID_Init(PID_TypeDef *pid, float kp, float ki, float kd, float max_output, float integral_max) {
     pid->Kp = kp;
     pid->Ki = ki;
     pid->Kd = kd;
     pid->MaxOutput = max_output;
-    pid->IntegralMax = 2000;  // 积分限幅
+    pid->IntegralMax = integral_max;
 
     PID_Reset(pid);
 }

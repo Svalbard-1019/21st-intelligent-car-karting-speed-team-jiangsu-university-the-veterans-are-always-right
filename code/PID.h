@@ -68,7 +68,7 @@ float PID_Compute(PID_TypeDef *pid, float target, float current);
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
-void PID_Init(PID_TypeDef *pid, float kp, float ki, float kd, float max_output);
+void PID_Init(PID_TypeDef *pid, float kp, float ki, float kd, float max_output, float integral_max);
 /**
  * 接口说明：PID_Reset()。清零内部状态和控制输出，用于重新进入测试/自动驾驶前恢复初始状态。
  * 所属模块：轻量 PID 控制器模块，当前主要被 angle_control 转向闭环调用。

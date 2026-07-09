@@ -353,7 +353,8 @@ void Encoder_Get(Encoder_t *count)
     }
     else
     {
-        count->delta_l = (count->delta_l * 3 + raw_delta_l) / 4;
+        count->delta_l = raw_delta_l;  // 直接赋值，去掉整数低通滤波
+        // 原 (delta*3+raw)/4 在亚毫秒主循环下 raw=0或1 时因整数截断使 delta 长期为 0，位置积分丢失
     }
     if(raw_delta_r > ENCODER_DELTA_ABS_MAX || raw_delta_r < -ENCODER_DELTA_ABS_MAX)
     {
@@ -361,7 +362,7 @@ void Encoder_Get(Encoder_t *count)
     }
     else
     {
-        count->delta_r = (count->delta_r * 3 + raw_delta_r) / 4;
+        count->delta_r = raw_delta_r;  // 直接赋值，去掉整数低通滤波
     }
 //    ips200_show_int(X(1),  Y(8),count->delta_l ,5);
 //    ips200_show_int(X(10),  Y(8),count->delta_r ,5);

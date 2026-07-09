@@ -44,11 +44,13 @@
 #define ANGLE_GEAR_RATIO    300                    // 减速比
 #define ANGLE_MAX_DEGREE    60                     // 最大目标角度
 #define ANGLE_MIN_DEGREE    -60                    // 最小目标角度
-#define ANGLE_DEFAULT_KP    1000.0f
-#define ANGLE_DEFAULT_KI    15.0f
-#define ANGLE_DEFAULT_KD    40.0f
+#define ANGLE_DEFAULT_KP    500.0f
+#define ANGLE_DEFAULT_KI    18.0f
+#define ANGLE_DEFAULT_KD    27.0f
 #define ANGLE_OUTPUT_MAX    10000
 #define ANGLE_DEAD_BAND     0.1f
+#define ANGLE_FF_GAIN       65.0f    // 前馈系数：前轮转向目标角度越大额外加一个正比例于目标角的 PWM哂克服静摩擦
+#define ANGLE_INTEGRAL_MAX  1000.0f  // 积分限幅
 
 /**
  * 结构体说明：用于集中保存本模块的一组状态量/参数，字段通常会被初始化函数清零，并在周期函数中持续更新。

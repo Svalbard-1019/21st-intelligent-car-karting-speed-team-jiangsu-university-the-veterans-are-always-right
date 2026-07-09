@@ -1840,15 +1840,24 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    uint32 steer_now_ms = system_getval_ms();
    uint32 steer_elapsed_ms = (last_steer_limit_ms == 0) ? 20u
            : guandao_elapsed_ms(steer_now_ms, last_steer_limit_ms);
-   if(steer_elapsed_ms > 100u) steer_elapsed_ms = 20u;
-   float steer_delta_limit = steering_rate_limit * ((float)steer_elapsed_ms / 20.0f);
-   float steer_delta = target_steering - last_target_steering;
-   Value_Limit_float(&steer_delta, -steer_delta_limit, steer_delta_limit);
-    target_steering = last_target_steering + steer_delta;
-    Value_Limit_float(&target_steering ,-steering_limit,steering_limit);
-    guandao_debug_steer_final = target_steering;
-   last_target_steering = target_steering;
-   last_steer_limit_ms = steer_now_ms;
+   // Bug2: sub-ms loop makes steer_elapsed_ms==0 most iterations, freezing steering angle.
+   // Only apply rate limit when real time has elapsed (>=1ms); hold last frame otherwise.
+   if(steer_elapsed_ms >= 1u)
+   {
+       if(steer_elapsed_ms > 100u) steer_elapsed_ms = 20u;
+       float steer_delta_limit = steering_rate_limit * ((float)steer_elapsed_ms / 20.0f);
+       float steer_delta = target_steering - last_target_steering;
+       Value_Limit_float(&steer_delta, -steer_delta_limit, steer_delta_limit);
+       target_steering = last_target_steering + steer_delta;
+       last_target_steering = target_steering;
+       last_steer_limit_ms = steer_now_ms;
+   }
+   else
+   {
+       target_steering = last_target_steering; // hold: same ms, no new rate budget
+   }
+   Value_Limit_float(&target_steering ,-steering_limit,steering_limit);
+   guandao_debug_steer_final = target_steering;
 
    float w = (v_center * tanf(target_steering/3.0f/180.0f*M_PI)) / WHEEL_BASE;
    *out_v_l = v_center + (w * TRACK_WIDTH / 2.0f);
