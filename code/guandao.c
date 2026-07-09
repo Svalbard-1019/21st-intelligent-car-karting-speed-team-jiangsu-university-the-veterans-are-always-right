@@ -160,6 +160,7 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_EARLY_TURN_ALPHA       8.0f
 #define GUANDAO_EARLY_TURN_STEER_BLEND 0.70f
 #define GUANDAO_EARLY_TURN_FINAL_DIST  6.0f
+#define GUANDAO_EARLY_TURN_LEAD_STEPS  18
 #define GUANDAO_FRONT_TARGET_ANGLE     100.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
 #define GUANDAO_REVERSE_TARGET_DIST    0.12f
@@ -1794,8 +1795,12 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    if(base_speed >= 15.0f && dist_to_final > GUANDAO_EARLY_TURN_FINAL_DIST
            && fabsf(preview_alpha2) > GUANDAO_EARLY_TURN_ALPHA)
    {
-       float lead_steering = steering_gain*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha2/180.0f*M_PI), actual_ld2)/M_PI*180.0f;
-       float lead_blend = (fabsf(preview_alpha2) - GUANDAO_EARLY_TURN_ALPHA) / GUANDAO_EARLY_TURN_ALPHA;
+       float lead_alpha = 0.0f;
+       float lead_ld = 0.1f;
+       float lead_steering = 0.0f;
+       pursuit_midhandle(state, &current_point, GUANDAO_EARLY_TURN_LEAD_STEPS, &lead_alpha, &lead_ld);
+       lead_steering = steering_gain*atan2f(2.0f * WHEEL_BASE * sinf(lead_alpha/180.0f*M_PI), lead_ld)/M_PI*180.0f;
+       float lead_blend = (fabsf(lead_alpha) - GUANDAO_EARLY_TURN_ALPHA) / GUANDAO_EARLY_TURN_ALPHA;
        Value_Limit_float(&lead_blend, 0.0f, GUANDAO_EARLY_TURN_STEER_BLEND);
        target_steering = target_steering * (1.0f - lead_blend) + lead_steering * lead_blend;
    }
