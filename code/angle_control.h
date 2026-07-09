@@ -44,9 +44,9 @@
 #define ANGLE_GEAR_RATIO    300                    // 减速比
 #define ANGLE_MAX_DEGREE    60                     // 最大目标角度
 #define ANGLE_MIN_DEGREE    -60                    // 最小目标角度
-#define ANGLE_DEFAULT_KP    200.0f
-#define ANGLE_DEFAULT_KI    4.0f
-#define ANGLE_DEFAULT_KD    10.0f
+#define ANGLE_DEFAULT_KP    1000.0f
+#define ANGLE_DEFAULT_KI    15.0f
+#define ANGLE_DEFAULT_KD    40.0f
 #define ANGLE_OUTPUT_MAX    10000
 #define ANGLE_DEAD_BAND     0.1f
 
