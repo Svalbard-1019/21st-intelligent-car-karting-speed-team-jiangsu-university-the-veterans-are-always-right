@@ -165,6 +165,12 @@ extern float guandao_debug_entry_yaw;             // 当前航向相对入口方
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
+extern int16 guandao_debug_steer_preview;
+extern int16 guandao_debug_curve_preview;
+extern float guandao_debug_upcoming_turn;
+extern float guandao_debug_steer_raw;
+extern float guandao_debug_steer_limited;
+extern float guandao_debug_steer_final;
 void guandao_state_init(guandao_state * e);
 /**
  * 接口说明：guandao_chain_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。

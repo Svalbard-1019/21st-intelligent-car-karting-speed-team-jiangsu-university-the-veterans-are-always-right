@@ -126,7 +126,7 @@ static void Serial_Debug_Update(void)
 {
     static uint32 last_ms = 0;
     uint32 now_ms = system_getval_ms();
-    static char line[640];
+    static char line[896];
     int len;
 
     if(now_ms - last_ms < SERIAL_DEBUG_PERIOD_MS)
@@ -175,7 +175,7 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,rstate=%d,pready=%d,pidx=%d,pcnt=%d,td100=%ld,tyaw10=%ld,app=%d,gate=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,steerA10=%ld,encL=%ld,gyroRaw=%d,gyroOff100=%ld,gpsLat1e7=%ld,gpsLon1e7=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld,totalPulse=%ld,dist100=%ld\r\n",
+                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,rstate=%d,pready=%d,pidx=%d,pcnt=%d,td100=%ld,tyaw10=%ld,app=%d,gate=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,pth100=%ld,pv=%d,epv=%d,cpv=%d,cturn10=%ld,raw10=%ld,lim10=%ld,fin10=%ld,x100=%ld,y100=%ld,yaw10=%ld,steerA10=%ld,encL=%ld,gyroRaw=%d,gyroOff100=%ld,gpsLat1e7=%ld,gpsLon1e7=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld,totalPulse=%ld,dist100=%ld\r\n",
                       (unsigned long)now_ms,
                       INS.current_point_index,
                       INS.length_index,
@@ -198,6 +198,12 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(guandao_debug_entry_yaw, 10.0f),
                       (long)Serial_Debug_Scale(persuit_threshold, 100.0f),
                       preview_spets,
+                      guandao_debug_steer_preview,
+                      guandao_debug_curve_preview,
+                      (long)Serial_Debug_Scale(guandao_debug_upcoming_turn, 10.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_steer_raw, 10.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_steer_limited, 10.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_steer_final, 10.0f),
                       (long)Serial_Debug_Scale(INS.current_state.x, 100.0f),
                       (long)Serial_Debug_Scale(INS.current_state.y, 100.0f),
                       (long)Serial_Debug_Scale(Yaw_1, 10.0f),

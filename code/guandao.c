@@ -63,6 +63,12 @@ uint8 guandao_debug_entry_gate = 0;
 float guandao_debug_entry_long = 0.0f;
 float guandao_debug_entry_lat = 0.0f;
 float guandao_debug_entry_yaw = 0.0f;
+int16 guandao_debug_steer_preview = 0;
+int16 guandao_debug_curve_preview = 0;
+float guandao_debug_upcoming_turn = 0.0f;
+float guandao_debug_steer_raw = 0.0f;
+float guandao_debug_steer_limited = 0.0f;
+float guandao_debug_steer_final = 0.0f;
 
 int16 daoche_target_length = 0;
 state_t daoche_start_state = {0.0f, 0.0f, 0.0f};
@@ -143,11 +149,11 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_HIGH_SPEED_CMD_LIMIT   32.0f
 #define GUANDAO_CURVE_SPEED_RATIO      0.70f
 #define GUANDAO_VERY_HIGH_SPEED_GAIN   1.20f
-#define GUANDAO_VERY_HIGH_CMD_LIMIT    28.0f
+#define GUANDAO_VERY_HIGH_CMD_LIMIT    35.0f
 #define GUANDAO_STEER_RATE_LOW         3.0f
-#define GUANDAO_STEER_RATE_HIGH        1.5f
+#define GUANDAO_STEER_RATE_HIGH        2.5f
 #define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
-#define GUANDAO_SHARP_TURN_ANGLE       45.0f
+#define GUANDAO_SHARP_TURN_ANGLE       40.0f
 #define GUANDAO_FRONT_TARGET_ANGLE     100.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
 #define GUANDAO_REVERSE_TARGET_DIST    0.12f
@@ -1608,6 +1614,12 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float upcoming_turn = 0.0f;
 
     guandao_debug_stop_reason = 0;
+    guandao_debug_steer_preview = 0;
+    guandao_debug_curve_preview = 0;
+    guandao_debug_upcoming_turn = 0.0f;
+    guandao_debug_steer_raw = 0.0f;
+    guandao_debug_steer_limited = 0.0f;
+    guandao_debug_steer_final = 0.0f;
     if(route_length == 0 || state->current_point_index == route_length)
     {
         guandao_debug_stop_reason = 1;
@@ -1710,7 +1722,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
             if(steer_preview_steps < 4) steer_preview_steps = 4;
         }
     }
-    upcoming_turn = guandao_max_route_turn(state, state->current_point_index, 12);
+    upcoming_turn = guandao_max_route_turn(state, state->current_point_index, 18);
     if(upcoming_turn >= GUANDAO_SHARP_TURN_ANGLE)
     {
         if(steer_preview_steps > 3) steer_preview_steps = 3;
@@ -1722,6 +1734,9 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     {
         curve_preview_steps = steer_preview_steps + 3;
     }
+    guandao_debug_steer_preview = steer_preview_steps;
+    guandao_debug_curve_preview = curve_preview_steps;
+    guandao_debug_upcoming_turn = upcoming_turn;
 
     pursuit_midhandle(state , &current_point , steer_preview_steps , &preview_alpha , &actual_ld);
     pursuit_midhandle(state , &current_point , curve_preview_steps , &preview_alpha2 , &actual_ld2);
@@ -1743,6 +1758,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    {
        target_steering = steering_gain*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
    }
+   guandao_debug_steer_raw = target_steering;
    ips200_show_float(X(10),  Y(9),target_steering ,5 ,5);
 
    //限幅
@@ -1768,7 +1784,8 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        default : break;
    }
 
-   Value_Limit_float(&target_steering ,-steering_limit,steering_limit);
+    Value_Limit_float(&target_steering ,-steering_limit,steering_limit);
+    guandao_debug_steer_limited = target_steering;
 
    if(fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE)
    {
@@ -1826,8 +1843,9 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    float steer_delta_limit = steering_rate_limit * ((float)steer_elapsed_ms / 20.0f);
    float steer_delta = target_steering - last_target_steering;
    Value_Limit_float(&steer_delta, -steer_delta_limit, steer_delta_limit);
-   target_steering = last_target_steering + steer_delta;
-   Value_Limit_float(&target_steering ,-steering_limit,steering_limit);
+    target_steering = last_target_steering + steer_delta;
+    Value_Limit_float(&target_steering ,-steering_limit,steering_limit);
+    guandao_debug_steer_final = target_steering;
    last_target_steering = target_steering;
    last_steer_limit_ms = steer_now_ms;
 
