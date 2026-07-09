@@ -159,6 +159,8 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_EARLY_TURN_SPEED_RATIO 0.60f
 #define GUANDAO_EARLY_STEER_GAIN       0.22f
 #define GUANDAO_EARLY_STEER_MAX        14.0f
+#define GUANDAO_EARLY_STEER_RATE       2.0f
+#define GUANDAO_EARLY_STEER_FILTER     0.25f
 #define GUANDAO_EARLY_TURN_FINAL_POINTS 30
 #define GUANDAO_FRONT_TARGET_ANGLE     100.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
@@ -1652,6 +1654,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float steering_limit = GUANDAO_STEERING_CMD_LIMIT;
     float steering_rate_limit = GUANDAO_STEER_RATE_LOW;
     static float last_target_steering = 0.0f;
+    static float early_steer_filtered = 0.0f;
     static uint32 last_steer_limit_ms = 0;
     int steer_preview_steps = preview_spets;
     int curve_preview_steps = 5;
@@ -1677,6 +1680,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
         * out_v_r = 0;
         *out_servo = 0;
         last_target_steering = 0.0f;
+        early_steer_filtered = 0.0f;
         last_steer_limit_ms = 0;
 //        Buzzer_check(50);
         return;
@@ -1749,6 +1753,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
             * out_v_r = 0;
             *out_servo = 0;
             last_target_steering = 0.0f;
+            early_steer_filtered = 0.0f;
             last_steer_limit_ms = 0;
 //            Buzzer_check(50);
             return;
@@ -1813,13 +1818,21 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    {
        target_steering = steering_gain*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
    }
+   float early_steer_target = 0.0f;
    if(base_speed >= 15.0f && state->current_point_index < route_length - GUANDAO_EARLY_TURN_FINAL_POINTS
            && early_turn > GUANDAO_EARLY_TURN_ANGLE)
    {
-       float early_steer = early_turn_signed * GUANDAO_EARLY_STEER_GAIN;
-       Value_Limit_float(&early_steer, -GUANDAO_EARLY_STEER_MAX, GUANDAO_EARLY_STEER_MAX);
-       target_steering += early_steer;
+       early_steer_target = early_turn_signed * GUANDAO_EARLY_STEER_GAIN;
+       Value_Limit_float(&early_steer_target, -GUANDAO_EARLY_STEER_MAX, GUANDAO_EARLY_STEER_MAX);
    }
+   float early_steer_delta = early_steer_target - early_steer_filtered;
+   Value_Limit_float(&early_steer_delta, -GUANDAO_EARLY_STEER_RATE, GUANDAO_EARLY_STEER_RATE);
+   early_steer_filtered += early_steer_delta * GUANDAO_EARLY_STEER_FILTER;
+   if(fabsf(early_steer_target) < 0.1f && fabsf(early_steer_filtered) < 0.3f)
+   {
+       early_steer_filtered = 0.0f;
+   }
+   target_steering += early_steer_filtered;
    guandao_debug_steer_raw = target_steering;
    ips200_show_float(X(10),  Y(9),target_steering ,5 ,5);
 
@@ -1895,6 +1908,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        * out_v_r = 0;
        *out_servo = 0;
        last_target_steering = 0.0f;
+       early_steer_filtered = 0.0f;
        last_steer_limit_ms = 0;
        return;
    }
