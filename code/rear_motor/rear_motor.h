@@ -58,6 +58,7 @@
 #define REAR_PWM_RATE_LIMIT     1000
 #define REAR_REVERSE_PWM_MIN    800
 #define REAR_INTEGRAL_LIMIT     2000.0f
+#define REAR_DIFF_PWM_GAIN      600.0f  // 后轴左右差动前馈系数。转弯时基于左右轮目标速度差直接在前馈上拉开左右电机的 PWM，克服大弯道刹车时的偏航阻尼。
 #define REAR_INTEGRAL_THRESHOLD 60.0f
 #define REAR_ENCODER_DELTA_ABS_MAX 300
 

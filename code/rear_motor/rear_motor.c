@@ -66,6 +66,9 @@ static int    last_pwm    = 0;
  */
 static void rear_motor_set_pwm(int16 pwm)
 {
+    extern float out_v_l;
+    extern float out_v_r;
+    extern MOTER_control_mode conrtol_mode;
     int diff = pwm - last_pwm;
     if(diff > REAR_PWM_RATE_LIMIT)  diff = REAR_PWM_RATE_LIMIT;
     if(diff < -REAR_PWM_RATE_LIMIT) diff = -REAR_PWM_RATE_LIMIT;
@@ -76,18 +79,43 @@ static void rear_motor_set_pwm(int16 pwm)
 
     current_pwm = last_pwm;
 
-    if(current_pwm >= 0)
+    int16 pwm_l = current_pwm;
+    int16 pwm_r = current_pwm;
+
+    // Torque Vectoring: apply differential feedforward PWM based on target speeds
+    if (conrtol_mode == GUANDAO)
     {
-        pwm_set_duty(PWM_L,  current_pwm);
+        float diff_val = out_v_l - out_v_r;
+        int16 diff_pwm = (int16)(diff_val * REAR_DIFF_PWM_GAIN);
+        if (diff_pwm > 1500) diff_pwm = 1500;
+        if (diff_pwm < -1500) diff_pwm = -1500;
+        pwm_l = current_pwm + diff_pwm;
+        pwm_r = current_pwm - diff_pwm;
+    }
+
+    if(pwm_l > REAR_PWM_HARD_LIMIT)  pwm_l = REAR_PWM_HARD_LIMIT;
+    if(pwm_l < -REAR_PWM_HARD_LIMIT) pwm_l = -REAR_PWM_HARD_LIMIT;
+    if(pwm_r > REAR_PWM_HARD_LIMIT)  pwm_r = REAR_PWM_HARD_LIMIT;
+    if(pwm_r < -REAR_PWM_HARD_LIMIT) pwm_r = -REAR_PWM_HARD_LIMIT;
+
+    if(pwm_l >= 0)
+    {
+        pwm_set_duty(PWM_L,  pwm_l);
         gpio_set_level(MOTOR_GPIO_L, 1);
-        pwm_set_duty(PWM_R,  current_pwm);
+    }
+    else
+    {
+        pwm_set_duty(PWM_L,  -pwm_l);
+        gpio_set_level(MOTOR_GPIO_L, 0);
+    }
+    if(pwm_r >= 0)
+    {
+        pwm_set_duty(PWM_R,  pwm_r);
         gpio_set_level(MOTOR_GPIO_R, 1);
     }
     else
     {
-        pwm_set_duty(PWM_L,  -current_pwm);
-        gpio_set_level(MOTOR_GPIO_L, 0);
-        pwm_set_duty(PWM_R,  -current_pwm);
+        pwm_set_duty(PWM_R,  -pwm_r);
         gpio_set_level(MOTOR_GPIO_R, 0);
     }
 }
