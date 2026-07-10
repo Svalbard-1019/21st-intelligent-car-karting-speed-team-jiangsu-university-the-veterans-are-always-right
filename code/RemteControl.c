@@ -88,7 +88,7 @@ void sbus_rc_control(void)
     uint16 ch_save = uart_receiver.channel[2];
     uint16 ch_stop = uart_receiver.channel[3];
 
-    hot_rc_steer = (float)(SBUS_MID - ch_steer) * 40.0f / (SBUS_MAX - SBUS_MID);
+    hot_rc_steer = (float)(SBUS_MID - ch_steer) * 45.0f / (SBUS_MAX - SBUS_MID);
     if(hot_rc_steer > -2.0f && hot_rc_steer < 2.0f)
     {
         hot_rc_steer = 0;
