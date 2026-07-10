@@ -106,17 +106,37 @@ static void uart_receiver_analysis (uart_receiver_struct *remote_data,uint8 * bu
 void uart_receiver_callback(void)
 {
     static vuint8 length = 0;
+    uint8 byte;
 
     if (uart_receiver_interval_time() > 3000)
     {
         length = 0;
     }
-    uart_receiver_data[length++] = uart_read_byte(UART_RECEVIER_UART_INDEX);
-    if  ( (REV_DATA_LEN  == length)                                                                    // 如果帧长、帧头、帧尾满足协议
-        && (FRAME_STAR   == uart_receiver_data[0])
-        && (FRAME_END    == uart_receiver_data[24]))
+
+    byte = uart_read_byte(UART_RECEVIER_UART_INDEX);
+
+    // 每帧从 0x0F 开始组包，不再依赖帧间空闲时间复位计数。
+    if(length == 0)
     {
-        uart_receiver_analysis(&uart_receiver, uart_receiver_data);
+        if(byte != FRAME_STAR) return;
+        uart_receiver_data[length++] = byte;
+        return;
+    }
+
+    if(length >= REV_DATA_LEN)
+    {
+        length = 0;
+        return;
+    }
+
+    uart_receiver_data[length++] = byte;
+    if(REV_DATA_LEN == length)
+    {
+        if(FRAME_END == uart_receiver_data[REV_DATA_LEN - 1])
+        {
+            uart_receiver_analysis(&uart_receiver, uart_receiver_data);
+        }
+        length = 0;
     }
 }
 
