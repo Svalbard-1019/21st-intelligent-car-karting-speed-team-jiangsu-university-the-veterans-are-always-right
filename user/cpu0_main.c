@@ -135,6 +135,27 @@ static void Serial_Debug_Update(void)
     }
     last_ms = now_ms;
 
+    if(conrtol_mode == YAOKONG)
+    {
+        len = sprintf(line,
+                      "RC,t=%lu,mode=%d,state=%d,frame=%d,ch1=%u,ch2=%u,ch3=%u,ch4=%u,speed100=%ld,steer10=%ld\r\n",
+                      (unsigned long)now_ms,
+                      main_mode,
+                      uart_receiver.state,
+                      uart_receiver.finsh_flag,
+                      (unsigned int)uart_receiver.channel[0],
+                      (unsigned int)uart_receiver.channel[1],
+                      (unsigned int)uart_receiver.channel[2],
+                      (unsigned int)uart_receiver.channel[3],
+                      (long)Serial_Debug_Scale(hot_rc_speed, 100.0f),
+                      (long)Serial_Debug_Scale(hot_rc_steer, 10.0f));
+        if(len > 0)
+        {
+            Serial_Debug_Write(line);
+        }
+        return;
+    }
+
     if(main_mode == Guandao_Recode_Mode)
     {
         guandao_state *record_state = Get_Record_Display_State();
