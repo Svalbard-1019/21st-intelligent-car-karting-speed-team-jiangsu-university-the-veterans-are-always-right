@@ -48,7 +48,7 @@ SLIP_Cheak slip_state = NONE;         // 打滑检测状态，初始为无打滑
 
 uint8 route_setting_choice = 0;        // 路径选择标志（0-3）
 
-float base_speed = 10.0f;
+float base_speed = 6.0f;
 float persuit_threshold = 0.4f;         // 纯追踪阈值（到达目标点的距离容差）
 float recode_threshold = 0.2f;         // 路径记录阈值
 int16 preview_spets = 2;                  // 预瞄步数
