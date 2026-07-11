@@ -39,38 +39,6 @@ float *p;
 int16 *p1;
 Mode_Choice main_mode = Mode_IDLE;
 
-// Battery voltage input: VCCBAT -> R27 (200K) -> A11 -> R28 (22K) -> GND.
-// The effective ADC reference is calibrated from the vehicle multimeter reading.
-// C27 (100 nF), ADC averaging and this low-pass filter keep the value stable.
-#define BATTERY_ADC_CHANNEL       ADC0_CH11_A11
-#define BATTERY_ADC_FULL_SCALE    (4095.0f)
-#define BATTERY_ADC_REFERENCE_V   (3.46f)
-#define BATTERY_R27_KOHM          (200.0f)
-#define BATTERY_R28_KOHM          (22.0f)
-#define BATTERY_DIVIDER_GAIN      ((BATTERY_R27_KOHM + BATTERY_R28_KOHM) / BATTERY_R28_KOHM)
-
-static float battery_voltage = 0.0f;
-
-/** Read A11 and return the filtered battery voltage in volts. */
-static float Battery_Voltage_Read(void)
-{
-    uint16 adc_value = adc_mean_filter_convert(BATTERY_ADC_CHANNEL, 16);
-    float measured_voltage = ((float)adc_value / BATTERY_ADC_FULL_SCALE)
-                           * BATTERY_ADC_REFERENCE_V
-                           * BATTERY_DIVIDER_GAIN;
-
-    if(battery_voltage <= 0.01f)
-    {
-        battery_voltage = measured_voltage;
-    }
-    else
-    {
-        battery_voltage = battery_voltage * 0.8f + measured_voltage * 0.2f;
-    }
-
-    return battery_voltage;
-}
-
 #define SERIAL_MENU_CMD_NONE      (0u)
 #define SERIAL_MENU_CMD_DOWN      (1u)
 #define SERIAL_MENU_CMD_UP        (2u)
@@ -322,7 +290,6 @@ static void Serial_Menu_Redraw_If_Needed(void)
  */
 void Display_Init(void)
 {
-    adc_init(BATTERY_ADC_CHANNEL, ADC_12BIT);
     ips200_set_dir(IPS200_PORTAIT);
     ips200_set_color(RGB565_WHITE , RGB565_BLACK);
     ips200_init(IPS200_TYPE);
@@ -386,9 +353,6 @@ void Menu_Main(void)
     ips200_show_string( X(3) ,Y(3) ,"Parameter");
     ips200_show_string( X(3) ,Y(4) ,"Mode_Choice");
     ips200_show_string( X(3) ,Y(5) ,"Show_Route");
-    ips200_show_string( X(3) ,Y(15) ,"Battery");
-    ips200_show_float( X(12),Y(15) ,Battery_Voltage_Read(), 2, 1);
-    ips200_show_string( X(18),Y(15) ,"V");
 
     prompt();                                                                                  //提示标识
     if(key_value == 1)key_mode1 ++;                                          //按键控制+限幅
