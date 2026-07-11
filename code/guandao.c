@@ -970,23 +970,39 @@ void update_state(guandao_state * state , Encoder_t * ecd)
     float delta_real_center = 0;
     float delta_real_l = 0;
     float delta_real_r = 0;
-    Encoder_Get(ecd);
+    int32 odometry_pulses = rear_motor_take_odometry_pulses();
+
+    if(odometry_pulses > 32767)
+    {
+        ecd->delta_l = 32767;
+        ecd->delta_r = 32767;
+    }
+    else if(odometry_pulses < -32768)
+    {
+        ecd->delta_l = -32768;
+        ecd->delta_r = -32768;
+    }
+    else
+    {
+        ecd->delta_l = (int16)odometry_pulses;
+        ecd->delta_r = (int16)odometry_pulses;
+    }
     switch(slip_state)
     {
         case NONE:
-            delta_real_l = (float)ecd->delta_l*ONE_TICK_DISTANCE;
-            delta_real_r = (float)ecd->delta_r*ONE_TICK_DISTANCE;
+            delta_real_l = (float)odometry_pulses * ONE_TICK_DISTANCE;
+            delta_real_r = delta_real_l;
 
             break;
 
         case Left_Slip:
-            delta_real_r = (float)ecd->delta_r*ONE_TICK_DISTANCE;
+            delta_real_r = (float)odometry_pulses * ONE_TICK_DISTANCE;
             delta_real_l = delta_real_r;
 
             break;
 
         case Right_Slip:
-            delta_real_l = (float)ecd->delta_l*ONE_TICK_DISTANCE;
+            delta_real_l = (float)odometry_pulses * ONE_TICK_DISTANCE;
             delta_real_r = delta_real_l;
 
             break;
@@ -1764,8 +1780,6 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        target_steering = steering_gain*atan2f(2.0f * WHEEL_BASE * sinf(preview_alpha/180.0f*M_PI), actual_ld)/M_PI*180.0f;
    }
    guandao_debug_steer_raw = target_steering;
-   ips200_show_float(X(10),  Y(9),target_steering ,5 ,5);
-
    //限幅
    Value_Limit_float(&target_steering ,-MAX_STEERING_RAD,MAX_STEERING_RAD);
 

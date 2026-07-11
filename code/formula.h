@@ -7,7 +7,7 @@
 
 /*
  * 主函数/科目一调用链：
- * 1. 科目一记录和自动驾驶会通过 Encoder_Get()、update_state()、rear_motor_encoder_update_10ms() 等路径间接使用 calculate_delta()。
+ * 1. 科目一记录和自动驾驶由 rear_motor_encoder_update_10ms() 使用 calculate_delta()，update_state() 消费累计脉冲。
  * 2. 旧 Speed_Control() 使用 PID_Place()/PID_Up() 做速度或转向 PID，当前科目一后轮主链路已改为 rear_motor 自带 PID。
  * 3. KWC_Init()/KWC_UpdateFast() 是 GPS/经纬度滤波预留工具，调 GPS 数据抖动时可以从这里检查滤波参数。
  * 4. 限幅函数用于保护控制量，调车时如果目标值不变化或输出被夹住，要同步检查这些工具函数。

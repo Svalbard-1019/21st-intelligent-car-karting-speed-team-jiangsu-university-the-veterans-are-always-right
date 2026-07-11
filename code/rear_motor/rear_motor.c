@@ -34,6 +34,7 @@
 
 #include "zf_common_headfile.h"
 #include "rear_motor/rear_motor.h"
+#include "rear_motor/rear_odometry_buffer.h"
 
 /* ---- 模块内部状态 ---- */
 static float  target_mps      = 0.0f;
@@ -42,7 +43,7 @@ static int16  current_pwm     = 0;
 static int16  encoder_10ms    = 0;
 static int32  encoder_100ms   = 0;
 static int32  encoder_100ms_last = 0;
-static int32  total_encoder_pulses = 0;
+static rear_odometry_buffer_t odometry_buffer;
 static volatile uint32 encoder_sample_count = 0;
 static uint32 last_encoder_sample_count = 0;
 static uint8  encoder_div = 0;
@@ -143,7 +144,7 @@ void rear_motor_init(void)
     encoder_10ms  = 0;
     encoder_100ms = 0;
     encoder_100ms_last = 0;
-    total_encoder_pulses = 0;
+    rear_odometry_buffer_init(&odometry_buffer);
     encoder_sample_count = 0;
     last_encoder_sample_count = 0;
     encoder_div = 0;
@@ -173,8 +174,10 @@ void rear_motor_stop(void)
     encoder_100ms_last = 0;
     encoder_div = 0;
     encoder_10ms = 0;
-    last_encoder_count = encoder_get_count(TIM2_ENCODER);
-    encoder_first_read = 0;
+    /* Keep the fixed 10 ms sampler baseline intact. Record mode can call
+     * rear_motor_stop() every main-loop iteration while the car is pushed;
+     * resetting last_encoder_count here would erase odometry before the ISR
+     * can accumulate it. */
 
     pwm_set_duty(PWM_L, 0);
     pwm_set_duty(PWM_R, 0);
@@ -219,6 +222,7 @@ void rear_motor_set_target_mps(float mps)
 void rear_motor_encoder_update_10ms(void)
 {
     int16 current_count = encoder_get_count(TIM2_ENCODER);
+    int32 raw_encoder_delta = 0;
 
     if(encoder_first_read)
     {
@@ -228,16 +232,17 @@ void rear_motor_encoder_update_10ms(void)
     }
     else
     {
-        encoder_10ms = (int16)((int32)REAR_ENCODER_FEEDBACK_DIRECTION * (int32)calculate_delta(current_count, last_encoder_count));
-        if(encoder_10ms > REAR_ENCODER_DELTA_ABS_MAX || encoder_10ms < -REAR_ENCODER_DELTA_ABS_MAX)
-        {
-            encoder_10ms = 0;
-        }
+        raw_encoder_delta = (int32)REAR_ENCODER_FEEDBACK_DIRECTION
+                * (int32)calculate_delta(current_count, last_encoder_count);
+        rear_odometry_buffer_add(&odometry_buffer, raw_encoder_delta,
+                REAR_ENCODER_DELTA_ABS_MAX);
+        encoder_10ms = (raw_encoder_delta > REAR_ENCODER_DELTA_ABS_MAX
+                || raw_encoder_delta < -REAR_ENCODER_DELTA_ABS_MAX)
+                ? 0 : (int16)raw_encoder_delta;
         last_encoder_count = current_count;
     }
 
     encoder_sample_count++;
-    total_encoder_pulses += (int32)encoder_10ms;
 }
 
 /* 主循环调用: 有新10ms编码器样本才处理, 每100ms更新一次PID */
@@ -358,14 +363,52 @@ int16  rear_motor_get_encoder_10ms(void)    { return encoder_10ms; }
  */
 int32  rear_motor_get_encoder_100ms(void)   { return encoder_100ms_last; }
 
-int32  rear_motor_get_total_encoder_pulses(void) { return total_encoder_pulses; }
+int32 rear_motor_take_odometry_pulses(void)
+{
+    uint32 interrupt_state = interrupt_global_disable();
+    int32 pulses = (int32)rear_odometry_buffer_take(&odometry_buffer);
+    interrupt_global_enable(interrupt_state);
+    return pulses;
+}
+
+int32 rear_motor_get_odometry_pending_pulses(void)
+{
+    return (int32)odometry_buffer.pending_pulses;
+}
+
+int32 rear_motor_get_odometry_last_sample(void)
+{
+    return (int32)odometry_buffer.last_sample;
+}
+
+uint32 rear_motor_get_odometry_rejected_samples(void)
+{
+    return (uint32)odometry_buffer.rejected_samples;
+}
+
+int32 rear_motor_get_odometry_rejected_pulses(void)
+{
+    return (int32)odometry_buffer.rejected_pulses;
+}
+
+int32 rear_motor_get_odometry_max_abs_sample(void)
+{
+    return (int32)odometry_buffer.max_abs_sample;
+}
+
+int32  rear_motor_get_total_encoder_pulses(void)
+{
+    return (int32)odometry_buffer.total_pulses;
+}
 
 float  rear_motor_get_total_distance_m(void)
 {
-    return (float)total_encoder_pulses * REAR_DISTANCE_PER_PULSE_M;
+    return (float)odometry_buffer.total_pulses * REAR_DISTANCE_PER_PULSE_M;
 }
 
 void   rear_motor_clear_odometer(void)
 {
-    total_encoder_pulses = 0;
+    uint32 interrupt_state = interrupt_global_disable();
+    rear_odometry_buffer_init(&odometry_buffer);
+    interrupt_global_enable(interrupt_state);
 }

@@ -14,7 +14,7 @@
  * 主函数/科目一调用链：
  * 1. core0_main() 首先调用 Init_All()，Init_All() 集中初始化屏幕、按键、蜂鸣器、编码器、电机、IMU、GPS 和惯导状态。
  * 2. CCU61_CH1 中断周期调用 Key_Scan()、IMU_GetValues()；CCU61_CH0 中断周期调用转向控制、GPS 解析和后轮编码器采样。
- * 3. 科目一记录模式通过 Encoder_Get(&guandao_ecd) 获取左右后轮里程。
+ * 3. 科目一固定10ms采样由 rear_motor 模块负责；Encoder_Get() 仅保留给 RackTest/旧兼容入口。
  * 4. Rack_Test_Run() 是架上调试入口，用来分别验证前轮转向、后轮速度和 IMU 直线保持，避免一上来就跑完整科目一。
  */
 
