@@ -62,15 +62,25 @@ static float rack_straight_last_yaw_error = 0.0f;
  */
 void Init_All(void)
 {
-
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,display_begin\r\n");
     Display_Init();
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,display_ok\r\n");
     Key_Init();
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,key_ok\r\n");
     Buzzer_Init();
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,buzzer_ok\r\n");
     Steer_init();
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,steer_io_ok\r\n");
     Encoder_Init();
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,rear_encoder_ok\r\n");
     Motor_init();
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,rear_motor_io_ok\r\n");
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,imu_begin\r\n");
     IMU_init();
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,imu_ok\r\n");
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,gps_begin\r\n");
     GPS_Init();
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,gps_ok\r\n");
 
     Encoder_count_init(&Speed_ecd);
     Encoder_count_init(&guandao_ecd);
@@ -84,7 +94,9 @@ void Init_All(void)
 
     KWC_Init(&klm_lat,2,1,0.01,0.0);
     KWC_Init(&klm_lon,2,1,0.01,0.0 );
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,steer_control_begin\r\n");
     Steer_Moter_Init();
+    uart_write_string(DEBUG_UART_INDEX, "BOOT,init_all_ok\r\n");
 }
 
 /**
