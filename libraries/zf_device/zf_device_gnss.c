@@ -578,7 +578,7 @@ void gnss_init (gps_device_enum gps_device)
     {
         fifo_init(&gnss_receiver_fifo, FIFO_DATA_8BIT, gnss_receiver_buffer, GNSS_BUFFER_SIZE);
         system_delay_ms(500);                                                   // 等待GPS启动后开始初始化
-        uart_init(GNSS_UART, 9600, GNSS_RX, GNSS_TX);
+        uart_init(GNSS_UART, 115200, GNSS_RX, GNSS_TX);
 
         uart_write_buffer(GNSS_UART, (uint8 *)set_rate, sizeof(set_rate));      // 设置GPS更新速率为10hz 如果不调用此语句则默认为1hz
         system_delay_ms(200);   
@@ -613,7 +613,7 @@ void gnss_init (gps_device_enum gps_device)
     {
         // GN43RFA RTK模块不需要进行参数设置，如果需要修改参数应该使用专用的上位机修改参数
         fifo_init(&gnss_receiver_fifo, FIFO_DATA_8BIT, gnss_receiver_buffer, GNSS_BUFFER_SIZE);
-        uart_init(GNSS_UART, 9600, GNSS_RX, GNSS_TX);
+        uart_init(GNSS_UART, 115200, GNSS_RX, GNSS_TX);
         gnss_state = 1;
         uart_rx_interrupt(GNSS_UART, 1);
     }
