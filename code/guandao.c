@@ -37,6 +37,7 @@
 #include "zf_common_headfile.h"
 #include "rear_motor/rear_motor.h"
 #include "auto_park_plan.h"
+#include "parking_se2.h"
 #include <string.h>
 
 guandao_state INS;                               //0 = route_setting_choice
@@ -188,6 +189,7 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_PARK_GPS_SAMPLE_MS      100u
 #define GUANDAO_PARK_GPS_MAX_ERROR      2.0f
 #define GUANDAO_PARK_GPS_MAX_DISTANCE   5.0f
+#define GUANDAO_PARK_SE2_MAX_ROTATION   25.0f
 // 低速教学倒车的弯线路程明显长于起终点直线距离；实测 18 s 仍会在距目标约 0.23 m 时超时。
 // 末端另有 12 cm 位置停车保护，因此延长运行时间而不放宽停车边界。
 #define GUANDAO_TAUGHT_REVERSE_MAX_MS  34000u
@@ -698,6 +700,10 @@ static void guandao_taught_reverse_prepare(void)
     int16 search_end;
     int16 best_index;
     float best_distance;
+    float recorded_heading;
+    float runtime_heading;
+    float runtime_physical_heading;
+    float axis_delta;
 
     portion1_taught_reverse_ready = 0;
     portion1_taught_reverse_length = 0;
@@ -714,32 +720,41 @@ static void guandao_taught_reverse_prepare(void)
     if(daoche_target_length > portion1_finally_length) return;
     if(daoche_target_length >= MAX_LENGTH_INDEX) return;
 
+    recorded_heading = daoche_start_state.theta;
+    runtime_physical_heading = portion1_reverse_start_state.theta;
+    axis_delta = parking_se2_axis_delta(recorded_heading, runtime_physical_heading);
+    if(fabsf(axis_delta) > GUANDAO_PARK_SE2_MAX_ROTATION) axis_delta = 0.0f;
+    runtime_heading = recorded_heading + axis_delta;
     source_start = daoche_point_length;
     for(int16 source_index = source_start;
             source_index < daoche_target_length && portion1_taught_reverse_length < MAX_LENGTH_INDEX - 1;
             source_index++)
     {
-        // Keep the taught route in its recorded INS frame. Moving the whole route to the
-        // trigger pose also moves the final parking target by the same entry error.
-        portion1_taught_reverse_map[portion1_taught_reverse_length]
-                = INS.recode_map[source_index];
+        state_t source = INS.recode_map[source_index];
+        state_t *target = &portion1_taught_reverse_map[portion1_taught_reverse_length];
+
+        parking_se2_transform_point(
+                daoche_start_state.x, daoche_start_state.y, recorded_heading,
+                portion1_reverse_start_state.x, portion1_reverse_start_state.y, runtime_heading,
+                source.x, source.y, &target->x, &target->y);
+        target->theta = parking_se2_transform_heading(
+                source.theta, recorded_heading, runtime_heading);
         portion1_taught_reverse_length++;
     }
 
-    portion1_taught_reverse_target = daoche_target_state;
+    parking_se2_transform_point(
+            daoche_start_state.x, daoche_start_state.y, recorded_heading,
+            portion1_reverse_start_state.x, portion1_reverse_start_state.y, runtime_heading,
+            daoche_target_state.x, daoche_target_state.y,
+            &portion1_taught_reverse_target.x, &portion1_taught_reverse_target.y);
+    portion1_taught_reverse_target.theta = parking_se2_transform_heading(
+            daoche_target_state.theta, recorded_heading, runtime_physical_heading);
     portion1_taught_reverse_map[portion1_taught_reverse_length] = portion1_taught_reverse_target;
     portion1_taught_reverse_length++;
 
-    if(portion1_park_gps_ready)
-    {
-        for(int16 i = 0; i < portion1_taught_reverse_length; i++)
-        {
-            portion1_taught_reverse_map[i].x += portion1_park_gps_offset_x;
-            portion1_taught_reverse_map[i].y += portion1_park_gps_offset_y;
-        }
-        portion1_taught_reverse_target.x += portion1_park_gps_offset_x;
-        portion1_taught_reverse_target.y += portion1_park_gps_offset_y;
-    }
+    /* The SE(2) runtime anchor already corrects translation and rotation.
+     * Applying the GNSS translation again would move the local parking route
+     * away from the actual stopped vehicle pose. GPS remains diagnostic only. */
 
     if(portion1_taught_reverse_length >= 3)
     {
