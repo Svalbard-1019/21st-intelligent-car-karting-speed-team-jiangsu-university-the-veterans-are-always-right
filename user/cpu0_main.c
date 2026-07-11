@@ -78,6 +78,36 @@ static void Main_Loop_Timing_Update(void)
     main_loop_last_ms = now_ms;
 }
 
+// GNSS UART interrupt only assembles received bytes and raises gnss_flag.
+// Parsing runs here at low priority so it cannot block steering, odometry or
+// the UART2 SBUS receiver interrupt.
+static void GPS_Main_Loop_Update(void)
+{
+    static uint32 last_gps_ms = 0;
+    uint32 now_ms;
+    uint32 interrupt_state;
+    uint8 parse_pending = 0;
+
+    if(!GPS_WORK_FLAG) return;
+
+    now_ms = system_getval_ms();
+    if(last_gps_ms != 0 && Main_Elapsed_Ms(now_ms, last_gps_ms) < 100u) return;
+    last_gps_ms = now_ms;
+
+    interrupt_state = interrupt_global_disable();
+    if(gnss_flag)
+    {
+        gnss_flag = 0;
+        parse_pending = 1;
+    }
+    interrupt_global_enable(interrupt_state);
+
+    if(!parse_pending) return;
+
+    gnss_data_parse();
+    if(Main_Key_Flag) update_gpsinformation();
+}
+
 static uint8 Main_Display_Update_Due(void)
 {
     static uint32 last_display_ms = 0;
@@ -387,6 +417,7 @@ int core0_main(void)
 
         }
         Guandao_Rear_Motor_Update();
+        GPS_Main_Loop_Update();
         Serial_Debug_Update();
         uint8 display_update_due = Main_Display_Update_Due();
 //        ips200_show_float(X(1),  Y(8) ,INS.recode_gpsmap[INS.gps_recode_length -1].lat, 3,6);

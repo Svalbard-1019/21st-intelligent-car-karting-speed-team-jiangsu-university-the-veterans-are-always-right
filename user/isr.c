@@ -58,7 +58,6 @@ IFX_INTERRUPT(cc61_pit_ch0_isr, 0, CCU6_1_CH0_ISR_PRIORITY)
 {
     interrupt_global_enable(0);                     // 开启中断嵌套
     pit_clear_flag(CCU61_CH0);
-    TIM_FLAG2 ++;
     TIM_FLAG3 ++;
 
     if(TIM_FLAG3 > 10)
@@ -108,21 +107,6 @@ IFX_INTERRUPT(cc61_pit_ch0_isr, 0, CCU6_1_CH0_ISR_PRIORITY)
         }
     }
 
-    if(GPS_WORK_FLAG)
-    {
-        if(TIM_FLAG2 > 100 )
-        {
-            TIM_FLAG2 = 0;
-            if(gnss_flag)
-            {
-                gnss_flag = 0 ;
-                gnss_data_parse();           //开始解析数据
-//                klm_handle();
-                // 检查标志位 开始解析
-                if(Main_Key_Flag ){update_gpsinformation();}
-            }
-        }
-    }
 
 }
 
