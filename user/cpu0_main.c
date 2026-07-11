@@ -50,6 +50,51 @@ extern int num;
 // 后轮新模块使用 m/s，所以这里集中做比例换算，方便后续统一调速度标定。
 #define GUANDAO_SPEED_TO_MPS    (0.1f)
 #define SERIAL_DEBUG_PERIOD_MS  (200)
+#define DISPLAY_DEBUG_PERIOD_MS (200)
+#define SYSTEM_MS_WRAP          (42950u)
+
+static uint32 main_loop_last_ms = 0;
+static uint32 main_loop_last_dt_ms = 0;
+static uint32 main_loop_max_dt_ms = 0;
+
+static uint32 Main_Elapsed_Ms(uint32 now_ms, uint32 start_ms)
+{
+    if(now_ms >= start_ms) return now_ms - start_ms;
+    return (SYSTEM_MS_WRAP - start_ms) + now_ms;
+}
+
+static void Main_Loop_Timing_Update(void)
+{
+    uint32 now_ms = system_getval_ms();
+
+    if(main_loop_last_ms != 0)
+    {
+        main_loop_last_dt_ms = Main_Elapsed_Ms(now_ms, main_loop_last_ms);
+        if(main_loop_last_dt_ms > main_loop_max_dt_ms)
+        {
+            main_loop_max_dt_ms = main_loop_last_dt_ms;
+        }
+    }
+    main_loop_last_ms = now_ms;
+}
+
+static uint8 Main_Display_Update_Due(void)
+{
+    static uint32 last_display_ms = 0;
+    uint32 now_ms = system_getval_ms();
+
+    if(last_display_ms == 0)
+    {
+        last_display_ms = now_ms;
+        return 1;
+    }
+    if(Main_Elapsed_Ms(now_ms, last_display_ms) < DISPLAY_DEBUG_PERIOD_MS)
+    {
+        return 0;
+    }
+    last_display_ms = now_ms;
+    return 1;
+}
 
 // 记录菜单可以选择 INS/passage/portion_3/portion_2。
 // 屏幕调试页必须显示当前正在记录的那条链路，否则会误以为 Len/X/Y 没变化。
@@ -140,7 +185,7 @@ static void Serial_Debug_Update(void)
         guandao_state *record_state = Get_Record_Display_State();
 
         len = sprintf(line,
-                      "REC,t=%lu,route=%d,len=%d,gpslen=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,lastx100=%ld,lasty100=%ld,lastth10=%ld,encL=%d,encR=%d,key1=%d,ch1=%d,ch2=%d,ch3=%d,ch4=%d,gps=%d,sat=%d,gflag=%d,parkS=%d,parkT=%d\r\n",
+                      "REC,t=%lu,route=%d,len=%d,gpslen=%d,full=%d,thr100=%ld,x100=%ld,y100=%ld,th10=%ld,lastx100=%ld,lasty100=%ld,lastth10=%ld,encL=%d,encR=%d,key1=%d,key4=%d,ch1=%d,ch2=%d,ch3=%d,ch4=%d,gps=%d,sat=%d,gflag=%d,parkS=%d,parkT=%d,parkE=%d\r\n",
                       (unsigned long)now_ms,
                       route_setting_choice,
                       record_state->length_index,
@@ -156,6 +201,7 @@ static void Serial_Debug_Update(void)
                       guandao_ecd.delta_l,
                       guandao_ecd.delta_r,
                       gpio_get_level(KEY1),
+                      gpio_get_level(KEY4),
                       x6f_out[0],
                       x6f_out[1],
                       x6f_out[2],
@@ -164,7 +210,8 @@ static void Serial_Debug_Update(void)
                       gnss.satellite_used,
                       gnss_flag,
                       daoche_point_length,
-                      daoche_target_flag);
+                      daoche_target_flag,
+                      daoche_target_length);
         if(len > 0)
         {
             Serial_Debug_Write(line);
@@ -173,29 +220,24 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,idx=%d,rlen=%d,plen=%d,ready=%d,D100=%ld,A10=%ld,fd100=%ld,reason=%d,pth100=%ld,pv=%d,x100=%ld,y100=%ld,yaw10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      "AUTO,t=%lu,dt=%lu,dtMax=%lu,raw=%ld,pend=%ld,drop=%lu,dropP=%ld,maxRaw=%ld,idx=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld\r\n",
                       (unsigned long)now_ms,
+                      (unsigned long)main_loop_last_dt_ms,
+                      (unsigned long)main_loop_max_dt_ms,
+                      (long)rear_motor_get_odometry_last_sample(),
+                      (long)rear_motor_get_odometry_pending_pulses(),
+                      (unsigned long)rear_motor_get_odometry_rejected_samples(),
+                      (long)rear_motor_get_odometry_rejected_pulses(),
+                      (long)rear_motor_get_odometry_max_abs_sample(),
                       INS.current_point_index,
-                      INS.length_index,
-                      INS.planned_length,
-                      INS.plan_ready,
-                      (long)Serial_Debug_Scale(guandao_debug_distance, 100.0f),
-                      (long)Serial_Debug_Scale(guandao_debug_angle_diff, 10.0f),
-                      (long)Serial_Debug_Scale(guandao_debug_dist_final, 100.0f),
-                      guandao_debug_stop_reason,
-                      (long)Serial_Debug_Scale(persuit_threshold, 100.0f),
-                      preview_spets,
                       (long)Serial_Debug_Scale(INS.current_state.x, 100.0f),
                       (long)Serial_Debug_Scale(INS.current_state.y, 100.0f),
                       (long)Serial_Debug_Scale(Yaw_1, 10.0f),
-                      (long)Serial_Debug_Scale(out_v_l, 10.0f),
-                      (long)Serial_Debug_Scale(out_v_r, 10.0f),
-                      (long)Serial_Debug_Scale(out_servo, 10.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_steer_raw, 10.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_steer_final, 10.0f),
+                      (long)Serial_Debug_Scale((float)angle, 10.0f),
                       (long)Serial_Debug_Scale(rear_motor_get_target_mps(), 100.0f),
-                      (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
-                      rear_motor_get_pwm(),
-                      rear_motor_get_encoder_10ms(),
-                      (long)rear_motor_get_encoder_100ms());
+                      (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f));
         if(len > 0)
         {
             Serial_Debug_Write(line);
@@ -232,7 +274,7 @@ static void Serial_Debug_Update(void)
         angle_plan(&angle_error);
 
         len = sprintf(line,
-                      "P3AUTO,t=%lu,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      "P3AUTO,t=%lu,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld,totalPulse=%ld,dist100=%ld\r\n",
                       (unsigned long)now_ms,
                       portion_3.current_point_index,
                       portion_3.length_index,
@@ -257,7 +299,9 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
                       rear_motor_get_pwm(),
                       rear_motor_get_encoder_10ms(),
-                      (long)rear_motor_get_encoder_100ms());
+                      (long)rear_motor_get_encoder_100ms(),
+                      (long)rear_motor_get_total_encoder_pulses(),
+                      (long)Serial_Debug_Scale(rear_motor_get_total_distance_m(), 100.0f));
         if(len > 0)
         {
             Serial_Debug_Write(line);
@@ -304,6 +348,7 @@ int core0_main(void)
     {
         // 此处编写需要循环执行的代码
 
+        Main_Loop_Timing_Update();
         sbus_rc_control();
 
         switch(main_mode)                                                    // 根据主模式选择执行不同功能
@@ -343,6 +388,7 @@ int core0_main(void)
         }
         Guandao_Rear_Motor_Update();
         Serial_Debug_Update();
+        uint8 display_update_due = Main_Display_Update_Due();
 //        ips200_show_float(X(1),  Y(8) ,INS.recode_gpsmap[INS.gps_recode_length -1].lat, 3,6);
 //        ips200_show_float(X(11),  Y(8) ,INS.recode_gpsmap[INS.gps_recode_length -1].lon, 3,6);
 //        ips200_show_float(X(1),  Y(9) ,INS.recode_gpsmap[INS.gps_recode_length -1].cheak_flag, 3,6);
@@ -352,7 +398,7 @@ int core0_main(void)
 
             // 记录模式单独显示“记录诊断页”：
             // Enc 不变说明编码器没进来；Enc 变但 X/Y/Len 不变，才继续查里程积分和记录阈值。
-            if(main_mode == Guandao_Recode_Mode)
+            if(display_update_due && main_mode == Guandao_Recode_Mode)
             {
                 guandao_state *record_state = Get_Record_Display_State();
                 ips200_show_string(X(1),  Y(8), "REC");      ips200_show_int(X(6),  Y(8), route_setting_choice, 2);
@@ -374,7 +420,7 @@ int core0_main(void)
             }
             // 自动驾驶诊断页：用于判断停车原因。
             // Idx 接近 Len 表示路线追完；TgtAct/PWM 为 0 表示后轮目标已被上层清掉。
-            else if(main_mode != Rack_Test_Mode)
+            else if(display_update_due && main_mode != Rack_Test_Mode)
             {
                 ips200_show_string(X(1),  Y(8), "Idx");      ips200_show_int(X(6),  Y(8), INS.current_point_index, 4);
                 ips200_show_string(X(12), Y(8), "Len");      ips200_show_int(X(17), Y(8), INS.length_index, 4);

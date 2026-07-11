@@ -44,11 +44,13 @@
 #define ANGLE_GEAR_RATIO    300                    // 减速比
 #define ANGLE_MAX_DEGREE    60                     // 最大目标角度
 #define ANGLE_MIN_DEGREE    -60                    // 最小目标角度
-#define ANGLE_DEFAULT_KP    200.0f
-#define ANGLE_DEFAULT_KI    4.0f
-#define ANGLE_DEFAULT_KD    10.0f
+#define ANGLE_DEFAULT_KP    500.0f
+#define ANGLE_DEFAULT_KI    18.0f
+#define ANGLE_DEFAULT_KD    27.0f
 #define ANGLE_OUTPUT_MAX    10000
 #define ANGLE_DEAD_BAND     0.1f
+#define ANGLE_FF_GAIN       65.0f    // 前馈系数：前轮转向目标角度越大额外加一个正比例于目标角的 PWM哂克服静摩擦
+#define ANGLE_INTEGRAL_MAX  1000.0f  // 积分限幅
 
 /**
  * 结构体说明：用于集中保存本模块的一组状态量/参数，字段通常会被初始化函数清零，并在周期函数中持续更新。
@@ -102,7 +104,7 @@ void angle_control_update(void);
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
-void angle_control_set_target(int32 target_angle);
+void angle_control_set_target(float target_angle);
 
 // 在当前角度基础上旋转指定角度
 /**
@@ -139,6 +141,12 @@ void angle_motor_set_pwm(int32 pwm_value);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 int32 angle_control_get_current_angle(void);
+
+float angle_control_get_target_angle(void);
+
+float angle_control_get_current_angle_float(void);
+
+int32 angle_control_get_output_pwm(void);
 
 // 重置 PID 状态，重新记录零位，关闭电机
 /**

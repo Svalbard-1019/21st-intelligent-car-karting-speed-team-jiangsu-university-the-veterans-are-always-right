@@ -34,7 +34,7 @@
 #include "zf_common_headfile.h"
 
 float speed_pid[6]={0.5f, 1.0f, 0.0f, 0.2f, 0.4f, 3.0f};
-int16 control[5] = {10, -10, 2, 0, 0};
+int16 control[5] = {15, -10, 2, 0, 0};
 float kp;
 float ki;
 float kd;
@@ -48,6 +48,11 @@ float kd;
 #define FLASH_FINAL_DSTS_DEFAULT         (3.0f)
 #define FLASH_FINAL_DSTS_MIN             (0.3f)
 #define FLASH_FINAL_DSTS_MAX             (20.0f)
+#define FLASH_PREVIEW_STEPS_DEFAULT      (2)
+#define FLASH_PREVIEW_STEPS_MIN          (1)
+#define FLASH_PREVIEW_STEPS_MAX          (20)
+#define FLASH_BASE_SPEED_DEFAULT          (15)
+#define FLASH_BASE_SPEED_TEST_VALUE       (6)
 
 static int16 flash_clamp_route_length(int16 length)
 {
@@ -112,6 +117,16 @@ void Flash_Read_pid(void)
         {
             control[j] = flash_union_buffer[i].int16_type;
         }
+        if(control[2] < FLASH_PREVIEW_STEPS_MIN || control[2] > FLASH_PREVIEW_STEPS_MAX)
+        {
+            control[2] = FLASH_PREVIEW_STEPS_DEFAULT;
+        }
+        /* Migrate the temporary 0.6 m/s test setting back to the normal
+         * 1.5 m/s preset. Flash_Write_pid() persists the restored value. */
+        if(control[0] == FLASH_BASE_SPEED_TEST_VALUE)
+        {
+            control[0] = FLASH_BASE_SPEED_DEFAULT;
+        }
         base_speed = (float)control[0];
         daoche_speed = (float)control[1];
         preview_spets = control[2];
@@ -133,6 +148,10 @@ void Flash_Write_pid(void)
 {
     flash_buffer_clear();
     flash_sanitize_runtime_params();
+    if(control[2] < FLASH_PREVIEW_STEPS_MIN || control[2] > FLASH_PREVIEW_STEPS_MAX)
+    {
+        control[2] = FLASH_PREVIEW_STEPS_DEFAULT;
+    }
 
     MoterPID_L.Kp = speed_pid[0];
     MoterPID_R.Kp = speed_pid[0];

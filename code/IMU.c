@@ -87,7 +87,9 @@ void IMU_gyro_Offset_Init(void)
 void IMU_GetValues(void)//将采集的数值转化为实际物理值, 并对陀螺仪进行去零漂处理
 {
 
-    IMU_Data.gyro_z = ((float) imu963ra_gyro_z - Gyro_Offset.Zdata)* PI / 180.0f/ 14.3f;
+    // Bench calibration: a physical 90 degree turn was reported as about
+    // 100 degrees in both directions.  Increase the scale divisor by 100/90.
+    IMU_Data.gyro_z = ((float) imu963ra_gyro_z - Gyro_Offset.Zdata)* PI / 180.0f/ 15.9f;
 
     if(IMU_Data.gyro_z<0.025&&IMU_Data.gyro_z>-0.025)//滤波
     {

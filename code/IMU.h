@@ -58,6 +58,7 @@ typedef struct{
 extern int IMU_1_Open_flag;
 extern float Yaw_1;
 extern IMU_param_t  IMU_Data;
+extern gyro_param_t Gyro_Offset;
 /**
  * 接口说明：IMU_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
  * 所属模块：当前使用的 IMU963RA 姿态模块，给科目一提供车头航向 Yaw_1。

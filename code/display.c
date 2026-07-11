@@ -71,6 +71,246 @@ static float Battery_Voltage_Read(void)
     return battery_voltage;
 }
 
+#define SERIAL_MENU_CMD_NONE      (0u)
+#define SERIAL_MENU_CMD_DOWN      (1u)
+#define SERIAL_MENU_CMD_UP        (2u)
+#define SERIAL_MENU_CMD_ENTER     (3u)
+#define SERIAL_MENU_CMD_BACK      (4u)
+
+static uint8 serial_menu_redraw_request = 1;
+static uint8 serial_control_edit_flag = 0;
+
+static uint8 Serial_Menu_Read_Key(void);
+static void Serial_Menu_Print_Page(void);
+static void Serial_Menu_Redraw_If_Needed(void);
+
+static const char *Serial_Menu_Main_Mode_Name(void)
+{
+    switch(main_mode)
+    {
+        case Mode_IDLE:             return "Mode_IDLE";
+        case Guandao_Recode_Mode:   return "Guandao_Recode_Mode";
+        case Guandao_portion_1:     return "Guandao_portion_1";
+        case Guandao_Voice:         return "Guandao_Voice";
+        case Guandao_portion_3:     return "Guandao_portion_3";
+        case Rack_Test_Mode:        return "Rack_Test_Mode";
+        default:                    return "Unknown";
+    }
+}
+
+static const char *Serial_Menu_Control_Mode_Name(void)
+{
+    switch(conrtol_mode)
+    {
+        case IDLE:       return "IDLE";
+        case YAOKONG:    return "YAOKONG";
+        case GUANDAO:    return "GUANDAO";
+        case GPS:        return "GPS";
+        case DAOCHE:     return "DAOCHE";
+        case RACK_TEST:  return "RACK_TEST";
+        default:         return "Unknown";
+    }
+}
+
+static void Serial_Menu_Print_Help(void)
+{
+    printf("\r\nSerial menu keys:\r\n");
+    printf("  w/8: up\r\n");
+    printf("  s/2: down\r\n");
+    printf("  d/6: enter\r\n");
+    printf("  a/4: back\r\n");
+    printf("  r: redraw\r\n");
+    printf("  h: help\r\n");
+}
+
+static void Serial_Menu_Print_Item(uint8 row, const char *text)
+{
+    printf("%c %s\r\n", (row == key_mode1) ? '>' : ' ', text);
+}
+
+static void Serial_Menu_Print_Footer(void)
+{
+    printf("\r\npage=%u cursor=%u route=%u main=%s ctrl=%s go=%u\r\n",
+           key_mode2,
+           key_mode1,
+           route_setting_choice,
+           Serial_Menu_Main_Mode_Name(),
+           Serial_Menu_Control_Mode_Name(),
+           CarGo_Flag);
+    printf("w/s move, d enter, a back, r redraw, h help\r\n");
+}
+
+static void Serial_Menu_Print_Page(void)
+{
+    printf("\r\n\r\n===== TC264 MENU =====\r\n");
+
+    if(key_mode2 == 1)
+    {
+        printf("[Menu_Main]\r\n");
+        Serial_Menu_Print_Item(2, "Car_Go");
+        Serial_Menu_Print_Item(3, "Parameter");
+        Serial_Menu_Print_Item(4, "Mode_Choice");
+        Serial_Menu_Print_Item(5, "Show_Route");
+    }
+    else if(key_mode2 == 2)
+    {
+        printf("[Car_Go]\r\n");
+        Serial_Menu_Print_Item(2, "Start");
+    }
+    else if(key_mode2 == 3)
+    {
+        printf("[Parameter]\r\n");
+        Serial_Menu_Print_Item(2, "PID");
+        Serial_Menu_Print_Item(3, "Control");
+    }
+    else if(key_mode2 == 4)
+    {
+        printf("[Mode_Choice]\r\n");
+        Serial_Menu_Print_Item(2, "NULL_Mode_IDLE");
+        Serial_Menu_Print_Item(3, "Guandao_Recode_Mode");
+        Serial_Menu_Print_Item(4, "Guandao_portion_1");
+        Serial_Menu_Print_Item(5, "Voice_Mode");
+        Serial_Menu_Print_Item(6, "Guandao_portion_3");
+        Serial_Menu_Print_Item(7, "Rack_Test");
+    }
+    else if(key_mode2 == 5)
+    {
+        printf("[Recode_Points]\r\n");
+        Serial_Menu_Print_Item(2, "INS");
+        Serial_Menu_Print_Item(3, "passage");
+        Serial_Menu_Print_Item(4, "portion_3");
+    }
+    else if(key_mode2 == 6)
+    {
+        printf("[Show_Route]\r\n");
+        Serial_Menu_Print_Item(2, "INS");
+        Serial_Menu_Print_Item(3, "passage");
+        Serial_Menu_Print_Item(4, "portion_3");
+    }
+    else if(key_mode2 == 7)
+    {
+        printf("[Route_Display]\r\n");
+        printf("Route display is drawn on IPS200. Press a/4 to return.\r\n");
+    }
+    else if(key_mode2 == 8)
+    {
+        printf("[PID_P]\r\n");
+        Serial_Menu_Print_Item(2, "Speed_kp");
+        Serial_Menu_Print_Item(3, "Speed_ki");
+        Serial_Menu_Print_Item(4, "Speed_kd");
+        Serial_Menu_Print_Item(5, "Recode_The");
+        Serial_Menu_Print_Item(6, "Persuit_The");
+        Serial_Menu_Print_Item(7, "End_Dec_D");
+    }
+    else if(key_mode2 == 9)
+    {
+        printf("[Control_P]\r\n");
+        Serial_Menu_Print_Item(2, "Base_Speed");
+        Serial_Menu_Print_Item(3, "Daoche_Speed");
+        Serial_Menu_Print_Item(4, "Preview_Spets");
+        printf("Base=%d Daoche=%d Preview=%d RunMps_x10=%d Edit=%u\r\n",
+               control[0], control[1], control[2], control[0], serial_control_edit_flag);
+        if(serial_control_edit_flag)
+        {
+            printf("EDIT: w/8=-1, s/2=+1, d/6=+10, a/4=done\r\n");
+        }
+        else
+        {
+            printf("SELECT: w/s move, d enter edit, a back\r\n");
+        }
+    }
+    else
+    {
+        printf("[Unknown page]\r\n");
+    }
+
+    Serial_Menu_Print_Footer();
+}
+
+static uint8 Serial_Menu_Read_Key(void)
+{
+    uint8 buffer[16];
+    uint32 len = debug_read_ring_buffer(buffer, sizeof(buffer));
+    uint32 i;
+
+    for(i = 0; i < len; i++)
+    {
+        switch(buffer[i])
+        {
+            case 'w':
+            case 'W':
+            case '8':
+                return SERIAL_MENU_CMD_UP;
+            case 's':
+            case 'S':
+            case '2':
+                return SERIAL_MENU_CMD_DOWN;
+            case 'd':
+            case 'D':
+            case '6':
+                return SERIAL_MENU_CMD_ENTER;
+            case 'a':
+            case 'A':
+            case '4':
+                return SERIAL_MENU_CMD_BACK;
+            case 'r':
+            case 'R':
+                serial_menu_redraw_request = 1;
+                return SERIAL_MENU_CMD_NONE;
+            case 'h':
+            case 'H':
+            case '?':
+                Serial_Menu_Print_Help();
+                serial_menu_redraw_request = 1;
+                return SERIAL_MENU_CMD_NONE;
+            default:
+                break;
+        }
+    }
+
+    return SERIAL_MENU_CMD_NONE;
+}
+
+static void Serial_Menu_Redraw_If_Needed(void)
+{
+    static uint8 last_key_mode1 = 0xff;
+    static uint8 last_key_mode2 = 0xff;
+    static Mode_Choice last_main_mode = Mode_IDLE;
+    static MOTER_control_mode last_control_mode = IDLE;
+    static uint8 last_route_setting_choice = 0xff;
+    static uint8 last_cargo_flag = 0xff;
+    static int16 last_control0 = 0x7fff;
+    static int16 last_control1 = 0x7fff;
+    static int16 last_control2 = 0x7fff;
+    static uint8 last_serial_control_edit_flag = 0xff;
+
+    if(serial_menu_redraw_request
+            || last_key_mode1 != key_mode1
+            || last_key_mode2 != key_mode2
+            || last_main_mode != main_mode
+            || last_control_mode != conrtol_mode
+            || last_route_setting_choice != route_setting_choice
+            || last_cargo_flag != CarGo_Flag
+            || last_control0 != control[0]
+            || last_control1 != control[1]
+            || last_control2 != control[2]
+            || last_serial_control_edit_flag != serial_control_edit_flag)
+    {
+        serial_menu_redraw_request = 0;
+        last_key_mode1 = key_mode1;
+        last_key_mode2 = key_mode2;
+        last_main_mode = main_mode;
+        last_control_mode = conrtol_mode;
+        last_route_setting_choice = route_setting_choice;
+        last_cargo_flag = CarGo_Flag;
+        last_control0 = control[0];
+        last_control1 = control[1];
+        last_control2 = control[2];
+        last_serial_control_edit_flag = serial_control_edit_flag;
+        Serial_Menu_Print_Page();
+    }
+}
+
 /**
  * 函数说明：Display_Init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
  * 所属模块：IPS200 菜单模块，决定上电后进入记录、科目一自动驾驶、RackTest 等哪个主模式。
@@ -101,12 +341,18 @@ void Display_Init(void)
  */
 void Menu_Contral(void)
 {
+    uint8 serial_key_value = 0;
+
     while(1)
     {
+        key_value = Key_Get();
+        serial_key_value = Serial_Menu_Read_Key();
+        if(serial_key_value != SERIAL_MENU_CMD_NONE)
+        {
+            key_value = serial_key_value;
+        }
 
-
-        key_value = Key_Get();                                          //按键采集
-        if(key_mode2 == 1)          Menu_Main();              //界面选择配置
+        if(key_mode2 == 1)          Menu_Main();
         else if(key_mode2 == 2)  Menu_1();
         else if(key_mode2 == 3)  Menu_Parameter();
         else if(key_mode2 == 4)  Menu_Mode_Choice();
@@ -115,6 +361,8 @@ void Menu_Contral(void)
         else if(key_mode2 == 7)  Show_Route();
         else if(key_mode2 == 8) Menu_PID_P();
         else if(key_mode2 == 9) Menu_Control_P();
+
+        Serial_Menu_Redraw_If_Needed();
 
         if(CarGo_Flag == 1){ips200_clear();break;}         //发车指令
 
@@ -211,11 +459,19 @@ void Menu_Show_Route(void)
  */
 void Show_Route(void)
 {
+    uint8 serial_key_value = 0;
 
     Guandao_Points_Show(&INS);
+    serial_menu_redraw_request = 1;
+    Serial_Menu_Redraw_If_Needed();
     while(1){
-        key_value = Key_Get();   //按键采集
-        if(key_value == 4){key_mode2 =6;ips200_clear();break;}
+        key_value = Key_Get();
+        serial_key_value = Serial_Menu_Read_Key();
+        if(serial_key_value != SERIAL_MENU_CMD_NONE)
+        {
+            key_value = serial_key_value;
+        }
+        if(key_value == 4){key_mode2 =6;ips200_clear();serial_menu_redraw_request = 1;break;}
     }
 
 }
@@ -249,6 +505,7 @@ void Menu_Recode_Points(void)
         {
             case 2:
                 route_setting_choice = 0;
+                guandao_record_session_reset();
                 break;
             case 3:
                 route_setting_choice = 1;
@@ -419,6 +676,9 @@ void Menu_Control_P(void)
 {
     static uint8 edit_flag = 0;
     int16 *target;
+    uint8 value_changed = 0;
+
+    serial_control_edit_flag = edit_flag;
 
     ips200_show_string( X(10) ,Y(0) ,"Control_P");
     ips200_show_string( X(3) ,Y(2) ,"Base_Speed");
@@ -440,17 +700,29 @@ void Menu_Control_P(void)
         key_mode1 =(key_mode1 > 4) ? 2  : key_mode1;
         key_mode1 =(key_mode1 < 2) ? 4  : key_mode1;
 
-        if(key_value == 3){edit_flag = 1; ips200_clear();}
+        if(key_value == 3)
+        {
+            edit_flag = 1;
+            serial_control_edit_flag = edit_flag;
+            serial_menu_redraw_request = 1;
+            ips200_clear();
+        }
         if(key_value == 4){key_mode2 = 3;ips200_clear();}
     }
     else
     {
         target = &control[key_mode1 - 2];
 
-        if(key_value == 1)*target += 1;
-        else if(key_value == 2)*target -= 1;
-        else if(key_value == 3)*target += 10;
-        else if(key_value == 4){edit_flag = 0; ips200_clear();}
+        if(key_value == 1){*target += 1; value_changed = 1;}
+        else if(key_value == 2){*target -= 1; value_changed = 1;}
+        else if(key_value == 3){*target += 10; value_changed = 1;}
+        else if(key_value == 4)
+        {
+            edit_flag = 0;
+            serial_control_edit_flag = edit_flag;
+            serial_menu_redraw_request = 1;
+            ips200_clear();
+        }
 
         if(key_mode1 == 2)
         {
@@ -467,7 +739,17 @@ void Menu_Control_P(void)
             if(control[2] < 1) control[2] = 1;
             if(control[2] > 20) control[2] = 20;
         }
+
+        if(value_changed)
+        {
+            base_speed = (float)control[0];
+            daoche_speed = (float)control[1];
+            preview_spets = control[2];
+            serial_menu_redraw_request = 1;
+        }
     }
+
+    serial_control_edit_flag = edit_flag;
 }
 
 //

@@ -34,6 +34,7 @@
 
 #include "zf_common_headfile.h"
 #include "rear_motor/rear_motor.h"
+#include "rear_motor/rear_odometry_buffer.h"
 
 /* ---- 模块内部状态 ---- */
 static float  target_mps      = 0.0f;
@@ -42,6 +43,7 @@ static int16  current_pwm     = 0;
 static int16  encoder_10ms    = 0;
 static int32  encoder_100ms   = 0;
 static int32  encoder_100ms_last = 0;
+static rear_odometry_buffer_t odometry_buffer;
 static volatile uint32 encoder_sample_count = 0;
 static uint32 last_encoder_sample_count = 0;
 static uint8  encoder_div = 0;
@@ -65,6 +67,9 @@ static int    last_pwm    = 0;
  */
 static void rear_motor_set_pwm(int16 pwm)
 {
+    extern float out_v_l;
+    extern float out_v_r;
+    extern MOTER_control_mode conrtol_mode;
     int diff = pwm - last_pwm;
     if(diff > REAR_PWM_RATE_LIMIT)  diff = REAR_PWM_RATE_LIMIT;
     if(diff < -REAR_PWM_RATE_LIMIT) diff = -REAR_PWM_RATE_LIMIT;
@@ -75,18 +80,43 @@ static void rear_motor_set_pwm(int16 pwm)
 
     current_pwm = last_pwm;
 
-    if(current_pwm >= 0)
+    int16 pwm_l = current_pwm;
+    int16 pwm_r = current_pwm;
+
+    // Torque Vectoring: apply differential feedforward PWM based on target speeds
+    if (conrtol_mode == GUANDAO)
     {
-        pwm_set_duty(PWM_L,  current_pwm);
+        float diff_val = out_v_l - out_v_r;
+        int16 diff_pwm = (int16)(diff_val * REAR_DIFF_PWM_GAIN);
+        if (diff_pwm > 1500) diff_pwm = 1500;
+        if (diff_pwm < -1500) diff_pwm = -1500;
+        pwm_l = current_pwm + diff_pwm;
+        pwm_r = current_pwm - diff_pwm;
+    }
+
+    if(pwm_l > REAR_PWM_HARD_LIMIT)  pwm_l = REAR_PWM_HARD_LIMIT;
+    if(pwm_l < -REAR_PWM_HARD_LIMIT) pwm_l = -REAR_PWM_HARD_LIMIT;
+    if(pwm_r > REAR_PWM_HARD_LIMIT)  pwm_r = REAR_PWM_HARD_LIMIT;
+    if(pwm_r < -REAR_PWM_HARD_LIMIT) pwm_r = -REAR_PWM_HARD_LIMIT;
+
+    if(pwm_l >= 0)
+    {
+        pwm_set_duty(PWM_L,  pwm_l);
         gpio_set_level(MOTOR_GPIO_L, 1);
-        pwm_set_duty(PWM_R,  current_pwm);
+    }
+    else
+    {
+        pwm_set_duty(PWM_L,  -pwm_l);
+        gpio_set_level(MOTOR_GPIO_L, 0);
+    }
+    if(pwm_r >= 0)
+    {
+        pwm_set_duty(PWM_R,  pwm_r);
         gpio_set_level(MOTOR_GPIO_R, 1);
     }
     else
     {
-        pwm_set_duty(PWM_L,  -current_pwm);
-        gpio_set_level(MOTOR_GPIO_L, 0);
-        pwm_set_duty(PWM_R,  -current_pwm);
+        pwm_set_duty(PWM_R,  -pwm_r);
         gpio_set_level(MOTOR_GPIO_R, 0);
     }
 }
@@ -114,6 +144,7 @@ void rear_motor_init(void)
     encoder_10ms  = 0;
     encoder_100ms = 0;
     encoder_100ms_last = 0;
+    rear_odometry_buffer_init(&odometry_buffer);
     encoder_sample_count = 0;
     last_encoder_sample_count = 0;
     encoder_div = 0;
@@ -143,8 +174,10 @@ void rear_motor_stop(void)
     encoder_100ms_last = 0;
     encoder_div = 0;
     encoder_10ms = 0;
-    last_encoder_count = encoder_get_count(TIM2_ENCODER);
-    encoder_first_read = 0;
+    /* Keep the fixed 10 ms sampler baseline intact. Record mode can call
+     * rear_motor_stop() every main-loop iteration while the car is pushed;
+     * resetting last_encoder_count here would erase odometry before the ISR
+     * can accumulate it. */
 
     pwm_set_duty(PWM_L, 0);
     pwm_set_duty(PWM_R, 0);
@@ -189,6 +222,7 @@ void rear_motor_set_target_mps(float mps)
 void rear_motor_encoder_update_10ms(void)
 {
     int16 current_count = encoder_get_count(TIM2_ENCODER);
+    int32 raw_encoder_delta = 0;
 
     if(encoder_first_read)
     {
@@ -198,11 +232,13 @@ void rear_motor_encoder_update_10ms(void)
     }
     else
     {
-        encoder_10ms = (int16)calculate_delta(current_count, last_encoder_count);
-        if(encoder_10ms > REAR_ENCODER_DELTA_ABS_MAX || encoder_10ms < -REAR_ENCODER_DELTA_ABS_MAX)
-        {
-            encoder_10ms = 0;
-        }
+        raw_encoder_delta = (int32)REAR_ENCODER_FEEDBACK_DIRECTION
+                * (int32)calculate_delta(current_count, last_encoder_count);
+        rear_odometry_buffer_add(&odometry_buffer, raw_encoder_delta,
+                REAR_ENCODER_DELTA_ABS_MAX);
+        encoder_10ms = (raw_encoder_delta > REAR_ENCODER_DELTA_ABS_MAX
+                || raw_encoder_delta < -REAR_ENCODER_DELTA_ABS_MAX)
+                ? 0 : (int16)raw_encoder_delta;
         last_encoder_count = current_count;
     }
 
@@ -227,7 +263,6 @@ void rear_motor_pid_update_100ms(void)
     }
 
     last_encoder_sample_count = encoder_sample_count;
-    actual_mps = (float)((int32)encoder_10ms * 10) / REAR_EFFECTIVE_PPR * REAR_WHEEL_CIRCUM_M / 0.1f;
     encoder_100ms += (int32)encoder_10ms;
     encoder_div++;
 
@@ -238,6 +273,7 @@ void rear_motor_pid_update_100ms(void)
 
     encoder_div = 0;
     encoder_100ms_last = encoder_100ms;
+    actual_mps = (float)encoder_100ms * REAR_DISTANCE_PER_PULSE_M * REAR_SPEED_CALIBRATION_FACTOR / 0.1f;
 
     if(target_mps == 0.0f)
     {
@@ -246,7 +282,7 @@ void rear_motor_pid_update_100ms(void)
         return;
     }
 
-    float target_pulses = target_mps * REAR_EFFECTIVE_PPR / REAR_WHEEL_CIRCUM_M * 0.1f;
+    float target_pulses = target_mps * 0.1f / REAR_DISTANCE_PER_PULSE_M;
     float error = target_pulses - (float)encoder_100ms;
 
     if(error < REAR_INTEGRAL_THRESHOLD && error > -REAR_INTEGRAL_THRESHOLD)
@@ -262,7 +298,11 @@ void rear_motor_pid_update_100ms(void)
     float ff     = target_pulses * REAR_FF_GAIN;
     float pid    = REAR_KP * error + REAR_KI * integral + REAR_KD * derivative;
     float pwm_f  = ff + pid;
-    if(target_mps < -0.01f && pwm_f > -(float)REAR_REVERSE_PWM_MIN)
+    // 最小反向 PWM 只用于静止起步克服摩擦。
+    // 车辆已经在倒退时必须允许 PID 减小反向输出、甚至短暂正向制动，
+    // 否则低速倒车目标也会被强制保持在 -1800，造成持续超速。
+    if(target_mps < -0.01f && actual_mps > -0.05f
+            && pwm_f < 0.0f && pwm_f > -(float)REAR_REVERSE_PWM_MIN)
     {
         pwm_f = -(float)REAR_REVERSE_PWM_MIN;
     }
@@ -322,3 +362,53 @@ int16  rear_motor_get_encoder_10ms(void)    { return encoder_10ms; }
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 int32  rear_motor_get_encoder_100ms(void)   { return encoder_100ms_last; }
+
+int32 rear_motor_take_odometry_pulses(void)
+{
+    uint32 interrupt_state = interrupt_global_disable();
+    int32 pulses = (int32)rear_odometry_buffer_take(&odometry_buffer);
+    interrupt_global_enable(interrupt_state);
+    return pulses;
+}
+
+int32 rear_motor_get_odometry_pending_pulses(void)
+{
+    return (int32)odometry_buffer.pending_pulses;
+}
+
+int32 rear_motor_get_odometry_last_sample(void)
+{
+    return (int32)odometry_buffer.last_sample;
+}
+
+uint32 rear_motor_get_odometry_rejected_samples(void)
+{
+    return (uint32)odometry_buffer.rejected_samples;
+}
+
+int32 rear_motor_get_odometry_rejected_pulses(void)
+{
+    return (int32)odometry_buffer.rejected_pulses;
+}
+
+int32 rear_motor_get_odometry_max_abs_sample(void)
+{
+    return (int32)odometry_buffer.max_abs_sample;
+}
+
+int32  rear_motor_get_total_encoder_pulses(void)
+{
+    return (int32)odometry_buffer.total_pulses;
+}
+
+float  rear_motor_get_total_distance_m(void)
+{
+    return (float)odometry_buffer.total_pulses * REAR_DISTANCE_PER_PULSE_M;
+}
+
+void   rear_motor_clear_odometer(void)
+{
+    uint32 interrupt_state = interrupt_global_disable();
+    rear_odometry_buffer_init(&odometry_buffer);
+    interrupt_global_enable(interrupt_state);
+}

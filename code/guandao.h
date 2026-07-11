@@ -34,8 +34,8 @@
 
 // ============================== 科目一惯导参数 ==============================
 // ONE_TICK_DISTANCE：后轮编码器每个计数对应的车辆前进距离，单位 m。
-// 当前只接左后轮编码器，左右轮里程都复用同一反馈，所以这个值直接影响记录距离和自动驾驶里程。
-#define ONE_TICK_DISTANCE                      0.000378f
+// 左右后轮编码器的脉冲距离标定值，直接影响记录距离、自动驾驶里程和打滑检测。
+#define ONE_TICK_DISTANCE                      0.000473f
 #define MAX_LENGTH_INDEX                       400        // 单条路线最多保存点数，Flash 写入也按这个上限组织
 #define MAX_GPS_RECODE                         100        // GPS 辅助校验点数量上限
 #define M_PI                                   3.14159265358979323846f
@@ -148,6 +148,11 @@ extern float guandao_debug_distance;             // 自动驾驶调试：当前�
 extern float guandao_debug_angle_diff;           // 自动驾驶调试：车头方向与目标点方向夹角
 extern float guandao_debug_dist_final;           // 自动驾驶调试：当前位置到终点距离
 extern uint8 guandao_debug_stop_reason;          // 自动驾驶调试：0正常，1空路线，2到点切换，4到终点
+extern uint8 guandao_debug_approach_active;       // 第一停车点末段进场控制是否接管
+extern uint8 guandao_debug_entry_gate;            // 是否已经越过第一停车点的入口线
+extern float guandao_debug_entry_long;            // 相对入口线纵向位置，负值表示尚未到线
+extern float guandao_debug_entry_lat;             // 相对入口路线横向误差
+extern float guandao_debug_entry_yaw;             // 当前航向相对入口方向误差
 // ============================== 函数接口 ==============================
 // 记录流程：guandao_recode() -> update_state() -> recode_waypoint()。
 // 自动驾驶：portion_1()/guandao_trace() -> pursuit_contral_mode() -> out_v_l/out_v_r/out_servo。
@@ -160,6 +165,12 @@ extern uint8 guandao_debug_stop_reason;          // 自动驾驶调试：0正常
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
+extern int16 guandao_debug_steer_preview;
+extern int16 guandao_debug_curve_preview;
+extern float guandao_debug_upcoming_turn;
+extern float guandao_debug_steer_raw;
+extern float guandao_debug_steer_limited;
+extern float guandao_debug_steer_final;
 void guandao_state_init(guandao_state * e);
 /**
  * 接口说明：guandao_chain_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
@@ -293,6 +304,7 @@ void pursuit_midhandle(guandao_state * state ,state_t * current_state , int inde
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void guandao_recode(guandao_state * state);
+void guandao_record_session_reset(void);
 /**
  * 接口说明：guandao_trace()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
  * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。
@@ -313,6 +325,17 @@ void guandao_trace(guandao_state * state);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void portion_1(void);                         // 科目一完整自动驾驶入口，按 INS 路线追踪到停车点/终点
+uint8 guandao_reverse_debug_state(void);
+uint8 guandao_reverse_debug_plan_ready(void);
+int16 guandao_reverse_debug_route_index(void);
+int16 guandao_reverse_debug_route_count(void);
+float guandao_reverse_debug_target_distance(void);
+float guandao_reverse_debug_target_yaw_error(void);
+uint8 guandao_park_gps_debug_ready(void);
+uint8 guandao_park_gps_debug_count(void);
+int16 guandao_park_gps_debug_reference(void);
+float guandao_park_gps_debug_offset_x(void);
+float guandao_park_gps_debug_offset_y(void);
 /**
  * 接口说明：portion_1_reset()。清零内部状态和控制输出，用于重新进入测试/自动驾驶前恢复初始状态。
  * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。

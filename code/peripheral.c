@@ -3,12 +3,12 @@
  *
  * 模块职责：
  * 1. Init_All() 初始化屏幕、按键、蜂鸣器、编码器、电机、IMU、GPS、路线结构。
- * 2. Encoder_Get() 读取后轮编码器，目前左右反馈共用左编码器。
+ * 2. Encoder_Get() 分别读取左右后轮编码器，用于里程和打滑判断。
  * 3. Moter_Set()/VeerMoter_Set() 输出旧电机 PWM。
  * 4. Rack_Test_Run() 提供机架测试页面。
  *
  * 硬件注意：
- * - 后轮编码器当前使用 TIM2：P33_7/P33_6。
+ * - 左后轮编码器使用 TIM2：P33_7/P33_6；右后轮使用 TIM5：P10_3/P10_1。
  * - 蜂鸣器为无源蜂鸣器，Buzzer_check() 会输出约 2kHz 方波。
  * - 如果 Enc 没数据，优先查 P33_7/P33_6 是否被遥控/摄像头/其他外设占用。
  */
@@ -17,7 +17,7 @@
  * 主函数/科目一调用链：
  * 1. core0_main() 首先调用 Init_All()，Init_All() 集中初始化屏幕、按键、蜂鸣器、编码器、电机、IMU、GPS 和惯导状态。
  * 2. CCU61_CH1 中断周期调用 Key_Scan()、IMU_GetValues()；CCU61_CH0 中断周期调用转向控制、GPS 解析和后轮编码器采样。
- * 3. 科目一记录模式通过 Encoder_Get(&guandao_ecd) 获取后轮里程；当前左右反馈共用左后轮编码器。
+ * 3. 科目一固定10ms采样由 rear_motor 模块负责；Encoder_Get() 仅保留给 RackTest/旧兼容入口。
  * 4. Rack_Test_Run() 是架上调试入口，用来分别验证前轮转向、后轮速度和 IMU 直线保持，避免一上来就跑完整科目一。
  */
 
@@ -39,6 +39,7 @@ Encoder_t Speed_ecd;
 Encoder_t guandao_ecd;
 Encoder_t Steer_ecd;
 #define ENCODER_DELTA_ABS_MAX       (200)
+#define GUANDAO_ENCODER_DIRECTION   (-1)
 uint8 rack_test_stage = 0;
 int16 rack_test_speed_target = 0;
 int32 rack_test_steer_target = 0;
@@ -323,7 +324,7 @@ void Encoder_count_init(Encoder_t *count)
  */
 void Encoder_Init(void)
 {
-    encoder_quad_init(ENCODER_QUADDEC, ENCODER_QUADDEC_A, ENCODER_QUADDEC_B);
+    encoder_dir_init(ENCODER_LEFT, ENCODER_LEFT_A, ENCODER_LEFT_B);
 
 }
 
@@ -340,23 +341,33 @@ void Encoder_Init(void)
 void Encoder_Get(Encoder_t *count)
 {
 
-    count->left_counter = l_ecdcounter();                  // 获取左编码器计数
-    int32 raw_delta = calculate_delta(count->left_counter,count ->last_ecdcount_l);
-    if(raw_delta > ENCODER_DELTA_ABS_MAX || raw_delta < -ENCODER_DELTA_ABS_MAX)
+    count->left_counter = (int16)(GUANDAO_ENCODER_DIRECTION * l_ecdcounter());                  // 获取左编码器计数
+    /* 右编码器实测存在方向和倍率不稳定，科目一暂时只信任左轮。
+     * 将左轮计数镜像为右轮反馈，使位姿积分仍按后轴中心接口运行。 */
+    count->right_counter = count->left_counter;
+    int32 raw_delta_l = calculate_delta(count->left_counter, count->last_ecdcount_l);
+    int32 raw_delta_r = calculate_delta(count->right_counter, count->last_ecdcount_r);
+    if(raw_delta_l > ENCODER_DELTA_ABS_MAX || raw_delta_l < -ENCODER_DELTA_ABS_MAX)
     {
-        raw_delta = 0;
         count->delta_l = 0;
     }
     else
     {
-        count->delta_l = (count->delta_l * 3 + raw_delta) / 4;
+        count->delta_l = raw_delta_l;  // 直接赋值，去掉整数低通滤波
+        // 原 (delta*3+raw)/4 在亚毫秒主循环下 raw=0或1 时因整数截断使 delta 长期为 0，位置积分丢失
     }
-    count->right_counter  = count->left_counter;           // 当前只接左编码器，左右后轮共用速度反馈
-    count->delta_r = count->delta_l;
+    if(raw_delta_r > ENCODER_DELTA_ABS_MAX || raw_delta_r < -ENCODER_DELTA_ABS_MAX)
+    {
+        count->delta_r = 0;
+    }
+    else
+    {
+        count->delta_r = raw_delta_r;  // 直接赋值，去掉整数低通滤波
+    }
 //    ips200_show_int(X(1),  Y(8),count->delta_l ,5);
 //    ips200_show_int(X(10),  Y(8),count->delta_r ,5);
-    count ->last_ecdcount_l = count->left_counter;
-    count-> last_ecdcount_r = count->right_counter ;
+    count->last_ecdcount_l = count->left_counter;
+    count->last_ecdcount_r = count->right_counter;
 //    encoder_clear_count(ENCODER_QUADDEC);                                       // 清空编码器计数
 
 }
@@ -529,6 +540,166 @@ static void Rack_Test_Reset_Targets(void)
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
+
+#define RACK_SERIAL_CMD_NONE       (0u)
+#define RACK_SERIAL_CMD_NEXT       (1u)
+#define RACK_SERIAL_CMD_PREV       (2u)
+#define RACK_SERIAL_CMD_INC        (3u)
+#define RACK_SERIAL_CMD_DEC        (4u)
+#define RACK_SERIAL_CMD_REDRAW     (5u)
+#define RACK_SERIAL_CMD_HELP       (6u)
+#define RACK_SERIAL_PERIOD_MS      (200u)
+
+static long Rack_Serial_Scale(float value, float scale)
+{
+    if(value >= 0.0f)
+    {
+        return (long)(value * scale + 0.5f);
+    }
+    return (long)(value * scale - 0.5f);
+}
+
+static void Rack_Test_Print_Serial_Help(void)
+{
+    printf("\r\nRackTest serial keys:\r\n");
+    printf("  s/2/n: next stage\r\n");
+    printf("  w/8/p: prev stage\r\n");
+    printf("  d/6/+: increase target\r\n");
+    printf("  a/4/-: decrease target\r\n");
+    printf("  r: redraw\r\n");
+    printf("  h: help\r\n");
+}
+
+static uint8 Rack_Test_Read_Serial_Key(void)
+{
+    uint8 buffer[16];
+    uint32 len = debug_read_ring_buffer(buffer, sizeof(buffer));
+    uint32 i;
+
+    for(i = 0; i < len; i++)
+    {
+        switch(buffer[i])
+        {
+            case 's':
+            case 'S':
+            case '2':
+            case 'n':
+            case 'N':
+                return RACK_SERIAL_CMD_NEXT;
+            case 'w':
+            case 'W':
+            case '8':
+            case 'p':
+            case 'P':
+                return RACK_SERIAL_CMD_PREV;
+            case 'd':
+            case 'D':
+            case '6':
+            case '+':
+            case '=':
+                return RACK_SERIAL_CMD_INC;
+            case 'a':
+            case 'A':
+            case '4':
+            case '-':
+            case '_':
+                return RACK_SERIAL_CMD_DEC;
+            case 'r':
+            case 'R':
+                return RACK_SERIAL_CMD_REDRAW;
+            case 'h':
+            case 'H':
+            case '?':
+                return RACK_SERIAL_CMD_HELP;
+            default:
+                break;
+        }
+    }
+
+    return RACK_SERIAL_CMD_NONE;
+}
+
+static void Rack_Test_Print_Serial(uint8 force)
+{
+    static uint32 last_ms = 0;
+    static uint8 last_stage = 0xff;
+    static int16 last_speed_target = 0x7fff;
+    static int32 last_steer_target = 0x7fffffff;
+    uint32 now_ms = system_getval_ms();
+    static char line[320];
+    int len;
+
+    if(!force
+            && rack_test_stage == last_stage
+            && rack_test_speed_target == last_speed_target
+            && rack_test_steer_target == last_steer_target
+            && (uint32)(now_ms - last_ms) < RACK_SERIAL_PERIOD_MS)
+    {
+        return;
+    }
+
+    last_ms = now_ms;
+    last_stage = rack_test_stage;
+    last_speed_target = rack_test_speed_target;
+    last_steer_target = rack_test_steer_target;
+
+    len = sprintf(line,
+                  "RACK,t=%lu,stage=%u,yaw10=%ld,encL=%ld,encR=%ld,steerT=%ld,steerA=%ld,steerO=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld,tgtYaw10=%ld,yawErr10=%ld,straightSteer10=%ld\r\n",
+                  (unsigned long)now_ms,
+                  rack_test_stage,
+                  Rack_Serial_Scale(Yaw_1, 10.0f),
+                  (long)Speed_ecd.left_counter,
+                  (long)Speed_ecd.right_counter,
+                  (long)rack_test_steer_target,
+                  (long)angle,
+                  (long)angle_speed,
+                  Rack_Serial_Scale(rear_motor_get_target_mps(), 100.0f),
+                  Rack_Serial_Scale(rear_motor_get_speed_mps(), 100.0f),
+                  rear_motor_get_pwm(),
+                  rear_motor_get_encoder_10ms(),
+                  (long)rear_motor_get_encoder_100ms(),
+                  Rack_Serial_Scale(rack_straight_target_yaw, 10.0f),
+                  Rack_Serial_Scale(rack_straight_yaw_error, 10.0f),
+                  Rack_Serial_Scale(rack_straight_steer_target, 10.0f));
+    if(len > 0)
+    {
+        printf("%s", line);
+    }
+}
+
+static void Rack_Test_Handle_Serial_Command(uint8 command)
+{
+    if(command == RACK_SERIAL_CMD_NEXT)
+    {
+        rack_test_stage++;
+        if(rack_test_stage > 3) rack_test_stage = 0;
+        Rack_Test_Reset_Targets();
+    }
+    else if(command == RACK_SERIAL_CMD_PREV)
+    {
+        if(rack_test_stage == 0) rack_test_stage = 3;
+        else rack_test_stage--;
+        Rack_Test_Reset_Targets();
+    }
+    else if(command == RACK_SERIAL_CMD_INC)
+    {
+        if(rack_test_stage == 1)
+            rack_test_steer_target += 10;
+        else if(rack_test_stage == 2 || rack_test_stage == 3)
+            rear_motor_set_target_mps(rear_motor_get_target_mps() + 0.5f);
+    }
+    else if(command == RACK_SERIAL_CMD_DEC)
+    {
+        if(rack_test_stage == 1)
+            rack_test_steer_target -= 10;
+        else if(rack_test_stage == 2 || rack_test_stage == 3)
+            rear_motor_set_target_mps(rear_motor_get_target_mps() - 0.5f);
+    }
+    else if(command == RACK_SERIAL_CMD_HELP)
+    {
+        Rack_Test_Print_Serial_Help();
+    }
+}
 void Rack_Straight_Reset(void)
 {
     rack_straight_target_yaw = Yaw_1;
@@ -572,6 +743,14 @@ void Rack_Straight_Update(void)
  */
 void Rack_Test_Run(void)
 {
+    uint8 serial_command = RACK_SERIAL_CMD_NONE;
+
+    // Rack Test 不经过 guandao 的 update_state()，需要在这里主动刷新双编码器。
+    // 传感器页显示累计原始计数，避免主循环高频读取时瞬时增量很快滤波到 0。
+    Encoder_Get(&Speed_ecd);
+    serial_command = Rack_Test_Read_Serial_Key();
+    Rack_Test_Handle_Serial_Command(serial_command);
+
     if(key1_flag == 1)
     {
         key1_flag = 0;
@@ -614,8 +793,8 @@ void Rack_Test_Run(void)
     {
         /* Stage 0: 传感器显示, Stage 1: 前轮转向测试 */
         ips200_show_string(X(1), Y(3), "Yaw");         ips200_show_float(X(10), Y(3), Yaw_1, 4, 2);
-        ips200_show_string(X(1), Y(4), "EncL");        ips200_show_int(X(10), Y(4), Speed_ecd.delta_l, 5);
-        ips200_show_string(X(1), Y(5), "EncR");        ips200_show_int(X(10), Y(5), Speed_ecd.delta_r, 5);
+        ips200_show_string(X(1), Y(4), "EncL");        ips200_show_int(X(10), Y(4), Speed_ecd.left_counter, 6);
+        ips200_show_string(X(1), Y(5), "EncR");        ips200_show_int(X(10), Y(5), Speed_ecd.right_counter, 6);
         ips200_show_string(X(1), Y(6), "SteerT");      ips200_show_int(X(10), Y(6), rack_test_steer_target, 5);
         ips200_show_string(X(1), Y(7), "SteerA");      ips200_show_int(X(10), Y(7), angle, 5);
         ips200_show_string(X(1), Y(8), "SteerO");      ips200_show_int(X(10), Y(8), angle_speed, 5);
@@ -642,6 +821,8 @@ void Rack_Test_Run(void)
         ips200_show_string(X(1), Y(7), "Steer");      ips200_show_float(X(10), Y(7), rack_straight_steer_target, 3, 2);
         ips200_show_string(X(1), Y(8), "PWM");        ips200_show_int(X(10), Y(8), rear_motor_get_pwm(), 5);
     }
+
+    Rack_Test_Print_Serial(serial_command == RACK_SERIAL_CMD_REDRAW || serial_command == RACK_SERIAL_CMD_HELP);
 }
 /**
  * 函数说明：GPS_Init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
