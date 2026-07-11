@@ -319,32 +319,22 @@ int core0_main(void)
 {
     clock_init();                   // 获取时钟频率<务必保留>
     debug_init();                   // 初始化默认调试串口
-    uart_write_string(DEBUG_UART_INDEX, "BOOT,debug_ok\r\n");
     // 此处编写用户代码 例如外设初始化代码等
 
-    uart_write_string(DEBUG_UART_INDEX, "BOOT,init_all_begin\r\n");
     Init_All();                         // 初始化屏幕、按键、蜂鸣器、编码器、电机、IMU、GPS、路径结构等外设
     rear_motor_init();                  // 初始化后轮独立速度闭环模块，后续科目一直接使用这一套 PID/PWM 输出
-    uart_write_string(DEBUG_UART_INDEX, "BOOT,rear_motor_ok\r\n");
     uart_receiver_init();               // SBUS receiver: UART2, TX placeholder P10_5, RX P10_6, 100000 baud
-    uart_write_string(DEBUG_UART_INDEX, "BOOT,receiver_ok\r\n");
     // 前轮转向改为 TIM4 磁编码器闭环，不再初始化 SPI 绝对值编码器
 //    hotRc_Control_init();                                                              // RackTest禁用遥控器，避免占用P33_6/P33_7编码器
    pit_ms_init(CCU61_CH1, 1);           // 1ms 周期任务：按键扫描、IMU 解算、旧速度控制入口
    pit_ms_init(CCU61_CH0, 1);           // 1ms 周期任务：转向电机控制、GPS 解析节拍、后轮编码器采样
-    uart_write_string(DEBUG_UART_INDEX, "BOOT,pit_ok\r\n");
 
 
 
-    uart_write_string(DEBUG_UART_INDEX, "BOOT,cpu_wait_begin\r\n");
     cpu_wait_event_ready();                                                          // 等待所有核心初始化完毕
-    uart_write_string(DEBUG_UART_INDEX, "BOOT,cpu_wait_ok\r\n");
 
-    uart_write_string(DEBUG_UART_INDEX, "BOOT,flash_begin\r\n");
     Flash_Main_Read();                                                                  // 上电后读取 PID、路线点、GPS 辅助点等 Flash 数据
-    uart_write_string(DEBUG_UART_INDEX, "BOOT,flash_ok\r\n");
 
-    uart_write_string(DEBUG_UART_INDEX, "BOOT,menu_begin\r\n");
     Menu_Contral();                                                                      // 菜单结束后 main_mode/conrtol_mode 已确定，主循环按模式执行
 
     Flash_Write_pid();                                                               //Flash写入
