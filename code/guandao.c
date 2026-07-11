@@ -157,6 +157,12 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_SHARP_TURN_SPEED_RATIO 0.55f
 #define GUANDAO_HAIRPIN_TURN_ANGLE     70.0f
 #define GUANDAO_HAIRPIN_SPEED_RATIO    0.45f
+#define GUANDAO_ACCUM_TURN_SLOW_ANGLE  20.0f
+#define GUANDAO_ACCUM_TURN_MEDIUM_ANGLE 45.0f
+#define GUANDAO_ACCUM_TURN_SHARP_ANGLE 75.0f
+#define GUANDAO_ACCUM_TURN_SLOW_RATIO  0.80f
+#define GUANDAO_ACCUM_TURN_MEDIUM_RATIO 0.70f
+#define GUANDAO_ACCUM_TURN_SHARP_RATIO 0.55f
 #define GUANDAO_FRONT_TARGET_ANGLE     100.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
 #define GUANDAO_REVERSE_TARGET_DIST    0.12f
@@ -530,6 +536,26 @@ static float guandao_max_route_turn(guandao_state *state, int start_index, int l
     }
 
     return max_turn;
+}
+
+static float guandao_accumulated_route_turn(guandao_state *state, int start_index, int lookahead)
+{
+    float accumulated_turn = 0.0f;
+    int16 route_length = guandao_route_length(state);
+    int end_index = start_index + lookahead;
+
+    if(route_length < 3) return 0.0f;
+    if(start_index < 1) start_index = 1;
+    if(end_index > route_length - 2) end_index = route_length - 2;
+
+    for(int i = start_index; i <= end_index; i++)
+    {
+        float yaw_in = guandao_segment_yaw(guandao_route_point(state, i - 1), guandao_route_point(state, i));
+        float yaw_out = guandao_segment_yaw(guandao_route_point(state, i), guandao_route_point(state, i + 1));
+        accumulated_turn += fabsf(guandao_normalize_angle(yaw_out - yaw_in));
+    }
+
+    return accumulated_turn;
 }
 
 static int guandao_find_front_index(guandao_state *state, int start_index, int end_index)
@@ -1631,6 +1657,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     int16 route_length = guandao_route_length(state);
     float arrive_threshold = persuit_threshold;
     float upcoming_turn = 0.0f;
+    float max_single_turn = 0.0f;
     float dist_to_final = 0.0f;
 
     guandao_debug_stop_reason = 0;
@@ -1742,8 +1769,9 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
             if(steer_preview_steps < 4) steer_preview_steps = 4;
         }
     }
-    upcoming_turn = guandao_max_route_turn(state, state->current_point_index, 12);
-    if(upcoming_turn >= GUANDAO_SHARP_TURN_ANGLE)
+    upcoming_turn = guandao_accumulated_route_turn(state, state->current_point_index, 12);
+    max_single_turn = guandao_max_route_turn(state, state->current_point_index, 12);
+    if(max_single_turn >= GUANDAO_SHARP_TURN_ANGLE)
     {
         if(steer_preview_steps > 3) steer_preview_steps = 3;
         if(curve_preview_steps > 6) curve_preview_steps = 6;
@@ -1812,15 +1840,37 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        v_center = base_speed * curve_scale;
        if(v_center < MIN_SPEED) v_center = MIN_SPEED;
    }
-   // Restore sharp turn and hairpin turn speed caps from early June version
-   if(upcoming_turn >= GUANDAO_HAIRPIN_TURN_ANGLE)
+   // Use accumulated heading change to slow before a smooth multi-point curve.
+   if(upcoming_turn >= GUANDAO_ACCUM_TURN_SHARP_ANGLE)
+   {
+       if(v_center > base_speed * GUANDAO_ACCUM_TURN_SHARP_RATIO)
+       {
+           v_center = base_speed * GUANDAO_ACCUM_TURN_SHARP_RATIO;
+       }
+   }
+   else if(upcoming_turn >= GUANDAO_ACCUM_TURN_MEDIUM_ANGLE)
+   {
+       if(v_center > base_speed * GUANDAO_ACCUM_TURN_MEDIUM_RATIO)
+       {
+           v_center = base_speed * GUANDAO_ACCUM_TURN_MEDIUM_RATIO;
+       }
+   }
+   else if(upcoming_turn >= GUANDAO_ACCUM_TURN_SLOW_ANGLE)
+   {
+       if(v_center > base_speed * GUANDAO_ACCUM_TURN_SLOW_RATIO)
+       {
+           v_center = base_speed * GUANDAO_ACCUM_TURN_SLOW_RATIO;
+       }
+   }
+   // Keep the original single-point sharp-turn protection for route outliers.
+   if(max_single_turn >= GUANDAO_HAIRPIN_TURN_ANGLE)
    {
        if(v_center > base_speed * GUANDAO_HAIRPIN_SPEED_RATIO)
        {
            v_center = base_speed * GUANDAO_HAIRPIN_SPEED_RATIO;
        }
    }
-   else if(upcoming_turn >= GUANDAO_SHARP_TURN_ANGLE)
+   else if(max_single_turn >= GUANDAO_SHARP_TURN_ANGLE)
    {
        if(v_center > base_speed * GUANDAO_SHARP_TURN_SPEED_RATIO)
        {
