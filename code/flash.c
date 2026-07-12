@@ -33,13 +33,13 @@
  */
 #include "zf_common_headfile.h"
 
-float speed_pid[6]={0.5f, 1.0f, 0.0f, 0.2f, 0.4f, 3.0f};
+float speed_pid[6]={0.5f, 1.0f, 0.0f, 0.3f, 0.4f, 3.0f};
 int16 control[5] = {15, -10, 2, 0, 0};
 float kp;
 float ki;
 float kd;
 
-#define FLASH_RECODE_THRESHOLD_DEFAULT   (0.2f)
+#define FLASH_RECODE_THRESHOLD_DEFAULT   (0.3f)
 #define FLASH_RECODE_THRESHOLD_MIN       (0.05f)
 #define FLASH_RECODE_THRESHOLD_MAX       (2.0f)
 #define FLASH_PURSUIT_THRESHOLD_DEFAULT  (0.4f)
