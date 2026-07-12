@@ -49,7 +49,7 @@ extern int num;
 // guandao.c 输出的 out_v_l/out_v_r 仍沿用旧工程的速度单位。
 // 后轮新模块使用 m/s，所以这里集中做比例换算，方便后续统一调速度标定。
 #define GUANDAO_SPEED_TO_MPS    (0.1f)
-#define SERIAL_DEBUG_PERIOD_MS  (200)
+#define SERIAL_DEBUG_PERIOD_MS  (500)
 #define DISPLAY_DEBUG_PERIOD_MS (200)
 #define SYSTEM_MS_WRAP          (42950u)
 
