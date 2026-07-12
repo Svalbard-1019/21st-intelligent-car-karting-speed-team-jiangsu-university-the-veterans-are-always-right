@@ -124,6 +124,7 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_REVERSE_MIN_ROUTE_POINTS 5
 #define GUANDAO_PARK_ENTRY_DIST        0.15f
 #define GUANDAO_PARK_APPROACH_DIST     1.20f
+#define GUANDAO_PARK_APPROACH_RADIUS   1.80f
 #define GUANDAO_PARK_APPROACH_SPEED_FAST 10.0f
 #define GUANDAO_PARK_APPROACH_SPEED_MID  8.0f
 #define GUANDAO_PARK_APPROACH_SPEED_SLOW 5.0f
@@ -1379,7 +1380,8 @@ void portion_1(void)
 
             if(!portion1_approach_active
                     && INS.current_point_index >= active_route_length - 30
-                    && entry_longitudinal >= -GUANDAO_PARK_APPROACH_DIST)
+                    && entry_longitudinal >= -GUANDAO_PARK_APPROACH_DIST
+                    && guandao_debug_dist_final <= GUANDAO_PARK_APPROACH_RADIUS)
             {
                 portion1_approach_active = 1;
                 portion1_approach_steer_cmd = out_servo;

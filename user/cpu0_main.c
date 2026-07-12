@@ -250,7 +250,7 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,dt=%lu,dtMax=%lu,raw=%ld,pend=%ld,drop=%lu,dropP=%ld,maxRaw=%ld,idx=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld\r\n",
+                      "AUTO,t=%lu,dt=%lu,dtMax=%lu,raw=%ld,pend=%ld,drop=%lu,dropP=%ld,maxRaw=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld\r\n",
                       (unsigned long)now_ms,
                       (unsigned long)main_loop_last_dt_ms,
                       (unsigned long)main_loop_max_dt_ms,
@@ -260,6 +260,8 @@ static void Serial_Debug_Update(void)
                       (long)rear_motor_get_odometry_rejected_pulses(),
                       (long)rear_motor_get_odometry_max_abs_sample(),
                       INS.current_point_index,
+                      INS.length_index,
+                      guandao_debug_stop_reason,
                       (long)Serial_Debug_Scale(INS.current_state.x, 100.0f),
                       (long)Serial_Debug_Scale(INS.current_state.y, 100.0f),
                       (long)Serial_Debug_Scale(Yaw_1, 10.0f),
@@ -267,7 +269,11 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(guandao_debug_steer_final, 10.0f),
                       (long)Serial_Debug_Scale((float)angle, 10.0f),
                       (long)Serial_Debug_Scale(rear_motor_get_target_mps(), 100.0f),
-                      (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f));
+                      (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
+                      guandao_debug_approach_active,
+                      (long)Serial_Debug_Scale(guandao_debug_entry_long, 100.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_entry_lat, 100.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_entry_yaw, 10.0f));
         if(len > 0)
         {
             Serial_Debug_Write(line);
