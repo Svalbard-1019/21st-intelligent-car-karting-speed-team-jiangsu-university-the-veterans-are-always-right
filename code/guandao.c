@@ -164,6 +164,10 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_ACCUM_TURN_SLOW_RATIO  0.80f
 #define GUANDAO_ACCUM_TURN_MEDIUM_RATIO 0.70f
 #define GUANDAO_ACCUM_TURN_SHARP_RATIO 0.70f
+#define GUANDAO_FAST_STRAIGHT_SPEED     25.0f
+#define GUANDAO_FAST_STRAIGHT_TURN_MAX  15.0f
+#define GUANDAO_FAST_STRAIGHT_GAIN      0.65f
+#define GUANDAO_FAST_STRAIGHT_LIMIT     18.0f
 #define GUANDAO_FRONT_TARGET_ANGLE     100.0f
 #define GUANDAO_REVERSE_STEERING_GAIN  1.0f
 #define GUANDAO_REVERSE_TARGET_DIST    0.12f
@@ -1786,6 +1790,19 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     }
     upcoming_turn = guandao_accumulated_route_turn(state, state->current_point_index, 12);
     max_single_turn = guandao_max_route_turn(state, state->current_point_index, 12);
+    /* At 2.5 m/s and above, small route/pose errors can produce an alternating
+     * over-correction on straights. Reduce only straight-line authority; a
+     * detected bend keeps the existing gain and full steering range. */
+    if(base_speed >= GUANDAO_FAST_STRAIGHT_SPEED
+            && upcoming_turn < GUANDAO_ACCUM_TURN_SLOW_ANGLE
+            && max_single_turn < GUANDAO_FAST_STRAIGHT_TURN_MAX)
+    {
+        steering_gain *= GUANDAO_FAST_STRAIGHT_GAIN;
+        if(steering_limit > GUANDAO_FAST_STRAIGHT_LIMIT)
+        {
+            steering_limit = GUANDAO_FAST_STRAIGHT_LIMIT;
+        }
+    }
     if(max_single_turn >= GUANDAO_SHARP_TURN_ANGLE)
     {
         if(steer_preview_steps > 3) steer_preview_steps = 3;
