@@ -18,11 +18,6 @@
 #define AUTO_PARK_MIN_RADIUS (AUTO_PARK_WHEEL_BASE / tanf(AUTO_PARK_STEER_LIMIT_DEG * AUTO_PARK_PI / 180.0f))
 #define AUTO_PARK_BIG_SCORE  1000000000.0f
 
-typedef struct {
-    float x;
-    float y;
-} AutoParkPoint;
-
 static float auto_park_absf(float v)
 {
     return v < 0.0f ? -v : v;
@@ -38,6 +33,23 @@ float auto_park_normalize_deg(float angle)
     while(angle > 180.0f) angle -= 360.0f;
     while(angle < -180.0f) angle += 360.0f;
     return angle;
+}
+
+AutoParkPoint auto_park_start_translation(AutoParkPose recorded_start, AutoParkPose actual_start)
+{
+    AutoParkPoint offset = {
+        actual_start.x - recorded_start.x,
+        actual_start.y - recorded_start.y
+    };
+    return offset;
+}
+
+int auto_park_reverse_safety_stop(int terminal_crossed, int route_near_end,
+                                  float travelled, float planned_distance, float margin)
+{
+    if(terminal_crossed && route_near_end) return 1;
+    if(planned_distance > 0.0f && travelled >= planned_distance + margin) return 1;
+    return 0;
 }
 
 static AutoParkPoint auto_park_dir(float heading)

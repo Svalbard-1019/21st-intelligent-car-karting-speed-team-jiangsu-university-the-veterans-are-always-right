@@ -100,6 +100,9 @@ static int16 portion1_taught_reverse_index = 0;
 static uint8 portion1_taught_reverse_ready = 0;
 static uint32 portion1_taught_reverse_hold_ms = 0;
 static uint32 portion1_taught_reverse_steer_ms = 0;
+static float portion1_taught_reverse_path_length = 0.0f;
+static float portion1_taught_reverse_travelled = 0.0f;
+static state_t portion1_taught_reverse_last_state = {0.0f, 0.0f, 0.0f};
 static uint8 portion1_approach_active = 0;
 static float portion1_approach_steer_cmd = 0.0f;
 static uint32 portion1_approach_steer_ms = 0;
@@ -189,13 +192,13 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_TAUGHT_REVERSE_GAIN    1.40f
 #define GUANDAO_TAUGHT_REVERSE_RATE    2.0f
 #define GUANDAO_TAUGHT_REVERSE_HOLD_MS 300u
+#define GUANDAO_TAUGHT_REVERSE_OVERRUN 0.15f
 #define GUANDAO_PARK_GPS_SAMPLES        10
 #define GUANDAO_PARK_GPS_SAMPLE_MS      100u
 #define GUANDAO_PARK_GPS_MAX_ERROR      2.0f
 #define GUANDAO_PARK_GPS_MAX_DISTANCE   5.0f
-// 低速教学倒车的弯线路程明显长于起终点直线距离；实测 18 s 仍会在距目标约 0.23 m 时超时。
-// 末端另有 12 cm 位置停车保护，因此延长运行时间而不放宽停车边界。
-#define GUANDAO_TAUGHT_REVERSE_MAX_MS  34000u
+// 教学倒车另有终点截面和里程越界保护；超时只负责处理传感器或追踪状态异常。
+#define GUANDAO_TAUGHT_REVERSE_MAX_MS  15000u
 #define GUANDAO_PARK_SECOND_MIN_MS      1000u
 #define GUANDAO_PARK_SECOND_MIN_DIST    0.30f
 #define GUANDAO_PARK_SECOND_MIN_POINTS  2
@@ -699,6 +702,9 @@ static uint8 guandao_reverse_execute_plan(void)
 
 static void guandao_taught_reverse_prepare(void)
 {
+    AutoParkPose recorded_start;
+    AutoParkPose actual_start;
+    AutoParkPoint start_offset;
     int16 source_start;
     int16 search_end;
     int16 best_index;
@@ -709,6 +715,9 @@ static void guandao_taught_reverse_prepare(void)
     portion1_taught_reverse_index = 0;
     portion1_taught_reverse_hold_ms = 0;
     portion1_taught_reverse_steer_ms = 0;
+    portion1_taught_reverse_path_length = 0.0f;
+    portion1_taught_reverse_travelled = 0.0f;
+    portion1_taught_reverse_last_state = INS.current_state;
     portion1_approach_active = 0;
     portion1_approach_steer_cmd = 0.0f;
     portion1_approach_steer_ms = 0;
@@ -742,6 +751,28 @@ static void guandao_taught_reverse_prepare(void)
         }
         portion1_taught_reverse_target.x += portion1_park_gps_offset_x;
         portion1_taught_reverse_target.y += portion1_park_gps_offset_y;
+    }
+
+    /* Keep the taught parking shape, but anchor its first point to the actual reverse entry. */
+    recorded_start.x = portion1_taught_reverse_map[0].x;
+    recorded_start.y = portion1_taught_reverse_map[0].y;
+    recorded_start.heading = portion1_taught_reverse_map[0].theta;
+    actual_start.x = INS.current_state.x;
+    actual_start.y = INS.current_state.y;
+    actual_start.heading = Yaw_1;
+    start_offset = auto_park_start_translation(recorded_start, actual_start);
+    for(int16 i = 0; i < portion1_taught_reverse_length; i++)
+    {
+        portion1_taught_reverse_map[i].x += start_offset.x;
+        portion1_taught_reverse_map[i].y += start_offset.y;
+    }
+    portion1_taught_reverse_target.x += start_offset.x;
+    portion1_taught_reverse_target.y += start_offset.y;
+
+    for(int16 i = 1; i < portion1_taught_reverse_length; i++)
+    {
+        portion1_taught_reverse_path_length += get_distance(
+                portion1_taught_reverse_map[i - 1], portion1_taught_reverse_map[i]);
     }
 
     if(portion1_taught_reverse_length >= 3)
@@ -787,6 +818,10 @@ static uint8 guandao_taught_reverse_update(void)
     uint32 steer_elapsed_ms;
 
     if(!portion1_taught_reverse_ready) return 0;
+
+    portion1_taught_reverse_travelled += get_distance(
+            portion1_taught_reverse_last_state, INS.current_state);
+    portion1_taught_reverse_last_state = INS.current_state;
 
     search_end = portion1_taught_reverse_index + GUANDAO_TAUGHT_REVERSE_SEARCH;
     if(search_end >= portion1_taught_reverse_length) search_end = portion1_taught_reverse_length - 1;
@@ -875,6 +910,14 @@ static uint8 guandao_taught_reverse_update(void)
     guandao_debug_distance = get_distance(INS.current_state, target);
     guandao_debug_angle_diff = heading_error;
     guandao_debug_dist_final = final_distance;
+
+    if(auto_park_reverse_safety_stop(final_gate_passed,
+            portion1_taught_reverse_index >= portion1_taught_reverse_length - 2,
+            portion1_taught_reverse_travelled, portion1_taught_reverse_path_length,
+            GUANDAO_TAUGHT_REVERSE_OVERRUN))
+    {
+        return 1;
+    }
 
     // 障碍物附近以停车位置优先：教学路径已经走到末端且进入 12 cm 范围就结束。
     // 航向未完全收敛时继续倒车可能越过目标并撞击立柱。
@@ -1090,6 +1133,11 @@ void portion_1_reset(void)
     portion1_taught_reverse_ready = 0;
     portion1_taught_reverse_hold_ms = 0;
     portion1_taught_reverse_steer_ms = 0;
+    portion1_taught_reverse_path_length = 0.0f;
+    portion1_taught_reverse_travelled = 0.0f;
+    portion1_taught_reverse_last_state.x = 0.0f;
+    portion1_taught_reverse_last_state.y = 0.0f;
+    portion1_taught_reverse_last_state.theta = 0.0f;
     guandao_park_gps_reset();
     portion1_approach_active = 0;
     portion1_approach_steer_cmd = 0.0f;
