@@ -12,6 +12,55 @@
 `88c38d5` 及 KMS 后续已经验证过的科目三功能。这样保留 KMY 的科目一和倒车停车代码，
 同时加入 KMS 的返程能力。
 
+## KMS 昨天的两个对照版本
+
+### 版本一：dc1061c
+
+```text
+dc1061c Revert "Test master style KMS return tracking"
+```
+
+- 恢复 KMS 原来的返程追踪逻辑，撤销 master 风格追踪实验。
+- 已包含此前的路线下标保护、Start 路径诊断和非阻塞串口 Bus Error 修复。
+- 不包含最后加入的 KMY 式物理距离预瞄和平滑改进。
+- 适合作为“原KMS返程基线”对照。
+
+换电脑建立该版本的本地测试分支：
+
+```powershell
+git fetch origin
+git switch -c kms-yesterday-baseline dc1061c
+```
+
+### 版本二：88c38d5
+
+```text
+88c38d5 Align KMS return smoothing with KMY
+```
+
+- 这是当前远程 `kms` 分支的最新版本。
+- 在 `dc1061c` 基础上加入KMY式转向时间限速。
+- 按实际路线距离换算科目三预瞄，适配 `0.2m` 点距。
+- 移除追踪循环中不限频的屏幕刷新。
+- 后轮加入左右差动 PWM 前馈。
+- 适合作为“平滑KMS返程”对照。
+
+换电脑切换该版本：
+
+```powershell
+git fetch origin
+git switch kms
+git pull origin kms
+git log -1 --oneline
+```
+
+最后一条应显示 `88c38d5`。测试完两个KMS版本后，使用下面命令回到整合固件：
+
+```powershell
+git switch final
+git pull origin final
+```
+
 ## 已整合内容
 
 ### 科目一 KMY
