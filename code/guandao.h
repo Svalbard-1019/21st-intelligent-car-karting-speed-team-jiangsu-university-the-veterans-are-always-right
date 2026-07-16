@@ -36,7 +36,7 @@
 // ONE_TICK_DISTANCE：后轮编码器每个计数对应的车辆前进距离，单位 m。
 // 左右后轮编码器的脉冲距离标定值，直接影响记录距离、自动驾驶里程和打滑检测。
 #define ONE_TICK_DISTANCE                      0.000473f
-#define MAX_LENGTH_INDEX                       400        // 单条路线最多保存点数，Flash 写入也按这个上限组织
+#define MAX_LENGTH_INDEX                       800        // 整合固件路线容量；Flash 使用两个 EEPROM 页保存
 #define MAX_GPS_RECODE                         100        // GPS 辅助校验点数量上限
 #define M_PI                                   3.14159265358979323846f
 #define WHEEL_BASE                             0.724f     // 前后轴距，单位 m，用于纯追踪转角计算
@@ -95,7 +95,6 @@ typedef struct {
 typedef struct guandao{
         state_t current_state;              // 当前实时位姿，由 update_state() 按编码器和 IMU 更新
         state_t recode_map[MAX_LENGTH_INDEX]; // 推车记录得到的路线点数组
-        state_t planned_map[MAX_LENGTH_INDEX]; // 自动驾驶前由 recode_map 生成的平滑路线点数组
         GPS_state recode_gpsmap[MAX_GPS_RECODE]; // GPS 辅助点，按 KEY2 记录，用于远距离校验/修正
 
         int16 length_index;              // 已记录路线点数量，也是自动驾驶的目标路线长度

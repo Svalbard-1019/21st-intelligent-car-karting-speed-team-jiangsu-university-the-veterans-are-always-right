@@ -49,13 +49,17 @@ extern int num;
 // guandao.c 输出的 out_v_l/out_v_r 仍沿用旧工程的速度单位。
 // 后轮新模块使用 m/s，所以这里集中做比例换算，方便后续统一调速度标定。
 #define GUANDAO_SPEED_TO_MPS    (0.1f)
-#define SERIAL_DEBUG_PERIOD_MS  (500)
+#define SERIAL_DEBUG_PERIOD_MS  (200)
 #define DISPLAY_DEBUG_PERIOD_MS (200)
 #define SYSTEM_MS_WRAP          (42950u)
 
 static uint32 main_loop_last_ms = 0;
 static uint32 main_loop_last_dt_ms = 0;
 static uint32 main_loop_max_dt_ms = 0;
+static char serial_debug_tx_buffer[512];
+static uint16 serial_debug_tx_length = 0;
+static uint16 serial_debug_tx_index = 0;
+static uint32 serial_debug_tx_dropped = 0;
 
 static uint32 Main_Elapsed_Ms(uint32 now_ms, uint32 start_ms)
 {
@@ -191,7 +195,46 @@ static int32 Serial_Debug_Scale(float value, float scale)
 // Hardware path: TC264 UART0, TX=P14_0, RX=P14_1, 115200 baud, initialized by debug_init().
 static void Serial_Debug_Write(const char *line)
 {
-    uart_write_string(DEBUG_UART_INDEX, line);
+    uint16 length = 0;
+
+    if(serial_debug_tx_index < serial_debug_tx_length)
+    {
+        serial_debug_tx_dropped++;
+        return;
+    }
+    while(line[length] != '\0' && length < (uint16)(sizeof(serial_debug_tx_buffer) - 1u))
+    {
+        serial_debug_tx_buffer[length] = line[length];
+        length++;
+    }
+    serial_debug_tx_length = length;
+    serial_debug_tx_index = 0;
+}
+
+/* 每轮只向UART FIFO提交一个字节，避免格式化诊断行阻塞遥控、追点和转向。
+ * 直接使用固定ASCLIN模块地址，避开曾在KMS Start路径触发Bus Error的失效句柄。 */
+static void Serial_Debug_Service(void)
+{
+    Ifx_ASCLIN *asclin;
+
+    if(serial_debug_tx_index >= serial_debug_tx_length) return;
+    asclin = IfxAsclin_getAddress((IfxAsclin_Index)DEBUG_UART_INDEX);
+    if(asclin == NULL)
+    {
+        serial_debug_tx_index = 0;
+        serial_debug_tx_length = 0;
+        serial_debug_tx_dropped++;
+        return;
+    }
+    if(IfxAsclin_getTxFifoFillLevel(asclin) != 0u) return;
+
+    asclin->TXDATA.U = (uint32)(uint8)serial_debug_tx_buffer[serial_debug_tx_index];
+    serial_debug_tx_index++;
+    if(serial_debug_tx_index >= serial_debug_tx_length)
+    {
+        serial_debug_tx_index = 0;
+        serial_debug_tx_length = 0;
+    }
 }
 
 // Periodic serial diagnostics for subject-one record and autonomous trace modes.
@@ -204,7 +247,7 @@ static void Serial_Debug_Update(void)
     static char line[512];
     int len;
 
-    if(now_ms - last_ms < SERIAL_DEBUG_PERIOD_MS)
+    if(last_ms != 0 && Main_Elapsed_Ms(now_ms, last_ms) < SERIAL_DEBUG_PERIOD_MS)
     {
         return;
     }
@@ -425,6 +468,7 @@ int core0_main(void)
         Guandao_Rear_Motor_Update();
         GPS_Main_Loop_Update();
         Serial_Debug_Update();
+        Serial_Debug_Service();
         uint8 display_update_due = Main_Display_Update_Due();
 //        ips200_show_float(X(1),  Y(8) ,INS.recode_gpsmap[INS.gps_recode_length -1].lat, 3,6);
 //        ips200_show_float(X(11),  Y(8) ,INS.recode_gpsmap[INS.gps_recode_length -1].lon, 3,6);
@@ -459,8 +503,9 @@ int core0_main(void)
             // Idx 接近 Len 表示路线追完；TgtAct/PWM 为 0 表示后轮目标已被上层清掉。
             else if(display_update_due && main_mode != Rack_Test_Mode)
             {
-                ips200_show_string(X(1),  Y(8), "Idx");      ips200_show_int(X(6),  Y(8), INS.current_point_index, 4);
-                ips200_show_string(X(12), Y(8), "Len");      ips200_show_int(X(17), Y(8), INS.length_index, 4);
+                guandao_state *auto_state = (main_mode == Guandao_portion_3) ? &portion_3 : &INS;
+                ips200_show_string(X(1),  Y(8), "Idx");      ips200_show_int(X(6),  Y(8), auto_state->current_point_index, 4);
+                ips200_show_string(X(12), Y(8), "Len");      ips200_show_int(X(17), Y(8), auto_state->length_index, 4);
                 ips200_show_string(X(1),  Y(9), "D");        ips200_show_float(X(6),  Y(9), guandao_debug_distance, 3, 2);
                 ips200_show_string(X(12), Y(9), "A");        ips200_show_float(X(16), Y(9), guandao_debug_angle_diff, 3, 1);
                 ips200_show_string(X(1),  Y(10), "Reason");  ips200_show_int(X(10), Y(10), guandao_debug_stop_reason, 2);
@@ -468,7 +513,7 @@ int core0_main(void)
                 ips200_show_string(X(1),  Y(12), "TgtAct");  ips200_show_float(X(9),  Y(12), rear_motor_get_target_mps(), 2, 1); ips200_show_float(X(16), Y(12), rear_motor_get_speed_mps(), 2, 1);
                 ips200_show_string(X(1),  Y(13), "PWM");     ips200_show_int(X(7),  Y(13), rear_motor_get_pwm(), 5);
                 ips200_show_string(X(1),  Y(14), "Yaw");     ips200_show_float(X(7),  Y(14), Yaw_1, 4, 1);
-                ips200_show_string(X(1),  Y(15), "XY");      ips200_show_float(X(5),  Y(15), INS.current_state.x, 3, 1); ips200_show_float(X(13), Y(15), INS.current_state.y, 3, 1);
+                ips200_show_string(X(1),  Y(15), "XY");      ips200_show_float(X(5),  Y(15), auto_state->current_state.x, 3, 1); ips200_show_float(X(13), Y(15), auto_state->current_state.y, 3, 1);
             }
 //                    ips200_show_int(X(10),  Y(13),conrtol_mode ,5);
 //                    ips200_show_float(X(10),  Y(12),angle_speed ,5 ,5);

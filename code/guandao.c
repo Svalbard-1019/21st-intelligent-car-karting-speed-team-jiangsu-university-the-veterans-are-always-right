@@ -205,9 +205,17 @@ static void guandao_record_park_target_now(guandao_state *state)
 #define GUANDAO_PARK_SECOND_MIN_DIST    0.30f
 #define GUANDAO_PARK_SECOND_MIN_POINTS  2
 #define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
-#define PORTION3_PURSUIT_THRESHOLD     0.25f
-#define PORTION3_FINAL_STOP_DIST       0.6f
+#define PORTION3_RECORD_THRESHOLD      0.20f
+#define PORTION3_PURSUIT_THRESHOLD     0.15f
+#define PORTION3_FINAL_STOP_DIST       0.15f
+#define PORTION3_HEADING_BASELINE      0.80f
+#define GUANDAO_KMY_POINT_DISTANCE     0.30f
+#define GUANDAO_PREVIEW_MAX_STEPS      40
 #define GUANDAO_SYSTEM_MS_WRAP         42950u
+
+/* 科目一和科目三不会同时追踪，复用规划缓存可在路线扩展到800点时
+ * 避免四个 guandao_state 各自重复分配同样大小的 planned_map。 */
+static state_t guandao_planned_map[MAX_LENGTH_INDEX];
 
 static float guandao_normalize_angle(float angle);
 static uint32 guandao_elapsed_ms(uint32 now_ms, uint32 start_ms);
@@ -373,8 +381,41 @@ static state_t guandao_route_point(guandao_state *state, int index)
     if(route_length <= 0) return state->current_state;
     if(index < 0) index = 0;
     if(index >= route_length) index = route_length - 1;
-    if(state->plan_ready && state->planned_length > 0) return state->planned_map[index];
+    if(state->plan_ready && state->planned_length > 0) return guandao_planned_map[index];
     return state->recode_map[index];
+}
+
+/* KMY按0.30m点距调出的预瞄参数不能直接当作KMS的点数。
+ * 科目三沿实际路线累计距离，保持两种打点密度下相同的物理预瞄。 */
+static int guandao_preview_steps_for_distance(guandao_state *state,
+        int start_index, float desired_distance)
+{
+    int16 route_length = guandao_route_length(state);
+    int steps = 0;
+    float accumulated_distance = 0.0f;
+    state_t previous_point;
+
+    if(route_length <= 0 || desired_distance <= 0.0f) return 0;
+    if(start_index < 0) start_index = 0;
+    if(start_index >= route_length) start_index = route_length - 1;
+    previous_point = guandao_route_point(state, start_index);
+
+    for(int index = start_index + 1;
+            index < route_length && steps < GUANDAO_PREVIEW_MAX_STEPS;
+            index++)
+    {
+        state_t point = guandao_route_point(state, index);
+        accumulated_distance += get_distance(previous_point, point);
+        previous_point = point;
+        steps++;
+        if(accumulated_distance >= desired_distance) break;
+    }
+    return steps;
+}
+
+static float guandao_record_distance_for_route(guandao_state *state)
+{
+    return (state == &portion_3) ? PORTION3_RECORD_THRESHOLD : recode_threshold;
 }
 
 // Build a local parking frame from the taught points before the first parking marker.
@@ -1501,6 +1542,7 @@ void recode_waypoint(guandao_state * state)
     uint8 auto_gps_enabled = (state == &INS || state == &portion_3);
     uint8 rc_ch4_pressed = (x6f_out[3] == 200);
     uint8 park_pressed;
+    float record_distance = guandao_record_distance_for_route(state);
 
     /* Ignore a CH4 high level already present when record mode starts.  The
      * operator must release CH4 once before a new rising edge can mark a
@@ -1535,7 +1577,7 @@ void recode_waypoint(guandao_state * state)
     state_t last_recoded =  state->recode_map[state->length_index-1];
     float dist = get_distance(state->current_state, last_recoded );
 
-    if(dist >=recode_threshold)
+    if(dist >= record_distance)
     {
         state->recode_map[state->length_index] =state->current_state;
         state->length_index++;
@@ -1606,7 +1648,7 @@ void guandao_build_smooth_plan(guandao_state * state)
     {
         for(int i = 0; i < source_length; i++)
         {
-            state->planned_map[i] = state->recode_map[i];
+            guandao_planned_map[i] = state->recode_map[i];
         }
         state->planned_length = source_length;
         state->plan_ready = 1;
@@ -1644,12 +1686,12 @@ void guandao_build_smooth_plan(guandao_state * state)
                 out.y = 0.5f * ((2.0f * p1.y) + (-p0.y + p2.y) * t + (2.0f * p0.y - 5.0f * p1.y + 4.0f * p2.y - p3.y) * t2 + (-p0.y + 3.0f * p1.y - 3.0f * p2.y + p3.y) * t3);
             }
             out.theta = p1.theta + (p2.theta - p1.theta) * t;
-            state->planned_map[state->planned_length] = out;
+            guandao_planned_map[state->planned_length] = out;
             state->planned_length++;
         }
     }
 
-    state->planned_map[state->planned_length] = state->recode_map[source_length - 1];
+    guandao_planned_map[state->planned_length] = state->recode_map[source_length - 1];
     state->planned_length++;
     state->plan_ready = 1;
 }
@@ -1844,6 +1886,15 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     if(curve_preview_steps < steer_preview_steps + 3)
     {
         curve_preview_steps = steer_preview_steps + 3;
+    }
+    if(route_setting_choice == 2)
+    {
+        steer_preview_steps = guandao_preview_steps_for_distance(state,
+                state->current_point_index,
+                (float)steer_preview_steps * GUANDAO_KMY_POINT_DISTANCE);
+        curve_preview_steps = guandao_preview_steps_for_distance(state,
+                state->current_point_index,
+                (float)curve_preview_steps * GUANDAO_KMY_POINT_DISTANCE);
     }
     guandao_debug_steer_preview = steer_preview_steps;
     guandao_debug_curve_preview = curve_preview_steps;
@@ -2538,8 +2589,10 @@ uint8 portion3_points_switch(void)
 {
     static state_t reverse_map[MAX_LENGTH_INDEX];
     int16 len = portion_3.length_index;
+    int16 heading_anchor = 0;
     state_t origin;
     float return_heading = 0.0f;
+    float heading_baseline = 0.0f;
     float heading_rad = 0.0f;
     float heading_sin = 0.0f;
     float heading_cos = 1.0f;
@@ -2562,7 +2615,18 @@ uint8 portion3_points_switch(void)
      * rotate the path so the first return segment points to local +Y.
      */
     origin = portion_3.recode_map[len - 1];
-    return_heading = guandao_segment_yaw(origin, portion_3.recode_map[len - 2]);
+
+    /* 用终点前约0.8m路线确定返程坐标轴，避免最后两个0.2m点的记录噪声
+     * 把整条返程路线旋转，造成所有弯道统一提前或滞后。 */
+    heading_anchor = len - 2;
+    for(int16 i = len - 2; i >= 0; i--)
+    {
+        heading_baseline += get_distance(portion_3.recode_map[i + 1],
+                                         portion_3.recode_map[i]);
+        heading_anchor = i;
+        if(heading_baseline >= PORTION3_HEADING_BASELINE) break;
+    }
+    return_heading = guandao_segment_yaw(origin, portion_3.recode_map[heading_anchor]);
     heading_rad = return_heading / 180.0f * M_PI;
     heading_sin = sinf(heading_rad);
     heading_cos = cosf(heading_rad);

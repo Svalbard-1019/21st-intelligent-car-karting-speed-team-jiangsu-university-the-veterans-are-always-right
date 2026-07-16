@@ -37,12 +37,13 @@ extern float kd ;
 #define SPEED_PID_PAGE_INDEX            (11)   //储存页
 #define RECODE_MAP_POINTS_INDEX   (10)   //记录地图点位
 #define RECODE_PASSAGE                  (9)   //记录地图点位
-#define RECODE_PASSAGE_TWO                  (8)   //记录地图点位
+#define RECODE_PASSAGE_CONTINUATION          (8)   // passage 路线第 501~800 点
 #define RECODE_PASSAGE_THREE                  (7)   //记录地图点位
 #define RECODE_PASSAGE_FOUR                  (6)   //记录地图点位
-#define RECODE_PASSAGE_FIF                  (5)   //记录地图点位
+#define RECODE_PORTION_THREE_CONTINUATION    (5)   // portion_3 路线第 501~800 点
 #define RECODE_PORTION_THREE                  (4)   //记录地图点位
 #define GPS_CHEAK_FLAG                            (3)   //记录地图点位
+#define RECODE_MAP_POINTS_CONTINUATION        (2)   // INS 路线第 501~800 点及 GPS/倒车元数据
 //函数
 /**
  * 接口说明：Flash_Read_gpscheak()。从 Flash、传感器或缓存中读取数据，并同步到全局运行变量。

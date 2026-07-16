@@ -51,8 +51,10 @@ float kd;
 #define FLASH_PREVIEW_STEPS_DEFAULT      (2)
 #define FLASH_PREVIEW_STEPS_MIN          (1)
 #define FLASH_PREVIEW_STEPS_MAX          (20)
-#define FLASH_BASE_SPEED_DEFAULT          (15)
-#define FLASH_BASE_SPEED_TEST_VALUE       (6)
+#define FLASH_BASE_SPEED_DEFAULT         (15)
+#define FLASH_BASE_SPEED_TEST_VALUE      (6)
+#define FLASH_ROUTE_FORMAT_MAGIC         (0x4B525432u)
+#define FLASH_ROUTE_FIRST_PAGE_POINTS    (500)
 
 static int16 flash_clamp_route_length(int16 length)
 {
@@ -81,6 +83,142 @@ static void flash_sanitize_runtime_params(void)
                                         FLASH_FINAL_DSTS_DEFAULT,
                                         FLASH_FINAL_DSTS_MIN,
                                         FLASH_FINAL_DSTS_MAX);
+    if(control[2] < FLASH_PREVIEW_STEPS_MIN || control[2] > FLASH_PREVIEW_STEPS_MAX)
+    {
+        control[2] = FLASH_PREVIEW_STEPS_DEFAULT;
+    }
+    if(control[0] == FLASH_BASE_SPEED_TEST_VALUE)
+    {
+        control[0] = FLASH_BASE_SPEED_DEFAULT;
+    }
+}
+
+static void flash_route_buffer_reset(void)
+{
+    for(int i = 0; i < EEPROM_PAGE_LENGTH; i++) flash_union_buffer[i].uint32_type = 0xFFFFFFFFu;
+}
+
+static void flash_route_page_commit(uint32 page_index)
+{
+    if(flash_check(FLASH_SECTION_INDEX, page_index)) flash_erase_page(FLASH_SECTION_INDEX, page_index);
+    flash_write_page_from_buffer(FLASH_SECTION_INDEX, page_index);
+}
+
+static int16 flash_route_first_count(int16 route_length)
+{
+    return (route_length > FLASH_ROUTE_FIRST_PAGE_POINTS) ? FLASH_ROUTE_FIRST_PAGE_POINTS : route_length;
+}
+
+static int flash_route_fill_page(guandao_state *route, int16 route_length, int16 start_point,
+                                 int16 point_count, uint8 continuation, int16 primary_aux)
+{
+    flash_route_buffer_reset();
+    if(continuation)
+    {
+        flash_union_buffer[0].uint32_type = FLASH_ROUTE_FORMAT_MAGIC;
+        flash_union_buffer[1].uint32_type = ((uint32)(uint16)route_length << 16)
+                                          | (uint16)point_count;
+    }
+    else
+    {
+        flash_union_buffer[0].int16_type = route_length;
+        flash_union_buffer[1].int16_type = primary_aux;
+    }
+    for(int16 i = 0; i < point_count; i++)
+    {
+        flash_union_buffer[2 + i * 2].float_type = route->recode_map[start_point + i].x;
+        flash_union_buffer[3 + i * 2].float_type = route->recode_map[start_point + i].y;
+    }
+    return 2 + point_count * 2;
+}
+
+static void flash_route_read_buffer(guandao_state *route, int16 start_point, int16 point_count)
+{
+    for(int16 i = 0; i < point_count; i++)
+    {
+        route->recode_map[start_point + i].x = flash_union_buffer[2 + i * 2].float_type;
+        route->recode_map[start_point + i].y = flash_union_buffer[3 + i * 2].float_type;
+        route->recode_map[start_point + i].theta = 0.0f;
+    }
+}
+
+static uint8 flash_route_load_continuation(uint32 page_index,
+                                           int16 expected_length,
+                                           int16 expected_count)
+{
+    uint32 route_header;
+
+    if(!flash_check(FLASH_SECTION_INDEX, page_index)) return 0;
+    flash_read_page_to_buffer(FLASH_SECTION_INDEX, page_index);
+    if(flash_union_buffer[0].uint32_type != FLASH_ROUTE_FORMAT_MAGIC) return 0;
+    route_header = flash_union_buffer[1].uint32_type;
+    if((int16)(route_header >> 16) != expected_length) return 0;
+    return ((int16)(route_header & 0xFFFFu) == expected_count);
+}
+
+static void flash_clear_ins_parking_data(void)
+{
+    daoche_start_flag = 0;
+    daoche_start_state.x = daoche_start_state.y = daoche_start_state.theta = 0.0f;
+    daoche_target_flag = 0;
+    daoche_target_length = 0;
+    daoche_target_state.x = daoche_target_state.y = daoche_target_state.theta = 0.0f;
+}
+
+static void flash_read_ins_metadata(int metadata_index)
+{
+    int gps_max_storage;
+    INS.gps_recode_length = flash_union_buffer[metadata_index].int16_type;
+    if(INS.gps_recode_length < 0 || INS.gps_recode_length > MAX_GPS_RECODE) INS.gps_recode_length = 0;
+    gps_max_storage = metadata_index + INS.gps_recode_length * 2 + 2;
+    if(gps_max_storage + 8 >= EEPROM_PAGE_LENGTH)
+    {
+        INS.gps_recode_length = 0;
+        flash_clear_ins_parking_data();
+        return;
+    }
+    for(int i = metadata_index + 2, j = 0; i < gps_max_storage; i += 2, j++)
+        INS.recode_gpsmap[j].lat = int32_to_double(flash_union_buffer[i].int32_type);
+    for(int i = metadata_index + 3, j = 0; i < gps_max_storage; i += 2, j++)
+        INS.recode_gpsmap[j].lon = int32_to_double(flash_union_buffer[i].int32_type);
+    daoche_target_flag = (flash_union_buffer[gps_max_storage].int16_type == 1);
+    daoche_target_length = flash_clamp_route_length(flash_union_buffer[gps_max_storage + 1].int16_type);
+    daoche_target_state.x = flash_union_buffer[gps_max_storage + 2].float_type;
+    daoche_target_state.y = flash_union_buffer[gps_max_storage + 3].float_type;
+    daoche_target_state.theta = flash_union_buffer[gps_max_storage + 4].float_type;
+    daoche_start_flag = (flash_union_buffer[gps_max_storage + 5].int16_type == 1);
+    daoche_start_state.x = flash_union_buffer[gps_max_storage + 6].float_type;
+    daoche_start_state.y = flash_union_buffer[gps_max_storage + 7].float_type;
+    daoche_start_state.theta = flash_union_buffer[gps_max_storage + 8].float_type;
+}
+
+static void flash_validate_ins_parking_data(void)
+{
+    if(!daoche_start_flag || daoche_point_length <= 0 || daoche_point_length > INS.length_index
+            || fabsf(daoche_start_state.x) > 10000.0f || fabsf(daoche_start_state.y) > 10000.0f
+            || fabsf(daoche_start_state.theta) > 360.0f)
+    {
+        daoche_start_flag = 0;
+        daoche_start_state.x = daoche_start_state.y = daoche_start_state.theta = 0.0f;
+    }
+    if(!daoche_start_flag && daoche_point_length > 0 && daoche_point_length < INS.length_index)
+    {
+        daoche_start_state = INS.recode_map[daoche_point_length];
+        daoche_start_flag = 1;
+    }
+    if(!daoche_target_flag || daoche_point_length <= 0 || daoche_target_length <= daoche_point_length
+            || daoche_target_length > INS.length_index || fabsf(daoche_target_state.x) > 10000.0f
+            || fabsf(daoche_target_state.y) > 10000.0f || fabsf(daoche_target_state.theta) > 360.0f)
+    {
+        daoche_target_flag = 0;
+        daoche_target_length = 0;
+        daoche_target_state.x = daoche_target_state.y = daoche_target_state.theta = 0.0f;
+    }
+    if(!daoche_target_flag)
+    {
+        daoche_start_flag = 0;
+        daoche_start_state.x = daoche_start_state.y = daoche_start_state.theta = 0.0f;
+    }
 }
 
 
@@ -103,7 +241,6 @@ void Flash_Read_pid(void)
         {
             speed_pid[i] = flash_union_buffer[i].float_type;
         }
-        flash_sanitize_runtime_params();
         MoterPID_L.Kp = speed_pid[0];
         MoterPID_R.Kp = speed_pid[0];
         MoterPID_L.Ki = speed_pid[1];
@@ -117,16 +254,10 @@ void Flash_Read_pid(void)
         {
             control[j] = flash_union_buffer[i].int16_type;
         }
-        if(control[2] < FLASH_PREVIEW_STEPS_MIN || control[2] > FLASH_PREVIEW_STEPS_MAX)
-        {
-            control[2] = FLASH_PREVIEW_STEPS_DEFAULT;
-        }
-        /* Migrate the temporary 0.6 m/s test setting back to the normal
-         * 1.5 m/s preset. Flash_Write_pid() persists the restored value. */
-        if(control[0] == FLASH_BASE_SPEED_TEST_VALUE)
-        {
-            control[0] = FLASH_BASE_SPEED_DEFAULT;
-        }
+        flash_sanitize_runtime_params();
+        recode_threshold = speed_pid[3];
+        persuit_threshold = speed_pid[4];
+        final_dsts = speed_pid[5];
         base_speed = (float)control[0];
         daoche_speed = (float)control[1];
         preview_spets = control[2];
@@ -148,10 +279,6 @@ void Flash_Write_pid(void)
 {
     flash_buffer_clear();
     flash_sanitize_runtime_params();
-    if(control[2] < FLASH_PREVIEW_STEPS_MIN || control[2] > FLASH_PREVIEW_STEPS_MAX)
-    {
-        control[2] = FLASH_PREVIEW_STEPS_DEFAULT;
-    }
 
     MoterPID_L.Kp = speed_pid[0];
     MoterPID_R.Kp = speed_pid[0];
@@ -240,26 +367,16 @@ void Flash_Main_Read(void)
  */
 void Flash_Write_passage_points(void)
 {
-    int max_storage = 2 * passage.length_index +2 ;
-    if (max_storage >=1020) max_storage = 1020;
-    flash_buffer_clear();
+    int16 route_length = flash_clamp_route_length(passage.length_index);
+    int16 first_count = flash_route_first_count(route_length);
+    int16 continuation_count = route_length - first_count;
 
-    flash_union_buffer[0].int16_type = passage.length_index;
-    for(int i = 2 , j = 0;i < max_storage ; i += 2 , j++)
-    {
-        flash_union_buffer[i].float_type = passage.recode_map[j].x;
-    }
-    for(int i = 3 , j = 0;i < max_storage ; i += 2 , j++)
-    {
-        flash_union_buffer[i].float_type = passage.recode_map[j].y;
-    }
+    passage.length_index = route_length;
+    flash_route_fill_page(&passage, route_length, 0, first_count, 0, 0);
+    flash_route_page_commit(RECODE_PASSAGE);
 
-
-    if(flash_check(FLASH_SECTION_INDEX,RECODE_PASSAGE))
-    {
-        flash_erase_page(FLASH_SECTION_INDEX,RECODE_PASSAGE) ;
-    }
-    flash_write_page_from_buffer(FLASH_SECTION_INDEX,RECODE_PASSAGE);
+    flash_route_fill_page(&passage, route_length, first_count, continuation_count, 1, 0);
+    flash_route_page_commit(RECODE_PASSAGE_CONTINUATION);
 }
 /**
  * 函数说明：Flash_Read_passage_points()。从 Flash、传感器或缓存中读取数据，并同步到全局运行变量。
@@ -272,20 +389,33 @@ void Flash_Write_passage_points(void)
  */
 void Flash_Read_passage_points(void)
 {
-    int get_max_storage = 0;
     if(flash_check(FLASH_SECTION_INDEX,RECODE_PASSAGE))
     {
-        flash_buffer_clear();
+        int16 stored_length;
+        int16 first_count;
+        int16 continuation_count;
+
         flash_read_page_to_buffer(FLASH_SECTION_INDEX, RECODE_PASSAGE);
-        passage.length_index = flash_union_buffer[0].int16_type;
-        get_max_storage =2 * passage.length_index +2;
-        for(int i = 2 , j = 0;i < get_max_storage ; i += 2 , j++)
+        stored_length = flash_union_buffer[0].int16_type;
+        if(stored_length < 0 || stored_length > MAX_LENGTH_INDEX)
         {
-            passage.recode_map[j].x = flash_union_buffer[i].float_type;
+            passage.length_index = 0;
+            return;
         }
-        for(int i = 3 , j = 0;i < get_max_storage ; i += 2 , j++)
+
+        passage.length_index = stored_length;
+        first_count = flash_route_first_count(stored_length);
+        continuation_count = stored_length - first_count;
+        flash_route_read_buffer(&passage, 0, first_count);
+        if(continuation_count > 0)
         {
-            passage.recode_map[j].y = flash_union_buffer[i].float_type;
+            if(!flash_route_load_continuation(RECODE_PASSAGE_CONTINUATION,
+                    stored_length, continuation_count))
+            {
+                passage.length_index = 0;
+                return;
+            }
+            flash_route_read_buffer(&passage, first_count, continuation_count);
         }
     }
 }
@@ -301,27 +431,16 @@ void Flash_Read_passage_points(void)
  */
 void Flash_Write_portion_3points(void)
 {
-    int max_storage = 2 * portion_3.length_index +2 ;
-    if (max_storage >=1020) max_storage = 1020;
-    flash_buffer_clear();
+    int16 route_length = flash_clamp_route_length(portion_3.length_index);
+    int16 first_count = flash_route_first_count(route_length);
+    int16 continuation_count = route_length - first_count;
 
-    flash_union_buffer[0].int16_type = portion_3.length_index;
-    for(int i = 2 , j = 0;i < max_storage ; i += 2 , j++)
-    {
-        flash_union_buffer[i].float_type = portion_3.recode_map[j].x;
-    }
-    for(int i = 3 , j = 0;i < max_storage ; i += 2 , j++)
-    {
-        flash_union_buffer[i].float_type = portion_3.recode_map[j].y;
-    }
+    portion_3.length_index = route_length;
+    flash_route_fill_page(&portion_3, route_length, 0, first_count, 0, 0);
+    flash_route_page_commit(RECODE_PORTION_THREE);
 
-
-    if(flash_check(FLASH_SECTION_INDEX,RECODE_PORTION_THREE))
-    {
-        flash_erase_page(FLASH_SECTION_INDEX,RECODE_PORTION_THREE) ;
-    }
-    flash_write_page_from_buffer(FLASH_SECTION_INDEX,RECODE_PORTION_THREE);
-
+    flash_route_fill_page(&portion_3, route_length, first_count, continuation_count, 1, 0);
+    flash_route_page_commit(RECODE_PORTION_THREE_CONTINUATION);
 }
 /**
  * 函数说明：Flash_Read_portion_3points()。从 Flash、传感器或缓存中读取数据，并同步到全局运行变量。
@@ -334,20 +453,44 @@ void Flash_Write_portion_3points(void)
  */
 void Flash_Read_portion_3points(void)
 {
-    int get_max_storage = 0;
     if(flash_check(FLASH_SECTION_INDEX,RECODE_PORTION_THREE))
     {
-        flash_buffer_clear();
+        int16 stored_length;
+        int16 first_count;
+        int16 continuation_count;
+
         flash_read_page_to_buffer(FLASH_SECTION_INDEX, RECODE_PORTION_THREE);
-        portion_3.length_index = flash_union_buffer[0].int16_type -1 ;
-        get_max_storage =2 * portion_3.length_index +2;
-        for(int i = 2 , j = 0;i < get_max_storage ; i += 2 , j++)
+        stored_length = flash_union_buffer[0].int16_type;
+        if(stored_length <= 1 || stored_length > MAX_LENGTH_INDEX)
         {
-            portion_3.recode_map[j].x = flash_union_buffer[i].float_type;
+            portion_3.length_index = 0;
+            portion_3.gps_recode_length = 0;
+            return;
         }
-        for(int i = 3 , j = 0;i < get_max_storage ; i += 2 , j++)
+
+        /* Preserve the legacy convention that excludes the final saved point. */
+        portion_3.length_index = flash_clamp_route_length(stored_length - 1);
+        first_count = flash_route_first_count(portion_3.length_index);
+        continuation_count = portion_3.length_index - first_count;
+        flash_route_read_buffer(&portion_3, 0, first_count);
+        if(continuation_count > 0)
         {
-            portion_3.recode_map[j].y = flash_union_buffer[i].float_type;
+            if(!flash_check(FLASH_SECTION_INDEX, RECODE_PORTION_THREE_CONTINUATION))
+            {
+                portion_3.length_index = 0;
+                return;
+            }
+            flash_read_page_to_buffer(FLASH_SECTION_INDEX, RECODE_PORTION_THREE_CONTINUATION);
+            if(flash_union_buffer[0].uint32_type != FLASH_ROUTE_FORMAT_MAGIC
+                    || (int16)(flash_union_buffer[1].uint32_type >> 16) != stored_length
+                    || (int16)(flash_union_buffer[1].uint32_type & 0xFFFFu) < continuation_count
+                    || (int16)(flash_union_buffer[1].uint32_type & 0xFFFFu)
+                            > MAX_LENGTH_INDEX - FLASH_ROUTE_FIRST_PAGE_POINTS)
+            {
+                portion_3.length_index = 0;
+                return;
+            }
+            flash_route_read_buffer(&portion_3, first_count, continuation_count);
         }
     }
 }
@@ -363,9 +506,13 @@ void Flash_Read_portion_3points(void)
  */
 void Flash_Write_INSpoints(void)
 {
-
     int16 route_length = flash_clamp_route_length(INS.length_index);
     int16 stop_length = flash_clamp_route_length(daoche_point_length);
+    int16 first_count;
+    int16 continuation_count;
+    int metadata_index;
+    int gps_max_storage;
+
     if(stop_length > route_length) stop_length = route_length;
     int16 gps_length = INS.gps_recode_length;
     if(gps_length < 0) gps_length = 0;
@@ -375,27 +522,22 @@ void Flash_Write_INSpoints(void)
     daoche_point_length = stop_length;
     INS.gps_recode_length = gps_length;
 
-    int max_storage = 2 * route_length +2 ;
-    int gps_max_storage = max_storage + gps_length*2 + 2 ;
-    flash_buffer_clear();
+    first_count = flash_route_first_count(route_length);
+    continuation_count = route_length - first_count;
 
-    flash_union_buffer[0].int16_type = route_length;
-    if(daoche_flash_cheack)flash_union_buffer[1].int16_type = stop_length;
-    else{flash_union_buffer[1].int16_type = route_length;}
-    for(int i = 2 , j = 0;i < max_storage ; i += 2 , j++)
-    {
-        flash_union_buffer[i].float_type = INS.recode_map[j].x;
-    }
-    for(int i = 3 , j = 0;i < max_storage ; i += 2 , j++)
-    {
-        flash_union_buffer[i].float_type = INS.recode_map[j].y;
-    }
-    flash_union_buffer[max_storage].int16_type = gps_length;
-    for(int i = max_storage+2 , j = 0; i < gps_max_storage ; i+=2 , j++)
+    flash_route_fill_page(&INS, route_length, 0, first_count, 0,
+            daoche_flash_cheack ? stop_length : route_length);
+    flash_route_page_commit(RECODE_MAP_POINTS_INDEX);
+
+    metadata_index = flash_route_fill_page(&INS, route_length, first_count,
+            continuation_count, 1, 0);
+    gps_max_storage = metadata_index + gps_length * 2 + 2;
+    flash_union_buffer[metadata_index].int16_type = gps_length;
+    for(int i = metadata_index + 2, j = 0; i < gps_max_storage; i += 2, j++)
     {
         flash_union_buffer[i].int32_type = double_to_int32(INS.recode_gpsmap[j].lat);
     }
-    for(int i = max_storage+3 , j = 0; i < gps_max_storage ; i+=2 , j++)
+    for(int i = metadata_index + 3, j = 0; i < gps_max_storage; i += 2, j++)
     {
         flash_union_buffer[i].int32_type = double_to_int32(INS.recode_gpsmap[j].lon);
     }
@@ -409,13 +551,7 @@ void Flash_Write_INSpoints(void)
     flash_union_buffer[gps_max_storage + 6].float_type = daoche_start_state.x;
     flash_union_buffer[gps_max_storage + 7].float_type = daoche_start_state.y;
     flash_union_buffer[gps_max_storage + 8].float_type = daoche_start_state.theta;
-
-
-    if(flash_check(FLASH_SECTION_INDEX,RECODE_MAP_POINTS_INDEX))
-    {
-        flash_erase_page(FLASH_SECTION_INDEX,RECODE_MAP_POINTS_INDEX) ;
-    }
-    flash_write_page_from_buffer(FLASH_SECTION_INDEX,RECODE_MAP_POINTS_INDEX);
+    flash_route_page_commit(RECODE_MAP_POINTS_CONTINUATION);
 
 }
 /**
@@ -429,83 +565,57 @@ void Flash_Write_INSpoints(void)
  */
 void Flash_Read_INSpoints(void)
 {
-    int get_max_storage = 0;
+    int16 stored_length;
+    int16 first_count;
+    int16 continuation_count;
+    int metadata_index;
+    uint8 new_format = 0;
+
     INS.planned_length = 0;
     INS.plan_ready = 0;
+    INS.length_index = 0;
+    INS.gps_recode_length = 0;
+    daoche_point_length = 0;
+    flash_clear_ins_parking_data();
     if(flash_check(FLASH_SECTION_INDEX,RECODE_MAP_POINTS_INDEX))
     {
-        flash_buffer_clear();
         flash_read_page_to_buffer(FLASH_SECTION_INDEX, RECODE_MAP_POINTS_INDEX);
-        INS.length_index = flash_clamp_route_length(flash_union_buffer[0].int16_type);
+        stored_length = flash_union_buffer[0].int16_type;
+        if(stored_length < 0 || stored_length > MAX_LENGTH_INDEX) return;
+
+        INS.length_index = stored_length;
         daoche_point_length = flash_clamp_route_length(flash_union_buffer[1].int16_type);
         if(daoche_point_length > INS.length_index) daoche_point_length = INS.length_index;
-        get_max_storage =2 * INS.length_index +2;
-        for(int i = 2 , j = 0;i < get_max_storage ; i += 2 , j++)
+        first_count = flash_route_first_count(stored_length);
+        continuation_count = stored_length - first_count;
+        flash_route_read_buffer(&INS, 0, first_count);
+
+        if(flash_route_load_continuation(RECODE_MAP_POINTS_CONTINUATION,
+                stored_length, continuation_count))
         {
-            INS.recode_map[j].x = flash_union_buffer[i].float_type;
+            new_format = 1;
+            flash_route_read_buffer(&INS, first_count, continuation_count);
+            metadata_index = 2 + continuation_count * 2;
+            flash_read_ins_metadata(metadata_index);
         }
-        for(int i = 3 , j = 0;i < get_max_storage ; i += 2 , j++)
+        else if(continuation_count > 0)
         {
-            INS.recode_map[j].y = flash_union_buffer[i].float_type;
+            INS.length_index = 0;
+            daoche_point_length = 0;
+            return;
         }
-        INS.gps_recode_length = flash_union_buffer[get_max_storage].int16_type;
-        if(INS.gps_recode_length >MAX_GPS_RECODE)INS.gps_recode_length = MAX_GPS_RECODE;
-        int gps_max_storage = get_max_storage +INS.gps_recode_length*2 + 2 ;
-        for(int i = get_max_storage+2 , j = 0; i < gps_max_storage ; i+=2 , j++)
+
+        if(!new_format)
         {
-            INS.recode_gpsmap[j].lat = int32_to_double(flash_union_buffer[i].int32_type);
+            /* Read routes saved by the original single-page 400-point format. */
+            flash_read_page_to_buffer(FLASH_SECTION_INDEX, RECODE_MAP_POINTS_INDEX);
+            metadata_index = 2 + stored_length * 2;
+            if(metadata_index + 8 < EEPROM_PAGE_LENGTH)
+            {
+                flash_read_ins_metadata(metadata_index);
+            }
         }
-        for(int i = get_max_storage+3 , j = 0; i < gps_max_storage ; i+=2 , j++)
-        {
-            INS.recode_gpsmap[j].lon = int32_to_double(flash_union_buffer[i].int32_type);
-        }
-        daoche_target_flag = (flash_union_buffer[gps_max_storage].int16_type == 1) ? 1 : 0;
-        daoche_target_length = flash_clamp_route_length(flash_union_buffer[gps_max_storage + 1].int16_type);
-        daoche_target_state.x = flash_union_buffer[gps_max_storage + 2].float_type;
-        daoche_target_state.y = flash_union_buffer[gps_max_storage + 3].float_type;
-        daoche_target_state.theta = flash_union_buffer[gps_max_storage + 4].float_type;
-        daoche_start_flag = (flash_union_buffer[gps_max_storage + 5].int16_type == 1) ? 1 : 0;
-        daoche_start_state.x = flash_union_buffer[gps_max_storage + 6].float_type;
-        daoche_start_state.y = flash_union_buffer[gps_max_storage + 7].float_type;
-        daoche_start_state.theta = flash_union_buffer[gps_max_storage + 8].float_type;
-        if(!daoche_start_flag
-                || daoche_point_length <= 0
-                || daoche_point_length > INS.length_index
-                || fabsf(daoche_start_state.x) > 10000.0f
-                || fabsf(daoche_start_state.y) > 10000.0f
-                || fabsf(daoche_start_state.theta) > 360.0f)
-        {
-            daoche_start_flag = 0;
-            daoche_start_state.x = 0.0f;
-            daoche_start_state.y = 0.0f;
-            daoche_start_state.theta = 0.0f;
-        }
-        if(!daoche_start_flag && daoche_point_length > 0 && daoche_point_length < INS.length_index)
-        {
-            daoche_start_state = INS.recode_map[daoche_point_length];
-            daoche_start_flag = 1;
-        }
-        if(!daoche_target_flag
-                || daoche_point_length <= 0
-                || daoche_target_length <= daoche_point_length
-                || daoche_target_length > INS.length_index
-                || fabsf(daoche_target_state.x) > 10000.0f
-                || fabsf(daoche_target_state.y) > 10000.0f
-                || fabsf(daoche_target_state.theta) > 360.0f)
-        {
-            daoche_target_flag = 0;
-            daoche_target_length = 0;
-            daoche_target_state.x = 0.0f;
-            daoche_target_state.y = 0.0f;
-            daoche_target_state.theta = 0.0f;
-        }
-        if(!daoche_target_flag)
-        {
-            daoche_start_flag = 0;
-            daoche_start_state.x = 0.0f;
-            daoche_start_state.y = 0.0f;
-            daoche_start_state.theta = 0.0f;
-        }
+        flash_validate_ins_parking_data();
     }
 
 }
