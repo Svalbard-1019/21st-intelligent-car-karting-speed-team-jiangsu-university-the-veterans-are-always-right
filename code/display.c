@@ -464,6 +464,7 @@ void Menu_Recode_Points(void)
     if(key_value == 3)
     {
         main_mode = Guandao_Recode_Mode;
+        sbus_rc_capture_neutral();
         conrtol_mode = YAOKONG;
         switch(key_mode1)
         {

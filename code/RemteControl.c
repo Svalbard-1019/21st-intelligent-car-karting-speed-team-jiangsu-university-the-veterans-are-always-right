@@ -67,45 +67,106 @@ void hotRc_Control_init(void)//遥控器引脚初始化
 // SBUS receiver control.
 // Current hardware uses UART2: TX placeholder P10_5, RX P10_6.
 // CH1 controls steering, CH2 controls throttle. Channel range is usually 172~1811.
-#define SBUS_MIN    172
-#define SBUS_MID    1024
-#define SBUS_MAX    1811
+#define SBUS_MIN              172u
+#define SBUS_DEFAULT_MID      1024u
+#define SBUS_MAX              1811u
+#define SBUS_RAW_DEADBAND     20
+
+static uint16 sbus_steer_mid = SBUS_DEFAULT_MID;
+static uint16 sbus_throttle_mid = SBUS_DEFAULT_MID;
+static uint8 sbus_neutral_capture_pending = 0;
+
+static uint8 sbus_rc_channel_valid(uint16 channel)
+{
+    return (channel >= SBUS_MIN && channel <= SBUS_MAX) ? 1 : 0;
+}
+
+static void sbus_rc_clear_output(void)
+{
+    hot_rc_speed = 0.0f;
+    hot_rc_steer = 0.0f;
+    hot_rc_delta = 0.0f;
+}
+
+static void sbus_rc_apply_neutral(uint16 steer, uint16 throttle)
+{
+    sbus_steer_mid = steer;
+    sbus_throttle_mid = throttle;
+    sbus_rc_clear_output();
+}
+
+static float sbus_rc_map_centered(uint16 channel, uint16 center, float full_scale)
+{
+    int32 delta = (int32)center - (int32)channel;
+    uint16 span;
+    float output;
+
+    if(delta > -SBUS_RAW_DEADBAND && delta < SBUS_RAW_DEADBAND) return 0.0f;
+    span = (channel < center) ? (center - SBUS_MIN) : (SBUS_MAX - center);
+    if(span == 0u) return 0.0f;
+
+    output = (float)delta * full_scale / (float)span;
+    Value_Limit_float(&output, -full_scale, full_scale);
+    return output;
+}
+
+void sbus_rc_capture_neutral(void)
+{
+    uint16 steer;
+    uint16 throttle;
+
+    sbus_neutral_capture_pending = 1;
+    sbus_rc_clear_output();
+    if(uart_receiver.state == 0) return;
+
+    steer = uart_receiver.channel[0];
+    throttle = uart_receiver.channel[1];
+    if(!sbus_rc_channel_valid(steer) || !sbus_rc_channel_valid(throttle)) return;
+
+    sbus_rc_apply_neutral(steer, throttle);
+    sbus_neutral_capture_pending = 0;
+}
 
 void sbus_rc_control(void)
 {
+    uint16 ch_steer;
+    uint16 ch_throttle;
+    uint16 ch_save;
+    uint16 ch_stop;
+
     if(uart_receiver.state == 0)
     {
-        hot_rc_speed = 0;
-        hot_rc_steer = 0;
-        hot_rc_delta = 0;
+        sbus_rc_clear_output();
         x6f_out[2] = 100;
         x6f_out[3] = 100;
         return;
     }
 
-    uint16 ch_steer = uart_receiver.channel[0];
-    uint16 ch_throttle = uart_receiver.channel[1];
-    uint16 ch_save = uart_receiver.channel[2];
-    uint16 ch_stop = uart_receiver.channel[3];
-
-    hot_rc_steer = (float)(SBUS_MID - ch_steer) * 40.0f / (SBUS_MAX - SBUS_MID);
-    if(hot_rc_steer > -2.0f && hot_rc_steer < 2.0f)
-    {
-        hot_rc_steer = 0;
-    }
-
-    hot_rc_speed = (float)(SBUS_MID - ch_throttle) * 50.0f / (SBUS_MAX - SBUS_MID);
-    if(hot_rc_speed > -1.0f && hot_rc_speed < 1.0f)
-    {
-        hot_rc_speed = 0;
-    }
-
-    hot_rc_delta = (hot_rc_speed * tanf(hot_rc_steer / 3.0f / 180.0f * M_PI)) / WHEEL_BASE;
+    ch_steer = uart_receiver.channel[0];
+    ch_throttle = uart_receiver.channel[1];
+    ch_save = uart_receiver.channel[2];
+    ch_stop = uart_receiver.channel[3];
 
     x6f_out[0] = (int16)ch_steer;
     x6f_out[1] = (int16)ch_throttle;
-    x6f_out[2] = (ch_save > 1500) ? 200 : 100;
-    x6f_out[3] = (ch_stop > 1500) ? 200 : 100;
+    x6f_out[2] = (ch_save > 1500u) ? 200 : 100;
+    x6f_out[3] = (ch_stop > 1500u) ? 200 : 100;
+
+    if(!sbus_rc_channel_valid(ch_steer) || !sbus_rc_channel_valid(ch_throttle))
+    {
+        sbus_rc_clear_output();
+        return;
+    }
+    if(sbus_neutral_capture_pending)
+    {
+        sbus_rc_apply_neutral(ch_steer, ch_throttle);
+        sbus_neutral_capture_pending = 0;
+        return;
+    }
+
+    hot_rc_steer = sbus_rc_map_centered(ch_steer, sbus_steer_mid, 40.0f);
+    hot_rc_speed = sbus_rc_map_centered(ch_throttle, sbus_throttle_mid, 50.0f);
+    hot_rc_delta = (hot_rc_speed * tanf(hot_rc_steer / 3.0f / 180.0f * M_PI)) / WHEEL_BASE;
 }
 
 /**

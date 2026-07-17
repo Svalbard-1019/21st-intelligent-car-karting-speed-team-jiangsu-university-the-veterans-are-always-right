@@ -136,6 +136,7 @@ uint16_t map_x6f_to_pwm(int16_t x6f_out_0);
  */
 int16_t motor_map_x6f_to_pwm(int16_t x6f_out_0);
 void sbus_rc_control(void);
+void sbus_rc_capture_neutral(void);
 //void Control_TEXT();
 
 #endif /* CODE_REMTECONTROL_H_ */
