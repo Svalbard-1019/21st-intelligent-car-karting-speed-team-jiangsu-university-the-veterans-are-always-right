@@ -8,7 +8,7 @@
  *
  * 当前硬件：
  * - 只接左后轮编码器，左右后轮共用同一速度反馈。
- * - PWM/GPIO 仍使用 peripheral.h 里的 PWM_L/PWM_R/MOTOR_GPIO_L/MOTOR_GPIO_R。
+ * - HIP 四路 PWM 使用 peripheral.h 里的 PWM_L1/PWM_L2/PWM_R1/PWM_R2。
  *
  * 调试重点：
  * - TgtAct 中目标有值但 PWM=0，查本模块限幅/stop 条件。
@@ -55,7 +55,7 @@ static float  integral    = 0.0f;
 static float  last_error  = 0.0f;
 static int    last_pwm    = 0;
 
-/* ---- 电机驱动 (DIR + PWM, 旧工程方式) ---- */
+/* ---- HIP4082 电机驱动（每个电机两路 PWM） ---- */
 /**
  * 函数说明：rear_motor_set_pwm()。根据符号和限幅要求输出 PWM，占空比正负通常对应电机方向。
  * 所属模块：后轮 m/s 速度闭环模块，是当前科目一实际驱动后轮的主要模块。
@@ -98,26 +98,26 @@ static void rear_motor_set_pwm(int16 pwm)
     if(pwm_l < -REAR_PWM_HARD_LIMIT) pwm_l = -REAR_PWM_HARD_LIMIT;
     if(pwm_r > REAR_PWM_HARD_LIMIT)  pwm_r = REAR_PWM_HARD_LIMIT;
     if(pwm_r < -REAR_PWM_HARD_LIMIT) pwm_r = -REAR_PWM_HARD_LIMIT;
+    pwm_set_duty(PWM_L1, 0);
+    pwm_set_duty(PWM_L2, 0);
+    pwm_set_duty(PWM_R1, 0);
+    pwm_set_duty(PWM_R2, 0);
 
-    if(pwm_l >= 0)
+    if(pwm_l > 0)
     {
-        pwm_set_duty(PWM_L,  pwm_l);
-        gpio_set_level(MOTOR_GPIO_L, 1);
+        pwm_set_duty(PWM_L1, pwm_l);
     }
-    else
+    else if(pwm_l < 0)
     {
-        pwm_set_duty(PWM_L,  -pwm_l);
-        gpio_set_level(MOTOR_GPIO_L, 0);
+        pwm_set_duty(PWM_L2, -pwm_l);
     }
-    if(pwm_r >= 0)
+    if(pwm_r > 0)
     {
-        pwm_set_duty(PWM_R,  pwm_r);
-        gpio_set_level(MOTOR_GPIO_R, 1);
+        pwm_set_duty(PWM_R1, pwm_r);
     }
-    else
+    else if(pwm_r < 0)
     {
-        pwm_set_duty(PWM_R,  -pwm_r);
-        gpio_set_level(MOTOR_GPIO_R, 0);
+        pwm_set_duty(PWM_R2, -pwm_r);
     }
 }
 
@@ -133,10 +133,10 @@ static void rear_motor_set_pwm(int16 pwm)
  */
 void rear_motor_init(void)
 {
-    pwm_init(PWM_L, 17000, 0);
-    pwm_init(PWM_R, 17000, 0);
-    gpio_init(MOTOR_GPIO_L, GPO, 1, GPO_PUSH_PULL);
-    gpio_init(MOTOR_GPIO_R, GPO, 1, GPO_PUSH_PULL);
+    pwm_init(PWM_L1, 17000, 0);
+    pwm_init(PWM_L2, 17000, 0);
+    pwm_init(PWM_R1, 17000, 0);
+    pwm_init(PWM_R2, 17000, 0);
 
     target_mps  = 0.0f;
     actual_mps  = 0.0f;
@@ -178,11 +178,10 @@ void rear_motor_stop(void)
      * rear_motor_stop() every main-loop iteration while the car is pushed;
      * resetting last_encoder_count here would erase odometry before the ISR
      * can accumulate it. */
-
-    pwm_set_duty(PWM_L, 0);
-    pwm_set_duty(PWM_R, 0);
-    gpio_set_level(MOTOR_GPIO_L, 1);
-    gpio_set_level(MOTOR_GPIO_R, 1);
+    pwm_set_duty(PWM_L1, 0);
+    pwm_set_duty(PWM_L2, 0);
+    pwm_set_duty(PWM_R1, 0);
+    pwm_set_duty(PWM_R2, 0);
     current_pwm = 0;
 }
 

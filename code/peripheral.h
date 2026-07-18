@@ -104,10 +104,10 @@ extern Encoder_t Steer_ecd;
 #define ENCODER_QUADDEC_A               ENCODER_LEFT_A
 #define ENCODER_QUADDEC_B               ENCODER_LEFT_B
 
-#define PWM_L              (ATOM0_CH3_P21_5)
-#define PWM_R              (ATOM0_CH1_P21_3)
-#define MOTOR_GPIO_L              (P21_4)
-#define MOTOR_GPIO_R              (P21_2)
+#define PWM_L1             (ATOM0_CH2_P21_4)  // HIP P5-1: PWML1
+#define PWM_L2             (ATOM0_CH3_P21_5)  // HIP P5-5: PWML2
+#define PWM_R1             (ATOM0_CH0_P21_2)  // HIP P5-2: PWMR1
+#define PWM_R2             (ATOM0_CH1_P21_3)  // HIP P5-6: PWMR2
 #define MOTER_MAX       (7000)
 #define MOTER_MIN       (-7000)
 #define S_MOTER_MAX       (5000)
