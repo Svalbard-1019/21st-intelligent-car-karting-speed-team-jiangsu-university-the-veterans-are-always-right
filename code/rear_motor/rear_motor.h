@@ -64,6 +64,22 @@
 #define REAR_INTEGRAL_THRESHOLD 60.0f
 #define REAR_ENCODER_DELTA_ABS_MAX 300
 
+/* Nonblocking active-brake parameters verified by Rack Test Stage 5. */
+#define REAR_BRAKE_TIMEOUT_MS 700u
+#define REAR_BRAKE_HIGH_REVERSE_GUARD_MS 600u
+#define REAR_BRAKE_HIGH_SPEED_MPS 3.75f
+#define REAR_BRAKE_STOP_SPEED_MPS 0.05f
+#define REAR_BRAKE_REVERSE_MPS 0.05f
+#define REAR_BRAKE_PWM_HIGH 2500
+#define REAR_BRAKE_PWM_MID 1800
+#define REAR_BRAKE_PWM_LOW 1000
+#define REAR_BRAKE_SYSTEM_MS_WRAP 42950u
+
+#define REAR_BRAKE_REASON_NONE       0u
+#define REAR_BRAKE_REASON_LOW_SPEED  1u
+#define REAR_BRAKE_REASON_REVERSE    2u
+#define REAR_BRAKE_REASON_TIMEOUT    3u
+
 /* 速度限幅 (架上测试) */
 #define REAR_SPEED_MAX_MPS      5.0f
 #define REAR_SPEED_MIN_MPS      -5.0f
@@ -89,6 +105,15 @@ void rear_motor_init(void);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void rear_motor_stop(void);
+
+/* Explicit-stop active brake. Call update from the normal control loop. */
+void rear_motor_brake_start(void);
+void rear_motor_brake_update(void);
+uint8 rear_motor_brake_active(void);
+uint8 rear_motor_brake_reason(void);
+uint32 rear_motor_brake_elapsed_ms(void);
+int16 rear_motor_brake_pwm(void);
+float rear_motor_brake_end_raw_mps(void);
 
 /**
  * 接口说明：rear_motor_set_target_mps()。写入上层给定的目标值或执行器输出，并在函数内部做必要限幅。
