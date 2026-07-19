@@ -51,8 +51,6 @@ float kd;
 #define FLASH_PREVIEW_STEPS_DEFAULT      (2)
 #define FLASH_PREVIEW_STEPS_MIN          (1)
 #define FLASH_PREVIEW_STEPS_MAX          (20)
-#define FLASH_BASE_SPEED_DEFAULT         (15)
-#define FLASH_BASE_SPEED_TEST_VALUE      (6)
 #define FLASH_ROUTE_FORMAT_MAGIC         (0x4B525432u)
 #define FLASH_ROUTE_FIRST_PAGE_POINTS    (500)
 
@@ -86,10 +84,6 @@ static void flash_sanitize_runtime_params(void)
     if(control[2] < FLASH_PREVIEW_STEPS_MIN || control[2] > FLASH_PREVIEW_STEPS_MAX)
     {
         control[2] = FLASH_PREVIEW_STEPS_DEFAULT;
-    }
-    if(control[0] == FLASH_BASE_SPEED_TEST_VALUE)
-    {
-        control[0] = FLASH_BASE_SPEED_DEFAULT;
     }
 }
 

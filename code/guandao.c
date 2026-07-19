@@ -211,11 +211,12 @@ static guandao_state *guandao_trace_brake_route = NULL;
 #define GUANDAO_PARK_SECOND_MIN_POINTS  2
 #define GUANDAO_AUTO_GPS_RECORD_DIST   1.0f
 #define PORTION3_RECORD_THRESHOLD      0.20f
-#define PORTION3_PURSUIT_THRESHOLD     0.15f
+#define PORTION3_PURSUIT_THRESHOLD     0.25f
 #define PORTION3_FINAL_STOP_DIST       0.15f
-#define PORTION3_HEADING_BASELINE      0.80f
-#define GUANDAO_KMY_POINT_DISTANCE     0.30f
-#define GUANDAO_PREVIEW_MAX_STEPS      40
+#define PORTION3_RETURN_TRIM_DIST      0.5f
+#define PORTION3_CURVE_SPEED_FLOOR_RATIO 0.80f
+#define PORTION3_FAST_PREVIEW_STEPS    7
+#define PORTION3_SHARP_PREVIEW_STEPS   5
 #define GUANDAO_SYSTEM_MS_WRAP         42950u
 
 /* 科目一和科目三不会同时追踪，复用规划缓存可在路线扩展到800点时
@@ -388,34 +389,6 @@ static state_t guandao_route_point(guandao_state *state, int index)
     if(index >= route_length) index = route_length - 1;
     if(state->plan_ready && state->planned_length > 0) return guandao_planned_map[index];
     return state->recode_map[index];
-}
-
-/* KMY按0.30m点距调出的预瞄参数不能直接当作KMS的点数。
- * 科目三沿实际路线累计距离，保持两种打点密度下相同的物理预瞄。 */
-static int guandao_preview_steps_for_distance(guandao_state *state,
-        int start_index, float desired_distance)
-{
-    int16 route_length = guandao_route_length(state);
-    int steps = 0;
-    float accumulated_distance = 0.0f;
-    state_t previous_point;
-
-    if(route_length <= 0 || desired_distance <= 0.0f) return 0;
-    if(start_index < 0) start_index = 0;
-    if(start_index >= route_length) start_index = route_length - 1;
-    previous_point = guandao_route_point(state, start_index);
-
-    for(int index = start_index + 1;
-            index < route_length && steps < GUANDAO_PREVIEW_MAX_STEPS;
-            index++)
-    {
-        state_t point = guandao_route_point(state, index);
-        accumulated_distance += get_distance(previous_point, point);
-        previous_point = point;
-        steps++;
-        if(accumulated_distance >= desired_distance) break;
-    }
-    return steps;
 }
 
 static float guandao_record_distance_for_route(guandao_state *state)
@@ -1083,65 +1056,46 @@ float get_distance(state_t p1, state_t p2)
  */
 void update_state(guandao_state * state , Encoder_t * ecd)
 {
-    float delta_real_center = 0;
-    float delta_real_l = 0;
-    float delta_real_r = 0;
-    int32 odometry_pulses = rear_motor_take_odometry_pulses();
+    int32 odometry_pulses = 0;
+    int32 total_pulses = 0;
+    float sample_yaw = 0.0f;
 
-    if(odometry_pulses > 32767)
+    /* Each 10 ms pulse increment is projected using the Yaw sampled at the
+     * same instant.  A delayed main loop therefore cannot rotate an entire
+     * accumulated turn using only the newest heading. */
+    while(rear_motor_take_odometry_sample(&odometry_pulses, &sample_yaw))
+    {
+        float sample_theta = daoche_flag ? sample_yaw + 180.0f : sample_yaw;
+        float sample_distance = (float)odometry_pulses * ONE_TICK_DISTANCE;
+
+        angle_plan(&sample_theta);
+        if(daoche_flag) sample_distance = -sample_distance;
+
+        state->current_state.x += sample_distance
+                * sinf(sample_theta / 180.0f * M_PI);
+        state->current_state.y += sample_distance
+                * cosf(sample_theta / 180.0f * M_PI);
+        total_pulses += odometry_pulses;
+    }
+
+    if(total_pulses > 32767)
     {
         ecd->delta_l = 32767;
         ecd->delta_r = 32767;
     }
-    else if(odometry_pulses < -32768)
+    else if(total_pulses < -32768)
     {
         ecd->delta_l = -32768;
         ecd->delta_r = -32768;
     }
     else
     {
-        ecd->delta_l = (int16)odometry_pulses;
-        ecd->delta_r = (int16)odometry_pulses;
-    }
-    switch(slip_state)
-    {
-        case NONE:
-            delta_real_l = (float)odometry_pulses * ONE_TICK_DISTANCE;
-            delta_real_r = delta_real_l;
-
-            break;
-
-        case Left_Slip:
-            delta_real_r = (float)odometry_pulses * ONE_TICK_DISTANCE;
-            delta_real_l = delta_real_r;
-
-            break;
-
-        case Right_Slip:
-            delta_real_l = (float)odometry_pulses * ONE_TICK_DISTANCE;
-            delta_real_r = delta_real_l;
-
-            break;
-
-        default : break;
+        ecd->delta_l = (int16)total_pulses;
+        ecd->delta_r = (int16)total_pulses;
     }
 
-    if(!daoche_flag)
-    {
-        delta_real_center  = (delta_real_l+delta_real_r)/2.0f;
-        state->current_state.theta =Yaw_1;
-    }
-    else
-    {
-        delta_real_center  = -(delta_real_l+delta_real_r)/2.0f;
-        state->current_state.theta =Yaw_1+180.0f;
-        angle_plan(&state->current_state.theta);
-    }
-
-
-    state->current_state.x+=delta_real_center*sinf(state->current_state.theta/180.0f*M_PI);
-    state->current_state.y+=delta_real_center*cosf(state->current_state.theta/180.0f*M_PI);
-
+    state->current_state.theta = daoche_flag ? Yaw_1 + 180.0f : Yaw_1;
+    angle_plan(&state->current_state.theta);
 }
 // 科目一自动驾驶入口前的状态复位。
 // 注意：Flash 里的 INS.length_index 不能清零，它是已保存路线长度；这里只清运行态。
@@ -1849,9 +1803,13 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     }
     guandao_debug_angle_diff = angle_diff;
 
+    /* Portion 3 uses its dedicated 0.15 m gate for the final point. */
+    uint8 hold_portion3_final_point = (route_setting_choice == 2
+            && state->current_point_index >= route_length - 1);
+
     // 只允许“距离足够近”时切到下一个路线点。
     // 旧逻辑曾用 |angle_diff| > 90 直接跳点，车头方向一反就会瞬间跳到终点并停车。
-    if(distance_to_target <= arrive_threshold)
+    if(distance_to_target <= arrive_threshold && !hold_portion3_final_point)
     {
         if(guandao_debug_stop_reason == 0) guandao_debug_stop_reason = 2;
         state->current_point_index++;
@@ -1885,6 +1843,11 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
             if(steer_preview_steps < 4) steer_preview_steps = 4;
         }
     }
+    if(route_setting_choice == 2 && base_speed >= 15.0f
+            && steer_preview_steps < PORTION3_FAST_PREVIEW_STEPS)
+    {
+        steer_preview_steps = PORTION3_FAST_PREVIEW_STEPS;
+    }
     upcoming_turn = guandao_accumulated_route_turn(state, state->current_point_index, 12);
     max_single_turn = guandao_max_route_turn(state, state->current_point_index, 12);
     /* At 2.5 m/s and above, small route/pose errors can produce an alternating
@@ -1902,7 +1865,15 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     }
     if(max_single_turn >= GUANDAO_SHARP_TURN_ANGLE)
     {
-        if(steer_preview_steps > 3) steer_preview_steps = 3;
+        int sharp_preview_steps = 3;
+        if(route_setting_choice == 2)
+        {
+            sharp_preview_steps = PORTION3_SHARP_PREVIEW_STEPS;
+        }
+        if(steer_preview_steps > sharp_preview_steps)
+        {
+            steer_preview_steps = sharp_preview_steps;
+        }
         if(curve_preview_steps > 6) curve_preview_steps = 6;
         steering_rate_limit = GUANDAO_STEER_RATE_LOW;
         steering_limit = GUANDAO_STEERING_CMD_LIMIT;
@@ -1910,15 +1881,6 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     if(curve_preview_steps < steer_preview_steps + 3)
     {
         curve_preview_steps = steer_preview_steps + 3;
-    }
-    if(route_setting_choice == 2)
-    {
-        steer_preview_steps = guandao_preview_steps_for_distance(state,
-                state->current_point_index,
-                (float)steer_preview_steps * GUANDAO_KMY_POINT_DISTANCE);
-        curve_preview_steps = guandao_preview_steps_for_distance(state,
-                state->current_point_index,
-                (float)curve_preview_steps * GUANDAO_KMY_POINT_DISTANCE);
     }
     guandao_debug_steer_preview = steer_preview_steps;
     guandao_debug_curve_preview = curve_preview_steps;
@@ -2028,6 +1990,14 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        {
            v_center = base_speed * 0.75f;
        }
+   }
+
+   /* Keep KMS cone arcs above 80% base speed.  Terminal deceleration below
+    * remains authoritative near the final point. */
+   float portion3_curve_speed_floor = base_speed * PORTION3_CURVE_SPEED_FLOOR_RATIO;
+   if(route_setting_choice == 2 && v_center < portion3_curve_speed_floor)
+   {
+       v_center = portion3_curve_speed_floor;
    }
 
    if (dist_to_final < final_dsts && state->current_point_index >= route_length - 30)
@@ -2631,10 +2601,8 @@ uint8 portion3_points_switch(void)
 {
     static state_t reverse_map[MAX_LENGTH_INDEX];
     int16 len = portion_3.length_index;
-    int16 heading_anchor = 0;
     state_t origin;
     float return_heading = 0.0f;
-    float heading_baseline = 0.0f;
     float heading_rad = 0.0f;
     float heading_sin = 0.0f;
     float heading_cos = 1.0f;
@@ -2658,22 +2626,13 @@ uint8 portion3_points_switch(void)
      */
     origin = portion_3.recode_map[len - 1];
 
-    /* 用终点前约0.8m路线确定返程坐标轴，避免最后两个0.2m点的记录噪声
-     * 把整条返程路线旋转，造成所有弯道统一提前或滞后。 */
-    heading_anchor = len - 2;
-    for(int16 i = len - 2; i >= 0; i--)
-    {
-        heading_baseline += get_distance(portion_3.recode_map[i + 1],
-                                         portion_3.recode_map[i]);
-        heading_anchor = i;
-        if(heading_baseline >= PORTION3_HEADING_BASELINE) break;
-    }
-    return_heading = guandao_segment_yaw(origin, portion_3.recode_map[heading_anchor]);
+    /* The exact save point can be almost coincident with the previous point,
+     * so its segment direction is noisy.  The recorded endpoint yaw comes
+     * from the same IMU as the map and defines the return frame directly. */
+    return_heading = guandao_normalize_angle(origin.theta + 180.0f);
     heading_rad = return_heading / 180.0f * M_PI;
     heading_sin = sinf(heading_rad);
     heading_cos = cosf(heading_rad);
-    portion3_foint_flag = len;
-
     for(int16 i = 0; i < len; i++)
     {
         state_t src = portion_3.recode_map[len - 1 - i];
@@ -2685,6 +2644,39 @@ uint8 portion3_points_switch(void)
         reverse_map[i].theta = src.theta + 180.0f - return_heading;
         angle_plan(&reverse_map[i].theta);
     }
+
+    if(PORTION3_RETURN_TRIM_DIST > 0.0f && len > 2)
+    {
+        float trim_dist = PORTION3_RETURN_TRIM_DIST;
+
+        for(int16 i = len - 1; i > 0 && trim_dist > 0.0f; i--)
+        {
+            float segment_dist = get_distance(reverse_map[i - 1], reverse_map[i]);
+
+            if(segment_dist <= 0.001f)
+            {
+                len = i;
+                continue;
+            }
+            if(trim_dist < segment_dist)
+            {
+                float keep_ratio = (segment_dist - trim_dist) / segment_dist;
+                reverse_map[i].x = reverse_map[i - 1].x
+                        + (reverse_map[i].x - reverse_map[i - 1].x) * keep_ratio;
+                reverse_map[i].y = reverse_map[i - 1].y
+                        + (reverse_map[i].y - reverse_map[i - 1].y) * keep_ratio;
+                len = i + 1;
+                break;
+            }
+
+            trim_dist -= segment_dist;
+            len = i;
+        }
+        if(len < 2) len = 2;
+    }
+
+    portion3_foint_flag = len;
+    portion_3.length_index = len;
 
     for(int16 i = 0; i < len; i++)
     {
@@ -2816,8 +2808,20 @@ void guandao_show(guandao_state * p)
  */
 void follow_points_show(guandao_state * p)
 {
+    static uint32 last_show_ms = 0;
+    uint32 now_ms = system_getval_ms();
+    uint32 elapsed_ms = guandao_elapsed_ms(now_ms, last_show_ms);
+    int display_index;
 
-    ips200_show_float(X(10),Y(10),p->recode_map[INS.current_point_index].x,3,2); ips200_show_float(X(15),Y(10),p->recode_map[INS.current_point_index].y,3,2);
+    if(last_show_ms != 0 && elapsed_ms < 200u) return;
+    last_show_ms = now_ms;
+
+    if(p == NULL || p->length_index <= 0) return;
+    display_index = p->current_point_index;
+    if(display_index < 0) display_index = 0;
+    if(display_index >= p->length_index) display_index = p->length_index - 1;
+
+    ips200_show_float(X(10),Y(10),p->recode_map[display_index].x,3,2); ips200_show_float(X(15),Y(10),p->recode_map[display_index].y,3,2);
     ips200_show_float(X(10),Y(11),p->current_state.x,3,2);                                         ips200_show_float(X(15),Y(11),p->current_state.y,3,2);
     ips200_show_int(X(10),  Y(15) ,p->current_point_index, 5);                                   ips200_show_int(X(15),  Y(15) ,p->length_index, 5);
     ips200_show_float(X(15),Y(16),p->current_state.theta,3,2);

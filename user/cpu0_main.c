@@ -56,7 +56,7 @@ extern int num;
 static uint32 main_loop_last_ms = 0;
 static uint32 main_loop_last_dt_ms = 0;
 static uint32 main_loop_max_dt_ms = 0;
-static char serial_debug_tx_buffer[512];
+static char serial_debug_tx_buffer[640];
 static uint16 serial_debug_tx_length = 0;
 static uint16 serial_debug_tx_index = 0;
 static uint32 serial_debug_tx_dropped = 0;
@@ -253,7 +253,12 @@ static void Serial_Debug_Update(void)
 {
     static uint32 last_ms = 0;
     uint32 now_ms = system_getval_ms();
-    static char line[512];
+    static char line[640];
+    static uint8 p3_diag_started = 0;
+    static uint8 p3_gps_origin_valid = 0;
+    static int32 p3_pulse_origin = 0;
+    static double p3_lat_origin = 0.0;
+    static double p3_lon_origin = 0.0;
     int len;
 
     if(last_ms != 0 && Main_Elapsed_Ms(now_ms, last_ms) < SERIAL_DEBUG_PERIOD_MS)
@@ -261,6 +266,12 @@ static void Serial_Debug_Update(void)
         return;
     }
     last_ms = now_ms;
+
+    if(main_mode != Guandao_portion_3)
+    {
+        p3_diag_started = 0;
+        p3_gps_origin_valid = 0;
+    }
 
     if(main_mode == Guandao_Recode_Mode)
     {
@@ -302,15 +313,15 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,dt=%lu,dtMax=%lu,raw=%ld,pend=%ld,drop=%lu,dropP=%ld,maxRaw=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld\r\n",
+                      "AUTO,t=%lu,dt=%lu,dtMax=%lu,enc10=%d,pend=%u,merge=%lu,odom=%ld,enc100=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld\r\n",
                       (unsigned long)now_ms,
                       (unsigned long)main_loop_last_dt_ms,
                       (unsigned long)main_loop_max_dt_ms,
-                      (long)rear_motor_get_odometry_last_sample(),
-                      (long)rear_motor_get_odometry_pending_pulses(),
-                      (unsigned long)rear_motor_get_odometry_rejected_samples(),
-                      (long)rear_motor_get_odometry_rejected_pulses(),
-                      (long)rear_motor_get_odometry_max_abs_sample(),
+                      rear_motor_get_encoder_10ms(),
+                      (unsigned int)rear_motor_get_odometry_pending_samples(),
+                      (unsigned long)rear_motor_get_odometry_merged_samples(),
+                      (long)rear_motor_get_odometry_total_pulses(),
+                      (long)rear_motor_get_encoder_100ms(),
                       INS.current_point_index,
                       INS.length_index,
                       guandao_debug_stop_reason,
@@ -339,6 +350,28 @@ static void Serial_Debug_Update(void)
         float dy;
         float target_angle;
         float angle_error;
+        float gps_east_m = 0.0f;
+        float gps_north_m = 0.0f;
+        int32 pulse_relative;
+
+        if(!p3_diag_started)
+        {
+            p3_pulse_origin = rear_motor_get_odometry_total_pulses();
+            p3_diag_started = 1;
+        }
+        if(!p3_gps_origin_valid && gnss.state == 1)
+        {
+            p3_lat_origin = gnss.latitude;
+            p3_lon_origin = gnss.longitude;
+            p3_gps_origin_valid = 1;
+        }
+        if(p3_gps_origin_valid && gnss.state == 1)
+        {
+            gps_north_m = (float)((gnss.latitude - p3_lat_origin) * 111319.5);
+            gps_east_m = (float)((gnss.longitude - p3_lon_origin) * 111319.5
+                    * cos(p3_lat_origin * M_PI / 180.0));
+        }
+        pulse_relative = rear_motor_get_odometry_total_pulses() - p3_pulse_origin;
 
         if(target_index < 0) target_index = 0;
         if(target_index >= portion_3.length_index && portion_3.length_index > 0)
@@ -362,8 +395,19 @@ static void Serial_Debug_Update(void)
         angle_plan(&angle_error);
 
         len = sprintf(line,
-                      "P3AUTO,t=%lu,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld,totalPulse=%ld,dist100=%ld\r\n",
+                      "P3AUTO,cfg=final1,t=%lu,dt=%lu,dtMax=%lu,txDrop=%lu,odomMerge=%lu,pRel=%ld,pend=%u,gOrg=%u,gE100=%ld,gN100=%ld,gps=%u,sat=%u,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,steerAct10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
                       (unsigned long)now_ms,
+                      (unsigned long)main_loop_last_dt_ms,
+                      (unsigned long)main_loop_max_dt_ms,
+                      (unsigned long)serial_debug_tx_dropped,
+                      (unsigned long)rear_motor_get_odometry_merged_samples(),
+                      (long)pulse_relative,
+                      (unsigned int)rear_motor_get_odometry_pending_samples(),
+                      (unsigned int)p3_gps_origin_valid,
+                      (long)Serial_Debug_Scale(gps_east_m, 100.0f),
+                      (long)Serial_Debug_Scale(gps_north_m, 100.0f),
+                      (unsigned int)gnss.state,
+                      (unsigned int)gnss.satellite_used,
                       portion_3.current_point_index,
                       portion_3.length_index,
                       portion_3.gps_recode_length,
@@ -383,13 +427,12 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(out_v_l, 10.0f),
                       (long)Serial_Debug_Scale(out_v_r, 10.0f),
                       (long)Serial_Debug_Scale(out_servo, 10.0f),
+                      (long)Serial_Debug_Scale(angle_control_get_current_angle_float(), 10.0f),
                       (long)Serial_Debug_Scale(rear_motor_get_target_mps(), 100.0f),
                       (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
                       rear_motor_get_pwm(),
                       rear_motor_get_encoder_10ms(),
-                      (long)rear_motor_get_encoder_100ms(),
-                      (long)rear_motor_get_total_encoder_pulses(),
-                      (long)Serial_Debug_Scale(rear_motor_get_total_distance_m(), 100.0f));
+                      (long)rear_motor_get_encoder_100ms());
         if(len > 0)
         {
             Serial_Debug_Write(line);
@@ -425,9 +468,13 @@ int core0_main(void)
 
     Menu_Contral();                                                                      // 菜单结束后 main_mode/conrtol_mode 已确定，主循环按模式执行
 
-    Flash_Write_pid();                                                               //Flash写入
-
-    if(GPS_WORK_FLAG){GPS_WorkMap_Copy(&INS);}       //如果GPS工作标志为真  将GPS路径点数据复制到导航数据结构中
+    /* Parameter editing persists explicitly; Start must not rewrite Flash. */
+    if(main_mode != Guandao_Recode_Mode
+            && main_mode != Guandao_portion_3
+            && GPS_WORK_FLAG)
+    {
+        GPS_WorkMap_Copy(&INS);
+    }
 //    Buzzer_check(500);
     Main_Key_Flag = 1;                                                            // 中断控制开始标志为1，主循环和中断控制同时启动
 //    build_map_text(&INS);
@@ -510,11 +557,10 @@ int core0_main(void)
             }
             // 自动驾驶诊断页：用于判断停车原因。
             // Idx 接近 Len 表示路线追完；TgtAct/PWM 为 0 表示后轮目标已被上层清掉。
-            else if(display_update_due && main_mode != Rack_Test_Mode)
+            else if(display_update_due && main_mode == Guandao_portion_1)
             {
-                guandao_state *auto_state = (main_mode == Guandao_portion_3) ? &portion_3 : &INS;
-                ips200_show_string(X(1),  Y(8), "Idx");      ips200_show_int(X(6),  Y(8), auto_state->current_point_index, 4);
-                ips200_show_string(X(12), Y(8), "Len");      ips200_show_int(X(17), Y(8), auto_state->length_index, 4);
+                ips200_show_string(X(1),  Y(8), "Idx");      ips200_show_int(X(6),  Y(8), INS.current_point_index, 4);
+                ips200_show_string(X(12), Y(8), "Len");      ips200_show_int(X(17), Y(8), INS.length_index, 4);
                 ips200_show_string(X(1),  Y(9), "D");        ips200_show_float(X(6),  Y(9), guandao_debug_distance, 3, 2);
                 ips200_show_string(X(12), Y(9), "A");        ips200_show_float(X(16), Y(9), guandao_debug_angle_diff, 3, 1);
                 ips200_show_string(X(1),  Y(10), "Reason");  ips200_show_int(X(10), Y(10), guandao_debug_stop_reason, 2);
@@ -522,7 +568,7 @@ int core0_main(void)
                 ips200_show_string(X(1),  Y(12), "TgtAct");  ips200_show_float(X(9),  Y(12), rear_motor_get_target_mps(), 2, 1); ips200_show_float(X(16), Y(12), rear_motor_get_speed_mps(), 2, 1);
                 ips200_show_string(X(1),  Y(13), "PWM");     ips200_show_int(X(7),  Y(13), rear_motor_get_pwm(), 5);
                 ips200_show_string(X(1),  Y(14), "Yaw");     ips200_show_float(X(7),  Y(14), Yaw_1, 4, 1);
-                ips200_show_string(X(1),  Y(15), "XY");      ips200_show_float(X(5),  Y(15), auto_state->current_state.x, 3, 1); ips200_show_float(X(13), Y(15), auto_state->current_state.y, 3, 1);
+                ips200_show_string(X(1),  Y(15), "XY");      ips200_show_float(X(5),  Y(15), INS.current_state.x, 3, 1); ips200_show_float(X(13), Y(15), INS.current_state.y, 3, 1);
             }
 //                    ips200_show_int(X(10),  Y(13),conrtol_mode ,5);
 //                    ips200_show_float(X(10),  Y(12),angle_speed ,5 ,5);

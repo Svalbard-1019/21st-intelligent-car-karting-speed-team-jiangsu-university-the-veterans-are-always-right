@@ -133,6 +133,7 @@ void sbus_rc_control(void)
     uint16 ch_throttle;
     uint16 ch_save;
     uint16 ch_stop;
+    float steer_full_scale;
 
     if(uart_receiver.state == 0)
     {
@@ -164,7 +165,9 @@ void sbus_rc_control(void)
         return;
     }
 
-    hot_rc_steer = sbus_rc_map_centered(ch_steer, sbus_steer_mid, 40.0f);
+    /* Preserve each tested subject setting in the combined firmware. */
+    steer_full_scale = (route_setting_choice == 2) ? 45.0f : 40.0f;
+    hot_rc_steer = sbus_rc_map_centered(ch_steer, sbus_steer_mid, steer_full_scale);
     hot_rc_speed = sbus_rc_map_centered(ch_throttle, sbus_throttle_mid, 50.0f);
     hot_rc_delta = (hot_rc_speed * tanf(hot_rc_steer / 3.0f / 180.0f * M_PI)) / WHEEL_BASE;
 }

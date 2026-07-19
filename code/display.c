@@ -480,6 +480,7 @@ void Menu_Recode_Points(void)
                 break;
             default :break;
         }
+        angle_control_select_route(route_setting_choice);
          Buzzer_check(50);
     }
     if(key_value == 4){key_mode2 =4; ips200_clear();}
@@ -540,9 +541,9 @@ void Menu_Mode_Choice(void)
     if(key_value == 3)
     {
         if(key_mode1 == 3){key_mode2 =5 ; ips200_clear(); }
-        else if (key_mode1 ==4){main_mode = Guandao_portion_1 ;  route_setting_choice = 0; daoche_speed = (float)control[1]; portion_1_reset(); conrtol_mode = GUANDAO ; Buzzer_check(50);}
+        else if (key_mode1 ==4){main_mode = Guandao_portion_1 ;  route_setting_choice = 0; angle_control_select_route(route_setting_choice); daoche_speed = (float)control[1]; portion_1_reset(); conrtol_mode = GUANDAO ; Buzzer_check(50);}
         else if( key_mode1==5){main_mode = Guandao_Voice ; route_setting_choice = 3; conrtol_mode = GUANDAO ;Buzzer_check(50);}
-        else if( key_mode1==6){main_mode = Guandao_portion_3 ; route_setting_choice = 2; portion3_return_reset(); conrtol_mode = GUANDAO ;Buzzer_check(50);}
+        else if( key_mode1==6){main_mode = Guandao_portion_3 ; route_setting_choice = 2; angle_control_select_route(route_setting_choice); portion3_return_reset(); conrtol_mode = GUANDAO ;Buzzer_check(50);}
         else if( key_mode1==7){main_mode = Rack_Test_Mode ; conrtol_mode = RACK_TEST ; rack_test_stage = 0; rack_test_speed_target = 0; rack_test_steer_target = 0; Rack_Straight_Reset(); MoterPID_L.Kp = 0.5f; MoterPID_R.Kp = 0.5f; MoterPID_L.Ki = 1.0f; MoterPID_R.Ki = 1.0f; MoterPID_L.Kd = 0.0f; MoterPID_R.Kd = 0.0f; CarGo_Flag = 1; ips200_clear(); Buzzer_check(50);}
 //        main_mode  = key_mode1 - 2;
 //        Buzzer_check(50);
@@ -640,6 +641,7 @@ void Menu_PID_P(void)
 void Menu_Control_P(void)
 {
     static uint8 edit_flag = 0;
+    static uint8 params_dirty = 0;
     int16 *target;
     uint8 value_changed = 0;
 
@@ -683,6 +685,11 @@ void Menu_Control_P(void)
         else if(key_value == 3){*target += 10; value_changed = 1;}
         else if(key_value == 4)
         {
+            if(params_dirty)
+            {
+                Flash_Write_pid();
+                params_dirty = 0;
+            }
             edit_flag = 0;
             serial_control_edit_flag = edit_flag;
             serial_menu_redraw_request = 1;
@@ -707,6 +714,7 @@ void Menu_Control_P(void)
 
         if(value_changed)
         {
+            params_dirty = 1;
             base_speed = (float)control[0];
             daoche_speed = (float)control[1];
             preview_spets = control[2];

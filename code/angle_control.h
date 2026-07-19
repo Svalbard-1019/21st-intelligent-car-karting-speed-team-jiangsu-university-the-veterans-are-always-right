@@ -44,9 +44,17 @@
 #define ANGLE_GEAR_RATIO    300                    // 减速比
 #define ANGLE_MAX_DEGREE    60                     // 最大目标角度
 #define ANGLE_MIN_DEGREE    -60                    // 最小目标角度
-#define ANGLE_DEFAULT_KP    500.0f
-#define ANGLE_DEFAULT_KI    18.0f
-#define ANGLE_DEFAULT_KD    27.0f
+#define ANGLE_KMY_KP        500.0f
+#define ANGLE_KMY_KI        18.0f
+#define ANGLE_KMY_KD        27.0f
+#define ANGLE_KMY_FF_GAIN   65.0f
+#define ANGLE_KMS_KP        1000.0f
+#define ANGLE_KMS_KI        15.0f
+#define ANGLE_KMS_KD        40.0f
+#define ANGLE_KMS_FF_GAIN   80.0f
+#define ANGLE_DEFAULT_KP    ANGLE_KMY_KP
+#define ANGLE_DEFAULT_KI    ANGLE_KMY_KI
+#define ANGLE_DEFAULT_KD    ANGLE_KMY_KD
 #define ANGLE_OUTPUT_MAX    10000
 #define ANGLE_DEAD_BAND     0.1f
 #define ANGLE_FF_GAIN       65.0f    // 前馈系数：前轮转向目标角度越大额外加一个正比例于目标角的 PWM哂克服静摩擦
@@ -81,6 +89,9 @@ extern int32 accumulated_encoder_count;
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void angle_control_init(void);
+
+// Select the tested steering controller for INS (KMY) or portion_3 (KMS).
+void angle_control_select_route(uint8 route_choice);
 
 // 读取当前角度并执行一次位置式 PID 计算
 /**

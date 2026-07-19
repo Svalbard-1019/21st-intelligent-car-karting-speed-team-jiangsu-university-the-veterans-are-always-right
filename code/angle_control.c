@@ -43,6 +43,7 @@ AngleControl_TypeDef angle_ctrl;
 int32 accumulated_encoder_count = 0;
 static int16 prev_raw_count = 0;
 static uint8 encoder_first_read = 1;
+static float angle_ff_gain = ANGLE_KMY_FF_GAIN;
 
 /**
  * 函数说明：encoder_get_accumulated_count()。读取当前模块保存的状态量，主要用于屏幕显示和调试。
@@ -116,6 +117,26 @@ void angle_control_init(void) {
     angle_ctrl.encoder_zero_count = 0;
 }
 
+void angle_control_select_route(uint8 route_choice)
+{
+    float kp = ANGLE_KMY_KP;
+    float ki = ANGLE_KMY_KI;
+    float kd = ANGLE_KMY_KD;
+
+    angle_ff_gain = ANGLE_KMY_FF_GAIN;
+    if(route_choice == 2u)
+    {
+        kp = ANGLE_KMS_KP;
+        ki = ANGLE_KMS_KI;
+        kd = ANGLE_KMS_KD;
+        angle_ff_gain = ANGLE_KMS_FF_GAIN;
+    }
+
+    PID_Init(&angle_ctrl.pid, kp, ki, kd, ANGLE_OUTPUT_MAX, ANGLE_INTEGRAL_MAX);
+    angle_ctrl.target_angle = 0.0f;
+    angle_motor_set_pwm(0);
+}
+
 /**
  * 函数说明：angle_motor_set_pwm()。根据符号和限幅要求输出 PWM，占空比正负通常对应电机方向。
  * 所属模块：前轮转向电机闭环模块，主要由旧转向接口 Steer_Moter_Contral() 间接调用。
@@ -167,7 +188,7 @@ void angle_control_update(void) {
         angle_ctrl.pid.Integral = 0;
     } else {
         // 前馈：正比于目标角，克服静摩擦，减小稳态误差
-        pid_output += ANGLE_FF_GAIN * angle_ctrl.target_angle;
+        pid_output += angle_ff_gain * angle_ctrl.target_angle;
     }
 
     angle_motor_set_pwm((int32)pid_output);
