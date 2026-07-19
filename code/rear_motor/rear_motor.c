@@ -54,6 +54,8 @@ static uint8  encoder_first_read = 1;
 static float  integral    = 0.0f;
 static float  last_error  = 0.0f;
 static int    last_pwm    = 0;
+static int16  applied_pwm_l = 0;
+static int16  applied_pwm_r = 0;
 
 /* ---- HIP4082 电机驱动（每个电机两路 PWM） ---- */
 /**
@@ -71,6 +73,9 @@ static void rear_motor_set_pwm(int16 pwm)
     extern float out_v_r;
     extern MOTER_control_mode conrtol_mode;
     int diff = pwm - last_pwm;
+    int16 pwm_l;
+    int16 pwm_r;
+
     if(diff > REAR_PWM_RATE_LIMIT)  diff = REAR_PWM_RATE_LIMIT;
     if(diff < -REAR_PWM_RATE_LIMIT) diff = -REAR_PWM_RATE_LIMIT;
     last_pwm += diff;
@@ -79,46 +84,71 @@ static void rear_motor_set_pwm(int16 pwm)
     if(last_pwm < -REAR_PWM_HARD_LIMIT) last_pwm = -REAR_PWM_HARD_LIMIT;
 
     current_pwm = last_pwm;
+    pwm_l = current_pwm;
+    pwm_r = current_pwm;
 
-    int16 pwm_l = current_pwm;
-    int16 pwm_r = current_pwm;
-
-    // Torque Vectoring: apply differential feedforward PWM based on target speeds
-    if (conrtol_mode == GUANDAO)
+    if(conrtol_mode == GUANDAO)
     {
         float diff_val = out_v_l - out_v_r;
         int16 diff_pwm = (int16)(diff_val * REAR_DIFF_PWM_GAIN);
-        if (diff_pwm > 1500) diff_pwm = 1500;
-        if (diff_pwm < -1500) diff_pwm = -1500;
+        if(diff_pwm > 1500) diff_pwm = 1500;
+        if(diff_pwm < -1500) diff_pwm = -1500;
         pwm_l = current_pwm + diff_pwm;
         pwm_r = current_pwm - diff_pwm;
     }
 
-    if(pwm_l > REAR_PWM_HARD_LIMIT)  pwm_l = REAR_PWM_HARD_LIMIT;
+    if(pwm_l > REAR_PWM_HARD_LIMIT) pwm_l = REAR_PWM_HARD_LIMIT;
     if(pwm_l < -REAR_PWM_HARD_LIMIT) pwm_l = -REAR_PWM_HARD_LIMIT;
-    if(pwm_r > REAR_PWM_HARD_LIMIT)  pwm_r = REAR_PWM_HARD_LIMIT;
+    if(pwm_r > REAR_PWM_HARD_LIMIT) pwm_r = REAR_PWM_HARD_LIMIT;
     if(pwm_r < -REAR_PWM_HARD_LIMIT) pwm_r = -REAR_PWM_HARD_LIMIT;
-    pwm_set_duty(PWM_L1, 0);
-    pwm_set_duty(PWM_L2, 0);
-    pwm_set_duty(PWM_R1, 0);
-    pwm_set_duty(PWM_R2, 0);
+
+    if((pwm_l > 0 && applied_pwm_l < 0)
+            || (pwm_l < 0 && applied_pwm_l > 0))
+    {
+        pwm_set_duty(PWM_L1, 0);
+        pwm_set_duty(PWM_L2, 0);
+    }
+    if((pwm_r > 0 && applied_pwm_r < 0)
+            || (pwm_r < 0 && applied_pwm_r > 0))
+    {
+        pwm_set_duty(PWM_R1, 0);
+        pwm_set_duty(PWM_R2, 0);
+    }
 
     if(pwm_l > 0)
     {
+        pwm_set_duty(PWM_L2, 0);
         pwm_set_duty(PWM_L1, pwm_l);
     }
     else if(pwm_l < 0)
     {
+        pwm_set_duty(PWM_L1, 0);
         pwm_set_duty(PWM_L2, -pwm_l);
     }
+    else
+    {
+        pwm_set_duty(PWM_L1, 0);
+        pwm_set_duty(PWM_L2, 0);
+    }
+
     if(pwm_r > 0)
     {
+        pwm_set_duty(PWM_R2, 0);
         pwm_set_duty(PWM_R1, pwm_r);
     }
     else if(pwm_r < 0)
     {
+        pwm_set_duty(PWM_R1, 0);
         pwm_set_duty(PWM_R2, -pwm_r);
     }
+    else
+    {
+        pwm_set_duty(PWM_R1, 0);
+        pwm_set_duty(PWM_R2, 0);
+    }
+
+    applied_pwm_l = pwm_l;
+    applied_pwm_r = pwm_r;
 }
 
 /* ---- 公开接口 ---- */
@@ -153,6 +183,9 @@ void rear_motor_init(void)
     integral    = 0.0f;
     last_error  = 0.0f;
     last_pwm    = 0;
+
+    applied_pwm_l = 0;
+    applied_pwm_r = 0;
 }
 
 /**
@@ -183,6 +216,9 @@ void rear_motor_stop(void)
     pwm_set_duty(PWM_R1, 0);
     pwm_set_duty(PWM_R2, 0);
     current_pwm = 0;
+
+    applied_pwm_l = 0;
+    applied_pwm_r = 0;
 }
 
 /**
@@ -294,7 +330,14 @@ void rear_motor_pid_update_100ms(void)
     float derivative = (error - last_error) / 0.1f;
     last_error = error;
 
-    float ff     = target_pulses * REAR_FF_GAIN;
+    float ff = target_pulses * REAR_FF_GAIN;
+    if(fabsf(target_mps) > REAR_HIGH_SPEED_FF_START_MPS)
+    {
+        float high_speed_ff = (fabsf(target_mps) - REAR_HIGH_SPEED_FF_START_MPS)
+                * REAR_HIGH_SPEED_FF_GAIN;
+        if(target_mps < 0.0f) high_speed_ff = -high_speed_ff;
+        ff += high_speed_ff;
+    }
     float pid    = REAR_KP * error + REAR_KI * integral + REAR_KD * derivative;
     float pwm_f  = ff + pid;
     // 最小反向 PWM 只用于静止起步克服摩擦。

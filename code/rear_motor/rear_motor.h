@@ -37,11 +37,13 @@
 #define REAR_ENCODER_FEEDBACK_DIRECTION (-1)
 #define REAR_SPEED_CALIBRATION_FACTOR 0.7557f
 
-/* PID 参数: 载人旧工程参数 (当前科目一测试使用) */
-#define REAR_KP                 10.0f
-#define REAR_KI                 0.3f
-#define REAR_KD                 0.8f
-#define REAR_FF_GAIN            13.0f
+/* PID parameters: stable unloaded setup validated 2026-07-19. */
+#define REAR_KP                 4.0f
+#define REAR_KI                 0.6f
+#define REAR_KD                 0.12f
+#define REAR_FF_GAIN            8.0f
+#define REAR_HIGH_SPEED_FF_START_MPS 2.5f
+#define REAR_HIGH_SPEED_FF_GAIN 500.0f
 
 /* PID 参数: 空载实测 (2026-05-13), 架上测试需要时切回 */
 // #define REAR_KP              8.0f
@@ -55,7 +57,7 @@
 // #define REAR_KD              0.3f
 // #define REAR_FF_GAIN         9.0f
 #define REAR_PWM_HARD_LIMIT     9500
-#define REAR_PWM_RATE_LIMIT     1000
+#define REAR_PWM_RATE_LIMIT     600
 #define REAR_REVERSE_PWM_MIN    800
 #define REAR_INTEGRAL_LIMIT     2000.0f
 #define REAR_DIFF_PWM_GAIN      600.0f  // 后轴左右差动前馈系数。转弯时基于左右轮目标速度差直接在前馈上拉开左右电机的 PWM，克服大弯道刹车时的偏航阻尼。
