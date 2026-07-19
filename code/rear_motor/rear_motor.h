@@ -25,25 +25,29 @@
 #define CODE_REAR_MOTOR_H_
 
 #include "zf_common_headfile.h"
+#include "rear_encoder_calibration.h"
 
 /* 车轮与编码器参数 */
 #define REAR_WHEEL_DIAMETER_M        0.24f
 #define REAR_GEAR_RATIO              1.6f
 #define REAR_ENCODER_PPR             1024
 #define REAR_EFFECTIVE_PPR           ((float)REAR_ENCODER_PPR * REAR_GEAR_RATIO)
-#define REAR_WHEEL_CIRCUM_M          (3.14159265358979323846f * REAR_WHEEL_DIAMETER_M)
-#define REAR_ODOMETER_PULSES_PER_WHEEL_REV  2122.0f
-#define REAR_DISTANCE_PER_PULSE_M    (REAR_WHEEL_CIRCUM_M / REAR_ODOMETER_PULSES_PER_WHEEL_REV)
 #define REAR_ENCODER_FEEDBACK_DIRECTION (-1)
-#define REAR_SPEED_CALIBRATION_FACTOR 0.7557f
+#define REAR_WHEEL_CIRCUM_M          (3.14159265358979323846f * REAR_WHEEL_DIAMETER_M)
 
-/* PID parameters: stable unloaded setup validated 2026-07-19. */
+/* PID parameters: low-overshoot set for the new rear driver. */
 #define REAR_KP                 4.0f
 #define REAR_KI                 0.6f
 #define REAR_KD                 0.12f
 #define REAR_FF_GAIN            8.0f
 #define REAR_HIGH_SPEED_FF_START_MPS 2.5f
 #define REAR_HIGH_SPEED_FF_GAIN 500.0f
+
+/* Previous loaded-vehicle parameters, retained for track comparison. */
+// #define REAR_KP              10.0f
+// #define REAR_KI              0.3f
+// #define REAR_KD              0.8f
+// #define REAR_FF_GAIN         13.0f
 
 /* PID 参数: 空载实测 (2026-05-13), 架上测试需要时切回 */
 // #define REAR_KP              8.0f
@@ -58,11 +62,12 @@
 // #define REAR_FF_GAIN         9.0f
 #define REAR_PWM_HARD_LIMIT     9500
 #define REAR_PWM_RATE_LIMIT     600
-#define REAR_REVERSE_PWM_MIN    800
+#define REAR_DIFF_PWM_GAIN      600.0f
+#define REAR_REVERSE_PWM_MIN    1800
 #define REAR_INTEGRAL_LIMIT     2000.0f
-#define REAR_DIFF_PWM_GAIN      600.0f  // 后轴左右差动前馈系数。转弯时基于左右轮目标速度差直接在前馈上拉开左右电机的 PWM，克服大弯道刹车时的偏航阻尼。
-#define REAR_INTEGRAL_THRESHOLD 60.0f
+#define REAR_INTEGRAL_THRESHOLD 500.0f
 #define REAR_ENCODER_DELTA_ABS_MAX 300
+#define REAR_SPEED_FILTER_ALPHA  0.15f
 
 /* Nonblocking active-brake parameters verified by Rack Test Stage 5. */
 #define REAR_BRAKE_TIMEOUT_MS 700u
@@ -134,19 +139,11 @@ void rear_motor_set_target_mps(float target_mps);
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
-void rear_motor_encoder_update_10ms(void);
-
-int32 rear_motor_take_odometry_pulses(void);
-
-int32 rear_motor_get_odometry_pending_pulses(void);
-
-int32 rear_motor_get_odometry_last_sample(void);
-
-uint32 rear_motor_get_odometry_rejected_samples(void);
-
-int32 rear_motor_get_odometry_rejected_pulses(void);
-
-int32 rear_motor_get_odometry_max_abs_sample(void);
+void rear_motor_encoder_update_10ms(float yaw_deg);
+uint8 rear_motor_take_odometry_sample(int32 *pulses, float *yaw_deg);
+uint32 rear_motor_get_odometry_merged_samples(void);
+int32 rear_motor_get_odometry_total_pulses(void);
+uint8 rear_motor_get_odometry_pending_samples(void);
 /**
  * 接口说明：rear_motor_pid_update_100ms()。周期更新内部状态，依赖中断或主循环按固定节拍调用。
  * 所属模块：后轮 m/s 速度闭环模块，是当前科目一实际驱动后轮的主要模块。
@@ -157,6 +154,8 @@ int32 rear_motor_get_odometry_max_abs_sample(void);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void rear_motor_pid_update_100ms(void);
+/** RackTest Stage 4：绕过 PID，以固定 PWM 驱动并刷新实际速度。 */
+void rear_motor_open_loop_update(int16 pwm);
 
 /**
  * 接口说明：rear_motor_get_target_mps()。读取当前模块保存的状态量，主要用于屏幕显示和调试。
@@ -178,6 +177,9 @@ float  rear_motor_get_target_mps(void);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 float  rear_motor_get_speed_mps(void);
+float  rear_motor_get_raw_speed_mps(void);
+float rear_motor_get_error_pulses(void);
+float rear_motor_get_integral_pulses(void);
 /**
  * 接口说明：rear_motor_get_pwm()。读取当前模块保存的状态量，主要用于屏幕显示和调试。
  * 所属模块：后轮 m/s 速度闭环模块，是当前科目一实际驱动后轮的主要模块。
@@ -208,11 +210,5 @@ int16  rear_motor_get_encoder_10ms(void);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 int32  rear_motor_get_encoder_100ms(void);
-
-int32  rear_motor_get_total_encoder_pulses(void);
-
-float  rear_motor_get_total_distance_m(void);
-
-void   rear_motor_clear_odometer(void);
 
 #endif /* CODE_REAR_MOTOR_H_ */

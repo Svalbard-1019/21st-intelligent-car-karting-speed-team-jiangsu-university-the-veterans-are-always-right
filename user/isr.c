@@ -103,7 +103,7 @@ IFX_INTERRUPT(cc61_pit_ch0_isr, 0, CCU6_1_CH0_ISR_PRIORITY)
         if(rear_tick >= 10)
         {
             rear_tick = 0;
-            rear_motor_encoder_update_10ms();
+            rear_motor_encoder_update_10ms(Yaw_1);
         }
     }
 
