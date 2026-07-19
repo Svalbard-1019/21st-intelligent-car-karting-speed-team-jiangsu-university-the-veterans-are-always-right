@@ -151,6 +151,15 @@ static void Guandao_Rear_Motor_Update(void)
 {
     float target_mps = 0.0f;
 
+    /* An explicit route/save/parking stop owns the rear motor until
+     * its nonblocking brake sequence finishes. Remote neutral never
+     * starts this state, so manual control keeps its original behavior. */
+    if(rear_motor_brake_active())
+    {
+        rear_motor_brake_update();
+        return;
+    }
+
     if(conrtol_mode == GUANDAO)
     {
         target_mps = (out_v_l + out_v_r) * 0.5f * GUANDAO_SPEED_TO_MPS;

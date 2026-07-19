@@ -119,6 +119,11 @@ static void guandao_record_park_target_now(guandao_state *state)
     daoche_flash_cheack = 1;
     park_record_stage = 2;
 }
+static uint8 portion1_forward_brake_requested = 0;
+static uint8 portion1_reverse_brake_requested = 0;
+static uint8 portion1_park_brake_requested = 0;
+static uint8 guandao_trace_brake_requested = 0;
+static guandao_state *guandao_trace_brake_route = NULL;
 
 #define GUANDAO_START_SEARCH_POINTS    10
 #define GUANDAO_TRACE_SEARCH_POINTS    8
@@ -1186,6 +1191,11 @@ void portion_1_reset(void)
     guandao_debug_entry_long = 0.0f;
     guandao_debug_entry_lat = 0.0f;
     guandao_debug_entry_yaw = 0.0f;
+    portion1_forward_brake_requested = 0;
+    portion1_reverse_brake_requested = 0;
+    portion1_park_brake_requested = 0;
+    guandao_trace_brake_requested = 0;
+    guandao_trace_brake_route = NULL;
     INS.length_index = guandao_clamp_length(INS.length_index);
     INS.current_point_index = 0;
     INS.planned_length = 0;
@@ -1403,7 +1413,11 @@ void portion_1(void)
             conrtol_mode = IDLE;
             portion1_reverse_state = reverse_timeout ? 4 : 3;
             guandao_debug_stop_reason = reverse_timeout ? 11 : 8;
-            rear_motor_stop();
+            if(!portion1_park_brake_requested)
+            {
+                rear_motor_brake_start();
+                portion1_park_brake_requested = 1;
+            }
             Buzzer_check(50);
         }
     }
@@ -1503,6 +1517,11 @@ void portion_1(void)
             out_servo = 0;
             if(reverse_ready)
             {
+                if(!portion1_reverse_brake_requested)
+                {
+                    rear_motor_brake_start();
+                    portion1_reverse_brake_requested = 1;
+                }
                 portion1_reverse_wait_start_ms = system_getval_ms();
                 portion1_reverse_state = 1;
                 conrtol_mode = GUANDAO;
@@ -1510,6 +1529,11 @@ void portion_1(void)
             }
             else
             {
+                if(!portion1_forward_brake_requested)
+                {
+                    rear_motor_brake_start();
+                    portion1_forward_brake_requested = 1;
+                }
                 guandao_debug_stop_reason = 4;
                 conrtol_mode = GUANDAO;
             }
@@ -2272,6 +2296,7 @@ void guandao_recode(guandao_state * state)
             // 否则旧逻辑会在按键释放时才登记终点，导致 Flash 中 target_flag 仍为 0。
             guandao_record_park_target_now(p);
             Flash_Store_Mode(route_setting_choice);
+            rear_motor_brake_start();
             Buzzer_check(200);
             key1_save_wait_release = 1;
         }
@@ -2300,6 +2325,7 @@ void guandao_recode(guandao_state * state)
         {
             guandao_record_park_target_now(p);
             Flash_Store_Mode(route_setting_choice);
+            rear_motor_brake_start();
             Buzzer_check(200);
             rc_ch3_wait_release = 1;
         }
@@ -2507,7 +2533,23 @@ void guandao_trace(guandao_state * state)
 
     // ========== 纯追踪控制 ==========
     pursuit_contral_mode(p ,&out_v_l ,&out_v_r ,&out_servo);
-    if(GPS_WORK_FLAG)trace_gps(p);                              // 调用GPS轨迹跟踪函数
+    if((guandao_debug_stop_reason == 1 || guandao_debug_stop_reason == 4)
+            && guandao_route_length(p) > 0
+            && p->current_point_index >= guandao_route_length(p) - 1)
+    {
+        if(!guandao_trace_brake_requested || guandao_trace_brake_route != p)
+        {
+            rear_motor_brake_start();
+            guandao_trace_brake_requested = 1;
+            guandao_trace_brake_route = p;
+        }
+    }
+    else
+    {
+        guandao_trace_brake_requested = 0;
+        guandao_trace_brake_route = NULL;
+    }
+    if(GPS_WORK_FLAG)trace_gps(p);
     follow_points_show(p);
 //    follow_points_show();
 
@@ -2672,6 +2714,8 @@ void portion3_return_reset(void)
     out_servo = 0.0f;
     daoche_flag = 0;
     Yaw_1 = 0.0f;
+    guandao_trace_brake_requested = 0;
+    guandao_trace_brake_route = NULL;
 }
 /*在IPS200屏幕上显示路径点地图
 
