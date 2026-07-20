@@ -2503,7 +2503,9 @@ void guandao_trace(guandao_state * state)
 
     // ========== 纯追踪控制 ==========
     pursuit_contral_mode(p ,&out_v_l ,&out_v_r ,&out_servo);
-    if((guandao_debug_stop_reason == 1 || guandao_debug_stop_reason == 4)
+    if((guandao_debug_stop_reason == 1
+            || guandao_debug_stop_reason == 4
+            || (route_setting_choice == 2 && guandao_debug_stop_reason == 8))
             && guandao_route_length(p) > 0
             && p->current_point_index >= guandao_route_length(p) - 1)
     {

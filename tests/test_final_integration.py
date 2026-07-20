@@ -49,6 +49,10 @@ class FinalIntegrationSourceTests(unittest.TestCase):
         self.assertIn("PORTION3_RETURN_TRIM_DIST      0.5f", self.guandao_c)
         self.assertIn("uint8 hold_portion3_final_point", self.guandao_c)
         self.assertIn("dist_to_final <= PORTION3_FINAL_STOP_DIST", self.guandao_c)
+        self.assertIn(
+            "route_setting_choice == 2 && guandao_debug_stop_reason == 8",
+            self.guandao_c,
+        )
 
     def test_tracking_loop_keeps_kms_smoothing_guards(self):
         self.assertNotIn("ips200_show_float", self.pursuit)
@@ -81,6 +85,7 @@ class FinalIntegrationSourceTests(unittest.TestCase):
         self.assertNotIn("uart_write_string(DEBUG_UART_INDEX, line)", self.main_c)
         self.assertIn("IfxAsclin_getAddress", self.main_c)
         self.assertIn("Serial_Debug_Service();", self.main_c)
+        self.assertIn("base10=%ld", self.main_c)
 
     def test_combined_remote_preserves_both_subject_limits(self):
         self.assertIn("sbus_rc_capture_neutral", self.remote_c)

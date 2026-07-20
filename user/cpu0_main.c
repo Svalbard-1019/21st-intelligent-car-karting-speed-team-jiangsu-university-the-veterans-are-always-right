@@ -56,7 +56,7 @@ extern int num;
 static uint32 main_loop_last_ms = 0;
 static uint32 main_loop_last_dt_ms = 0;
 static uint32 main_loop_max_dt_ms = 0;
-static char serial_debug_tx_buffer[640];
+static char serial_debug_tx_buffer[1024];
 static uint16 serial_debug_tx_length = 0;
 static uint16 serial_debug_tx_index = 0;
 static uint32 serial_debug_tx_dropped = 0;
@@ -253,7 +253,7 @@ static void Serial_Debug_Update(void)
 {
     static uint32 last_ms = 0;
     uint32 now_ms = system_getval_ms();
-    static char line[640];
+    static char line[1024];
     static uint8 p3_diag_started = 0;
     static uint8 p3_gps_origin_valid = 0;
     static int32 p3_pulse_origin = 0;
@@ -313,10 +313,13 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,dt=%lu,dtMax=%lu,enc10=%d,pend=%u,merge=%lu,odom=%ld,enc100=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld\r\n",
+                      "AUTO,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,vl10=%ld,vr10=%ld,enc10=%d,pend=%u,merge=%lu,odom=%ld,enc100=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
                       (unsigned long)now_ms,
                       (unsigned long)main_loop_last_dt_ms,
                       (unsigned long)main_loop_max_dt_ms,
+                      (long)Serial_Debug_Scale(base_speed, 10.0f),
+                      (long)Serial_Debug_Scale(out_v_l, 10.0f),
+                      (long)Serial_Debug_Scale(out_v_r, 10.0f),
                       rear_motor_get_encoder_10ms(),
                       (unsigned int)rear_motor_get_odometry_pending_samples(),
                       (unsigned long)rear_motor_get_odometry_merged_samples(),
@@ -336,7 +339,10 @@ static void Serial_Debug_Update(void)
                       guandao_debug_approach_active,
                       (long)Serial_Debug_Scale(guandao_debug_entry_long, 100.0f),
                       (long)Serial_Debug_Scale(guandao_debug_entry_lat, 100.0f),
-                      (long)Serial_Debug_Scale(guandao_debug_entry_yaw, 10.0f));
+                      (long)Serial_Debug_Scale(guandao_debug_entry_yaw, 10.0f),
+                      (unsigned int)rear_motor_brake_active(),
+                      rear_motor_brake_pwm(),
+                      (unsigned int)rear_motor_brake_reason());
         if(len > 0)
         {
             Serial_Debug_Write(line);
@@ -395,10 +401,11 @@ static void Serial_Debug_Update(void)
         angle_plan(&angle_error);
 
         len = sprintf(line,
-                      "P3AUTO,cfg=final1,t=%lu,dt=%lu,dtMax=%lu,txDrop=%lu,odomMerge=%lu,pRel=%ld,pend=%u,gOrg=%u,gE100=%ld,gN100=%ld,gps=%u,sat=%u,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,steerAct10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld\r\n",
+                      "P3AUTO,cfg=final2,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,txDrop=%lu,odomMerge=%lu,pRel=%ld,pend=%u,gOrg=%u,gE100=%ld,gN100=%ld,gps=%u,sat=%u,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,steerAct10=%ld,tgt100=%ld,act100=%ld,pwm=%d,enc10=%d,enc100=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
                       (unsigned long)now_ms,
                       (unsigned long)main_loop_last_dt_ms,
                       (unsigned long)main_loop_max_dt_ms,
+                      (long)Serial_Debug_Scale(base_speed, 10.0f),
                       (unsigned long)serial_debug_tx_dropped,
                       (unsigned long)rear_motor_get_odometry_merged_samples(),
                       (long)pulse_relative,
@@ -432,7 +439,10 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
                       rear_motor_get_pwm(),
                       rear_motor_get_encoder_10ms(),
-                      (long)rear_motor_get_encoder_100ms());
+                      (long)rear_motor_get_encoder_100ms(),
+                      (unsigned int)rear_motor_brake_active(),
+                      rear_motor_brake_pwm(),
+                      (unsigned int)rear_motor_brake_reason());
         if(len > 0)
         {
             Serial_Debug_Write(line);

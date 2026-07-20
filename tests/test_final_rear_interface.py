@@ -38,10 +38,14 @@ class FinalRearInterfaceTests(unittest.TestCase):
         self.assertIn("rear_motor_get_odometry_pending_samples", self.main)
 
     def test_kms_diagnostics_include_timing_pose_and_steering(self):
-        self.assertIn("P3AUTO,cfg=final1", self.main)
+        self.assertIn("P3AUTO,cfg=final2", self.main)
         self.assertIn("pRel=%ld", self.main)
         self.assertIn("gE100=%ld", self.main)
         self.assertIn("steerAct10=%ld", self.main)
+        self.assertIn("brk=%u", self.main)
+        self.assertIn("brkP=%d", self.main)
+        self.assertIn("brkR=%u", self.main)
+        self.assertIn("serial_debug_tx_buffer[1024]", self.main)
 
 
 if __name__ == "__main__":
