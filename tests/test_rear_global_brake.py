@@ -62,6 +62,26 @@ class RearGlobalBrakeSourceTests(unittest.TestCase):
         self.assertIn("REAR_BRAKE_REASON_REVERSE", self.source)
         self.assertIn("REAR_BRAKE_REASON_LOW_SPEED", self.source)
 
+    def test_brake_records_motion_direction_and_opposes_it(self):
+        self.assertIn("static int8 brake_motion_sign = 0;", self.source)
+
+        start = self.source.index("void rear_motor_brake_start(void)")
+        end = self.source.index("void rear_motor_brake_update(void)", start)
+        start_body = self.source[start:end]
+        self.assertIn("brake_motion_sign = (direction_speed_mps > 0.0f) ? 1 : -1;", start_body)
+
+        update_start = end
+        update_end = self.source.index("uint8 rear_motor_brake_active", update_start)
+        update_body = self.source[update_start:update_end]
+        self.assertIn(
+            "signed_speed_mps = raw_speed_mps * (float)brake_motion_sign;",
+            update_body,
+        )
+        self.assertIn(
+            "rear_motor_open_loop_update((int16)(-brake_motion_sign * brake_output_pwm));",
+            update_body,
+        )
+
     def test_brake_start_does_not_reverse_an_already_stationary_car(self):
         start = self.source.index("void rear_motor_brake_start(void)")
         end = self.source.index("void rear_motor_brake_update(void)", start)
