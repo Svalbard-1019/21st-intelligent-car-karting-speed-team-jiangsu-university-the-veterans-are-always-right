@@ -15,6 +15,7 @@ class RearGlobalBrakeSourceTests(unittest.TestCase):
         cls.header = (ROOT / "code" / "rear_motor" / "rear_motor.h").read_text(
             encoding="utf-8"
         )
+        cls.isr = (ROOT / "user" / "isr.c").read_text(encoding="gbk")
 
     def test_public_nonblocking_brake_api_is_exposed(self):
         for declaration in (
@@ -61,6 +62,14 @@ class RearGlobalBrakeSourceTests(unittest.TestCase):
         self.assertIn("REAR_BRAKE_REASON_TIMEOUT", self.source)
         self.assertIn("REAR_BRAKE_REASON_REVERSE", self.source)
         self.assertIn("REAR_BRAKE_REASON_LOW_SPEED", self.source)
+
+    def test_encoder_sampling_continues_while_brake_owns_motor(self):
+        self.assertRegex(
+            self.isr,
+            r"if\(conrtol_mode == RACK_TEST \|\| conrtol_mode == GUANDAO "
+            r"\|\| conrtol_mode == DAOCHE \|\| conrtol_mode == YAOKONG"
+            r"\s*\|\| rear_motor_brake_active\(\)\)",
+        )
 
     def test_brake_records_motion_direction_and_opposes_it(self):
         self.assertIn("static int8 brake_motion_sign = 0;", self.source)
