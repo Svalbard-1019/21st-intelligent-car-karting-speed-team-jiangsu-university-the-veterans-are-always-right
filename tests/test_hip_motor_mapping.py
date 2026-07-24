@@ -10,6 +10,7 @@ class HipMotorSourceTests(unittest.TestCase):
     def setUpClass(cls):
         cls.header = (ROOT / "code" / "peripheral.h").read_text(encoding="utf-8", errors="replace")
         cls.peripheral = (ROOT / "code" / "peripheral.c").read_text(encoding="utf-8", errors="replace")
+        cls.isr = (ROOT / "user" / "isr.c").read_text(encoding="utf-8", errors="replace")
         rear_motor_path = ROOT / "code" / "rear_motor" / "rear_motor.c"
         cls.rear_motor = rear_motor_path.read_text(encoding="utf-8", errors="replace") if rear_motor_path.exists() else None
 
@@ -37,6 +38,10 @@ class HipMotorSourceTests(unittest.TestCase):
         stop_body = self.rear_motor.split("void rear_motor_stop(void)", 1)[1].split("}", 1)[0]
         for channel in ("PWM_L1", "PWM_L2", "PWM_R1", "PWM_R2"):
             self.assertIn(f"pwm_set_duty({channel}, 0)", stop_body)
+
+    def test_idle_mode_clears_stale_steering_pwm(self):
+        idle_body = self.isr.split("case IDLE:", 1)[1].split("break;", 1)[0]
+        self.assertIn("VeerMoter_Set(0);", idle_body)
 
 
 if __name__ == "__main__":

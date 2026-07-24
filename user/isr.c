@@ -67,6 +67,7 @@ IFX_INTERRUPT(cc61_pit_ch0_isr, 0, CCU6_1_CH0_ISR_PRIORITY)
         switch(conrtol_mode)
         {
             case IDLE:
+                VeerMoter_Set(0);
                 break;
 
             case YAOKONG:
