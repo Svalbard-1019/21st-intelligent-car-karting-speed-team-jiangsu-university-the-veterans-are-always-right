@@ -63,6 +63,47 @@ static int    last_pwm    = 0;
 static int16  applied_pwm_l = 0;
 static int16  applied_pwm_r = 0;
 
+typedef struct
+{
+    float kp;
+    float ki;
+    float kd;
+    float ff_gain;
+    float high_speed_ff_gain;
+    int pwm_rate_limit;
+} rear_motor_control_profile_t;
+
+static const rear_motor_control_profile_t rear_kmy_profile = {
+    REAR_KMY_KP, REAR_KMY_KI, REAR_KMY_KD, REAR_KMY_FF_GAIN,
+    REAR_KMY_HIGH_SPEED_FF_GAIN, REAR_KMY_PWM_RATE_LIMIT
+};
+static const rear_motor_control_profile_t rear_kms_profile = {
+    REAR_KMS_KP, REAR_KMS_KI, REAR_KMS_KD, REAR_KMS_FF_GAIN,
+    REAR_KMS_HIGH_SPEED_FF_GAIN, REAR_KMS_PWM_RATE_LIMIT
+};
+static uint8 rear_route_profile = 0u;
+
+static const rear_motor_control_profile_t *rear_motor_active_profile(void)
+{
+    return (rear_route_profile == 2u) ? &rear_kms_profile : &rear_kmy_profile;
+}
+
+void rear_motor_select_route(uint8 route_choice)
+{
+    uint8 next_profile = (route_choice == 2u) ? 2u : 0u;
+    if(next_profile != rear_route_profile)
+    {
+        rear_route_profile = next_profile;
+        integral = 0.0f;
+        last_error = 0.0f;
+    }
+}
+
+uint8 rear_motor_get_route_profile(void)
+{
+    return rear_route_profile;
+}
+
 /* Explicit-stop active brake state. Emergency rear_motor_stop() cancels it. */
 static uint8 brake_active = 0;
 static uint8 brake_exit_reason = REAR_BRAKE_REASON_NONE;
@@ -89,11 +130,12 @@ static void rear_motor_set_pwm(int16 pwm)
     extern float out_v_r;
     extern MOTER_control_mode conrtol_mode;
     int diff = pwm - last_pwm;
+    int rate_limit = rear_motor_active_profile()->pwm_rate_limit;
     int16 pwm_l;
     int16 pwm_r;
 
-    if(diff > REAR_PWM_RATE_LIMIT)  diff = REAR_PWM_RATE_LIMIT;
-    if(diff < -REAR_PWM_RATE_LIMIT) diff = -REAR_PWM_RATE_LIMIT;
+    if(diff > rate_limit)  diff = rate_limit;
+    if(diff < -rate_limit) diff = -rate_limit;
     last_pwm += diff;
 
     if(last_pwm > REAR_PWM_HARD_LIMIT)  last_pwm = REAR_PWM_HARD_LIMIT;
@@ -188,6 +230,7 @@ void rear_motor_init(void)
     pwm_init(PWM_R1, 17000, 0);
     pwm_init(PWM_R2, 17000, 0);
 
+    rear_route_profile = 0u;
     target_mps  = 0.0f;
     actual_mps  = 0.0f;
     raw_actual_mps = 0.0f;
@@ -398,6 +441,7 @@ void rear_motor_pid_update_100ms(void)
     float high_speed_ff = 0.0f;
     float pid;
     float pwm_f;
+    const rear_motor_control_profile_t *profile = rear_motor_active_profile();
 
     if(!rear_motor_take_speed_windows(&window_pulses, &window_count))
     {
@@ -428,15 +472,15 @@ void rear_motor_pid_update_100ms(void)
 
     derivative = (error - last_error) / 0.1f;
     last_error = error;
-    ff = target_pulses * REAR_FF_GAIN;
+    ff = target_pulses * profile->ff_gain;
     if(fabsf(target_mps) > REAR_HIGH_SPEED_FF_START_MPS)
     {
         high_speed_ff = (fabsf(target_mps) - REAR_HIGH_SPEED_FF_START_MPS)
-                * REAR_HIGH_SPEED_FF_GAIN;
+                * profile->high_speed_ff_gain;
         if(target_mps < 0.0f) high_speed_ff = -high_speed_ff;
         ff += high_speed_ff;
     }
-    pid = REAR_KP * error + REAR_KI * integral + REAR_KD * derivative;
+    pid = profile->kp * error + profile->ki * integral + profile->kd * derivative;
     pwm_f = ff + pid;
     if(target_mps < -0.01f && pwm_f > -(float)REAR_REVERSE_PWM_MIN)
     {

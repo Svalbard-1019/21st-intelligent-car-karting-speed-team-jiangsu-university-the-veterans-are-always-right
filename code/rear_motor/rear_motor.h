@@ -35,33 +35,23 @@
 #define REAR_ENCODER_FEEDBACK_DIRECTION (-1)
 #define REAR_WHEEL_CIRCUM_M          (3.14159265358979323846f * REAR_WHEEL_DIAMETER_M)
 
-/* PID parameters: low-overshoot set for the new rear driver. */
-#define REAR_KP                 4.0f
-#define REAR_KI                 0.6f
-#define REAR_KD                 0.12f
-#define REAR_FF_GAIN            8.0f
+/* Subject-specific rear speed profiles. */
+#define REAR_KMY_KP                 4.0f
+#define REAR_KMY_KI                 0.6f
+#define REAR_KMY_KD                 0.12f
+#define REAR_KMY_FF_GAIN            8.0f
+#define REAR_KMY_HIGH_SPEED_FF_GAIN 500.0f
+#define REAR_KMY_PWM_RATE_LIMIT     600
+
+#define REAR_KMS_KP                 10.0f
+#define REAR_KMS_KI                 0.3f
+#define REAR_KMS_KD                 0.8f
+#define REAR_KMS_FF_GAIN            13.0f
+#define REAR_KMS_HIGH_SPEED_FF_GAIN 0.0f
+#define REAR_KMS_PWM_RATE_LIMIT     1000
+
 #define REAR_HIGH_SPEED_FF_START_MPS 2.5f
-#define REAR_HIGH_SPEED_FF_GAIN 500.0f
-
-/* Previous loaded-vehicle parameters, retained for track comparison. */
-// #define REAR_KP              10.0f
-// #define REAR_KI              0.3f
-// #define REAR_KD              0.8f
-// #define REAR_FF_GAIN         13.0f
-
-/* PID 参数: 空载实测 (2026-05-13), 架上测试需要时切回 */
-// #define REAR_KP              8.0f
-// #define REAR_KI              0.5f
-// #define REAR_KD              0.2f
-// #define REAR_FF_GAIN         10.0f
-
-/* PID 参数: 空载微调, 降低架空超调, 需要时切回 */
-// #define REAR_KP              6.5f
-// #define REAR_KI              0.25f
-// #define REAR_KD              0.3f
-// #define REAR_FF_GAIN         9.0f
 #define REAR_PWM_HARD_LIMIT     9500
-#define REAR_PWM_RATE_LIMIT     600
 #define REAR_DIFF_PWM_GAIN      600.0f
 #define REAR_REVERSE_PWM_MIN    1800
 #define REAR_INTEGRAL_LIMIT     2000.0f
@@ -129,6 +119,8 @@ float rear_motor_brake_end_raw_mps(void);
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
+void rear_motor_select_route(uint8 route_choice);
+uint8 rear_motor_get_route_profile(void);
 void rear_motor_set_target_mps(float target_mps);
 /**
  * 接口说明：rear_motor_encoder_update_10ms()。周期更新内部状态，依赖中断或主循环按固定节拍调用。

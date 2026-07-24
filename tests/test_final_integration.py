@@ -45,7 +45,12 @@ class FinalIntegrationSourceTests(unittest.TestCase):
         self.assertNotIn("heading_baseline", self.guandao_c)
 
     def test_subject_three_has_latest_speed_and_finish_rules(self):
-        self.assertIn("PORTION3_CURVE_SPEED_FLOOR_RATIO 0.80f", self.guandao_c)
+        self.assertNotIn("PORTION3_CURVE_SPEED_FLOOR_RATIO", self.guandao_c)
+        self.assertIn("GUANDAO_KMY_CURVE_SPEED_RATIO      0.75f", self.guandao_c)
+        self.assertIn("GUANDAO_KMS_CURVE_SPEED_RATIO      0.70f", self.guandao_c)
+        self.assertIn("GUANDAO_KMY_SHARP_TURN_SPEED_RATIO 0.60f", self.guandao_c)
+        self.assertIn("GUANDAO_KMS_SHARP_TURN_SPEED_RATIO 0.55f", self.guandao_c)
+        self.assertIn("route_setting_choice == 2", self.guandao_c)
         self.assertIn("PORTION3_RETURN_TRIM_DIST      0.5f", self.guandao_c)
         self.assertIn("uint8 hold_portion3_final_point", self.guandao_c)
         self.assertIn("dist_to_final <= PORTION3_FINAL_STOP_DIST", self.guandao_c)
@@ -53,6 +58,35 @@ class FinalIntegrationSourceTests(unittest.TestCase):
             "route_setting_choice == 2 && guandao_debug_stop_reason == 8",
             self.guandao_c,
         )
+
+    def test_subject_three_has_terminal_pass_guard(self):
+        self.assertIn("PORTION3_TERMINAL_PASS_POINTS  3", self.guandao_c)
+        self.assertIn("guandao_portion3_terminal_passed", self.guandao_c)
+        self.assertIn("terminal_pass_advanced", self.guandao_c)
+        self.assertIn("guandao_debug_stop_reason = 9", self.guandao_c)
+
+    def test_rear_speed_profiles_are_isolated_by_subject(self):
+        for token in (
+            "REAR_KMY_KP                 4.0f",
+            "REAR_KMY_KI                 0.6f",
+            "REAR_KMY_KD                 0.12f",
+            "REAR_KMY_FF_GAIN            8.0f",
+            "REAR_KMY_PWM_RATE_LIMIT     600",
+            "REAR_KMS_KP                 10.0f",
+            "REAR_KMS_KI                 0.3f",
+            "REAR_KMS_KD                 0.8f",
+            "REAR_KMS_FF_GAIN            13.0f",
+            "REAR_KMS_PWM_RATE_LIMIT     1000",
+        ):
+            self.assertIn(token, self.rear_h)
+        self.assertIn("rear_motor_select_route(uint8 route_choice)", self.rear_c)
+        self.assertIn("rear_motor_select_route((conrtol_mode == GUANDAO", self.main_c)
+
+    def test_center_odometry_is_limited_to_subject_three(self):
+        self.assertIn('#include "rear_motor/rear_left_wheel_odometry.h"', self.guandao_c)
+        self.assertIn("state == &portion_3", self.guandao_c)
+        self.assertIn("rear_left_wheel_to_center_distance", self.guandao_c)
+        self.assertIn("rear_left_wheel_odometry_reset", self.guandao_c)
 
     def test_tracking_loop_keeps_kms_smoothing_guards(self):
         self.assertNotIn("ips200_show_float", self.pursuit)

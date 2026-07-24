@@ -146,7 +146,7 @@ extern float final_dsts ;
 extern float guandao_debug_distance;             // 自动驾驶调试：当前位置到当前目标点距离
 extern float guandao_debug_angle_diff;           // 自动驾驶调试：车头方向与目标点方向夹角
 extern float guandao_debug_dist_final;           // 自动驾驶调试：当前位置到终点距离
-extern uint8 guandao_debug_stop_reason;          // 自动驾驶调试：0正常，1空路线，2到点切换，4到终点
+extern uint8 guandao_debug_stop_reason;          // 自动驾驶调试：0正常，1空路线，2到点切换，4到终点，9科目三末段越点
 extern uint8 guandao_debug_approach_active;       // 第一停车点末段进场控制是否接管
 extern uint8 guandao_debug_entry_gate;            // 是否已经越过第一停车点的入口线
 extern float guandao_debug_entry_long;            // 相对入口线纵向位置，负值表示尚未到线

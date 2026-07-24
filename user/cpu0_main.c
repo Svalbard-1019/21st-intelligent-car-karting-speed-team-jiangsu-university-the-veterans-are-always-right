@@ -151,6 +151,11 @@ static void Guandao_Rear_Motor_Update(void)
 {
     float target_mps = 0.0f;
 
+    /* Keep remote recording on the proven KMY response.  Only the
+     * autonomous subject-three return selects the KMS rear profile. */
+    rear_motor_select_route((conrtol_mode == GUANDAO
+            && route_setting_choice == 2u) ? 2u : 0u);
+
     /* An explicit route/save/parking stop owns the rear motor until
      * its nonblocking brake sequence finishes. Remote neutral never
      * starts this state, so manual control keeps its original behavior. */
