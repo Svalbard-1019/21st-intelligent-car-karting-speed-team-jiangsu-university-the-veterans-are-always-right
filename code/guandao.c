@@ -39,6 +39,7 @@
 #include "rear_motor/rear_left_wheel_odometry.h"
 #include "auto_park_plan.h"
 #include "parking_se2.h"
+#include "guandao_speed_planner.h"
 #include <string.h>
 
 guandao_state INS;                               //0 = route_setting_choice
@@ -71,6 +72,9 @@ float guandao_debug_upcoming_turn = 0.0f;
 float guandao_debug_steer_raw = 0.0f;
 float guandao_debug_steer_limited = 0.0f;
 float guandao_debug_steer_final = 0.0f;
+float guandao_debug_speed_requested = 0.0f;
+float guandao_debug_speed_command = 0.0f;
+uint8 guandao_debug_turn_level = 0u;
 
 int16 daoche_target_length = 0;
 state_t daoche_start_state = {0.0f, 0.0f, 0.0f};
@@ -126,6 +130,8 @@ static uint8 portion1_park_brake_requested = 0;
 static uint8 guandao_trace_brake_requested = 0;
 static guandao_state *guandao_trace_brake_route = NULL;
 static rear_left_wheel_odometry_t portion3_center_odometry;
+static guandao_speed_planner_t portion1_speed_planner;
+static uint32 portion1_speed_last_ms = 0u;
 
 #define GUANDAO_START_SEARCH_POINTS    10
 #define GUANDAO_TRACE_SEARCH_POINTS    8
@@ -174,12 +180,16 @@ static rear_left_wheel_odometry_t portion3_center_odometry;
 #define GUANDAO_ACCUM_TURN_SLOW_ANGLE  20.0f
 #define GUANDAO_ACCUM_TURN_MEDIUM_ANGLE 45.0f
 #define GUANDAO_ACCUM_TURN_SHARP_ANGLE 75.0f
-#define GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO  0.85f
-#define GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.75f
-#define GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.75f
+#define GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO  0.80f
+#define GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.65f
+#define GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.55f
 #define GUANDAO_KMS_ACCUM_TURN_SLOW_RATIO  0.80f
 #define GUANDAO_KMS_ACCUM_TURN_MEDIUM_RATIO 0.70f
 #define GUANDAO_KMS_ACCUM_TURN_SHARP_RATIO 0.70f
+#define GUANDAO_P1_TURN_WINDOW_M        2.40f
+#define GUANDAO_P1_TURN_DEADBAND_DEG    2.50f
+#define GUANDAO_P1_ACCEL_UNITS_PER_S    12.0f
+#define GUANDAO_P1_DECEL_UNITS_PER_S    40.0f
 #define GUANDAO_FAST_STRAIGHT_SPEED     25.0f
 #define GUANDAO_FAST_STRAIGHT_TURN_MAX  15.0f
 #define GUANDAO_FAST_STRAIGHT_GAIN      0.65f
@@ -596,6 +606,37 @@ static float guandao_accumulated_route_turn(guandao_state *state, int start_inde
     }
 
     return accumulated_turn;
+}
+
+static float guandao_portion1_distance_turn(
+        guandao_state *state, int start_index, float window_distance)
+{
+    float positive_turn = 0.0f;
+    float negative_turn = 0.0f;
+    float accumulated_distance = 0.0f;
+    int16 route_length = guandao_route_length(state);
+
+    if(route_length < 3 || window_distance <= 0.0f) return 0.0f;
+    if(start_index < 1) start_index = 1;
+
+    for(int i = start_index;
+            i <= route_length - 2 && accumulated_distance < window_distance;
+            i++)
+    {
+        state_t previous = guandao_route_point(state, i - 1);
+        state_t current = guandao_route_point(state, i);
+        state_t next = guandao_route_point(state, i + 1);
+        float yaw_in = guandao_segment_yaw(previous, current);
+        float yaw_out = guandao_segment_yaw(current, next);
+        float signed_turn = guandao_normalize_angle(yaw_out - yaw_in);
+
+        accumulated_distance += get_distance(current, next);
+        if(fabsf(signed_turn) < GUANDAO_P1_TURN_DEADBAND_DEG) continue;
+        if(signed_turn > 0.0f) positive_turn += signed_turn;
+        else negative_turn -= signed_turn;
+    }
+
+    return (positive_turn >= negative_turn) ? positive_turn : -negative_turn;
 }
 
 static int guandao_find_front_index(guandao_state *state, int start_index, int end_index)
@@ -1204,6 +1245,11 @@ void portion_1_reset(void)
     guandao_debug_entry_long = 0.0f;
     guandao_debug_entry_lat = 0.0f;
     guandao_debug_entry_yaw = 0.0f;
+    guandao_debug_speed_requested = 0.0f;
+    guandao_debug_speed_command = 0.0f;
+    guandao_debug_turn_level = 0u;
+    guandao_speed_planner_reset(&portion1_speed_planner, MIN_SPEED);
+    portion1_speed_last_ms = 0u;
     portion1_forward_brake_requested = 0;
     portion1_reverse_brake_requested = 0;
     portion1_park_brake_requested = 0;
@@ -1275,6 +1321,8 @@ void portion_1(void)
             if(end_index > GUANDAO_START_SEARCH_POINTS) end_index = GUANDAO_START_SEARCH_POINTS;
             INS.current_point_index = guandao_find_closest_index(&INS, 1, end_index);
         }
+        guandao_speed_planner_reset(&portion1_speed_planner, MIN_SPEED);
+        portion1_speed_last_ms = system_getval_ms();
         portion1_state_flag = 1;
     }
 
@@ -1788,6 +1836,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float upcoming_turn = 0.0f;
     float max_single_turn = 0.0f;
     float dist_to_final = 0.0f;
+    uint8 accumulated_turn_level = 0u;
     uint8 terminal_pass_advanced = 0;
     float curve_speed_ratio = (route_setting_choice == 2)
             ? GUANDAO_KMS_CURVE_SPEED_RATIO : GUANDAO_KMY_CURVE_SPEED_RATIO;
@@ -1937,13 +1986,34 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     {
         steer_preview_steps = PORTION3_FAST_PREVIEW_STEPS;
     }
-    upcoming_turn = guandao_accumulated_route_turn(state, state->current_point_index, 12);
+    upcoming_turn = (route_setting_choice == 0)
+            ? guandao_portion1_distance_turn(
+                    state, state->current_point_index, GUANDAO_P1_TURN_WINDOW_M)
+            : guandao_accumulated_route_turn(state, state->current_point_index, 12);
     max_single_turn = guandao_max_route_turn(state, state->current_point_index, 12);
+    if(route_setting_choice == 0)
+    {
+        accumulated_turn_level = guandao_speed_turn_level(
+                &portion1_speed_planner, upcoming_turn);
+    }
+    else if(upcoming_turn >= GUANDAO_ACCUM_TURN_SHARP_ANGLE)
+    {
+        accumulated_turn_level = 3u;
+    }
+    else if(upcoming_turn >= GUANDAO_ACCUM_TURN_MEDIUM_ANGLE)
+    {
+        accumulated_turn_level = 2u;
+    }
+    else if(upcoming_turn >= GUANDAO_ACCUM_TURN_SLOW_ANGLE)
+    {
+        accumulated_turn_level = 1u;
+    }
+    guandao_debug_turn_level = accumulated_turn_level;
     /* At 2.5 m/s and above, small route/pose errors can produce an alternating
      * over-correction on straights. Reduce only straight-line authority; a
      * detected bend keeps the existing gain and full steering range. */
     if(base_speed >= GUANDAO_FAST_STRAIGHT_SPEED
-            && upcoming_turn < GUANDAO_ACCUM_TURN_SLOW_ANGLE
+            && fabsf(upcoming_turn) < GUANDAO_ACCUM_TURN_SLOW_ANGLE
             && max_single_turn < GUANDAO_FAST_STRAIGHT_TURN_MAX)
     {
         steering_gain *= GUANDAO_FAST_STRAIGHT_GAIN;
@@ -2030,21 +2100,21 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        if(v_center < MIN_SPEED) v_center = MIN_SPEED;
    }
    // Use accumulated heading change to slow before a smooth multi-point curve.
-   if(upcoming_turn >= GUANDAO_ACCUM_TURN_SHARP_ANGLE)
+   if(accumulated_turn_level >= 3u)
    {
        if(v_center > base_speed * accum_turn_sharp_ratio)
        {
            v_center = base_speed * accum_turn_sharp_ratio;
        }
    }
-   else if(upcoming_turn >= GUANDAO_ACCUM_TURN_MEDIUM_ANGLE)
+   else if(accumulated_turn_level >= 2u)
    {
        if(v_center > base_speed * accum_turn_medium_ratio)
        {
            v_center = base_speed * accum_turn_medium_ratio;
        }
    }
-   else if(upcoming_turn >= GUANDAO_ACCUM_TURN_SLOW_ANGLE)
+   else if(accumulated_turn_level >= 1u)
    {
        if(v_center > base_speed * accum_turn_slow_ratio)
        {
@@ -2101,6 +2171,29 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        last_steer_limit_ms = 0;
        return;
    }
+
+   guandao_debug_speed_requested = v_center;
+   if(route_setting_choice == 0)
+   {
+       uint32 speed_now_ms = system_getval_ms();
+       uint32 speed_elapsed_ms = (portion1_speed_last_ms == 0u) ? 20u
+               : guandao_elapsed_ms(speed_now_ms, portion1_speed_last_ms);
+       if(speed_elapsed_ms > 200u) speed_elapsed_ms = 20u;
+       if(speed_elapsed_ms >= 1u)
+       {
+           v_center = guandao_speed_rate_limit(
+                   &portion1_speed_planner, v_center,
+                   (float)speed_elapsed_ms * 0.001f,
+                   GUANDAO_P1_ACCEL_UNITS_PER_S,
+                   GUANDAO_P1_DECEL_UNITS_PER_S);
+           portion1_speed_last_ms = speed_now_ms;
+       }
+       else
+       {
+           v_center = portion1_speed_planner.command;
+       }
+   }
+   guandao_debug_speed_command = v_center;
 
    // 差动驱动速度分配：这里仍是惯导旧速度单位，cpu0_main.c 会再换算为 m/s 给 rear_motor。
    if(state->current_point_index <= 2)

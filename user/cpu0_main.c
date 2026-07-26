@@ -318,7 +318,7 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,vl10=%ld,vr10=%ld,enc10=%d,pend=%u,merge=%lu,odom=%ld,enc100=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
+                      "AUTO,cfg=p1spd1,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,vl10=%ld,vr10=%ld,enc10=%d,pend=%u,merge=%lu,odom=%ld,enc100=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld,pwm=%d,turn10=%ld,turnLv=%u,req100=%ld,cmd100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,revSt=%u,revPlan=%u,revIdx=%d,revLen=%d,revD100=%ld,revYaw10=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
                       (unsigned long)now_ms,
                       (unsigned long)main_loop_last_dt_ms,
                       (unsigned long)main_loop_max_dt_ms,
@@ -341,10 +341,23 @@ static void Serial_Debug_Update(void)
                       (long)Serial_Debug_Scale((float)angle, 10.0f),
                       (long)Serial_Debug_Scale(rear_motor_get_target_mps(), 100.0f),
                       (long)Serial_Debug_Scale(rear_motor_get_speed_mps(), 100.0f),
+                      rear_motor_get_pwm(),
+                      (long)Serial_Debug_Scale(guandao_debug_upcoming_turn, 10.0f),
+                      (unsigned int)guandao_debug_turn_level,
+                      (long)Serial_Debug_Scale(guandao_debug_speed_requested, 10.0f),
+                      (long)Serial_Debug_Scale(guandao_debug_speed_command, 10.0f),
                       guandao_debug_approach_active,
                       (long)Serial_Debug_Scale(guandao_debug_entry_long, 100.0f),
                       (long)Serial_Debug_Scale(guandao_debug_entry_lat, 100.0f),
                       (long)Serial_Debug_Scale(guandao_debug_entry_yaw, 10.0f),
+                      (unsigned int)guandao_reverse_debug_state(),
+                      (unsigned int)guandao_reverse_debug_plan_ready(),
+                      guandao_reverse_debug_route_index(),
+                      guandao_reverse_debug_route_count(),
+                      (long)Serial_Debug_Scale(
+                              guandao_reverse_debug_target_distance(), 100.0f),
+                      (long)Serial_Debug_Scale(
+                              guandao_reverse_debug_target_yaw_error(), 10.0f),
                       (unsigned int)rear_motor_brake_active(),
                       rear_motor_brake_pwm(),
                       (unsigned int)rear_motor_brake_reason());

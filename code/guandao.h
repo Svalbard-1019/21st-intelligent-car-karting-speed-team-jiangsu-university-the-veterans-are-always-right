@@ -170,6 +170,9 @@ extern float guandao_debug_upcoming_turn;
 extern float guandao_debug_steer_raw;
 extern float guandao_debug_steer_limited;
 extern float guandao_debug_steer_final;
+extern float guandao_debug_speed_requested;
+extern float guandao_debug_speed_command;
+extern uint8 guandao_debug_turn_level;
 void guandao_state_init(guandao_state * e);
 /**
  * 接口说明：guandao_chain_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
