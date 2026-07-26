@@ -703,8 +703,8 @@ void Menu_Control_P(void)
         }
         else if(key_mode1 == 3)
         {
-            if(control[1] > 0) control[1] = 0;
-            if(control[1] < -50) control[1] = -50;
+            if(control[1] > -2) control[1] = -2;
+            if(control[1] < -40) control[1] = -40;
         }
         else if(key_mode1 == 4)
         {

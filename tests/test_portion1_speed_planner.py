@@ -93,14 +93,15 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
 
         self.assertIn("GUANDAO_P1_TURN_WINDOW_M", source)
         self.assertIn("GUANDAO_P1_TURN_DEADBAND_DEG", source)
-        self.assertIn("#define GUANDAO_P1_ACCEL_UNITS_PER_S    25.0f", source)
+        self.assertIn("#define GUANDAO_P1_ACCEL_UNITS_PER_S    35.0f", source)
+        self.assertIn("#define GUANDAO_PARK_APPROACH_DIST     2.00f", source)
         self.assertIn("guandao_portion1_distance_turn(", source)
         self.assertIn("fabsf(upcoming_turn) < GUANDAO_ACCUM_TURN_SLOW_ANGLE", source)
         self.assertIn("guandao_speed_turn_level(", source)
         self.assertIn("guandao_speed_rate_limit(", source)
         self.assertIn("GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO  0.80f", source)
-        self.assertIn("GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.65f", source)
-        self.assertIn("GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.55f", source)
+        self.assertIn("GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.70f", source)
+        self.assertIn("GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.60f", source)
         self.assertIn("GUANDAO_KMS_ACCUM_TURN_SLOW_RATIO  0.80f", source)
         self.assertIn("GUANDAO_KMS_ACCUM_TURN_MEDIUM_RATIO 0.70f", source)
         self.assertIn("GUANDAO_KMS_ACCUM_TURN_SHARP_RATIO 0.70f", source)
@@ -112,7 +113,7 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
         auto_format = source[auto_start:auto_end]
 
         for field in (
-            "cfg=p1spd3",
+            "cfg=p1spd5",
             "pwm=%d",
             "turn10=%ld",
             "turnLv=%u",

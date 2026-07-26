@@ -40,6 +40,7 @@
 #include "auto_park_plan.h"
 #include "parking_se2.h"
 #include "guandao_speed_planner.h"
+#include "guandao_reverse_speed_planner.h"
 #include <string.h>
 
 guandao_state INS;                               //0 = route_setting_choice
@@ -139,7 +140,7 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_REVERSE_FINAL_DIST     0.55f
 #define GUANDAO_REVERSE_MIN_ROUTE_POINTS 5
 #define GUANDAO_PARK_ENTRY_DIST        0.15f
-#define GUANDAO_PARK_APPROACH_DIST     1.20f
+#define GUANDAO_PARK_APPROACH_DIST     2.00f
 #define GUANDAO_PARK_APPROACH_RADIUS   1.80f
 #define GUANDAO_PARK_APPROACH_SPEED_FAST 10.0f
 #define GUANDAO_PARK_APPROACH_SPEED_MID  8.0f
@@ -159,7 +160,6 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_REVERSE_DISTANCE       0.55f
 #define GUANDAO_REVERSE_MIN_MS         1800u
 #define GUANDAO_REVERSE_MAX_MS         6500u
-#define GUANDAO_REVERSE_SPEED_UNITS    -6.0f
 #define GUANDAO_STEERING_GAIN          2.2f
 #define GUANDAO_STEERING_CMD_LIMIT     35.0f
 #define GUANDAO_HIGH_SPEED_THRESHOLD   5.0f
@@ -181,14 +181,14 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_ACCUM_TURN_MEDIUM_ANGLE 45.0f
 #define GUANDAO_ACCUM_TURN_SHARP_ANGLE 75.0f
 #define GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO  0.80f
-#define GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.65f
-#define GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.55f
+#define GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.70f
+#define GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.60f
 #define GUANDAO_KMS_ACCUM_TURN_SLOW_RATIO  0.80f
 #define GUANDAO_KMS_ACCUM_TURN_MEDIUM_RATIO 0.70f
 #define GUANDAO_KMS_ACCUM_TURN_SHARP_RATIO 0.70f
 #define GUANDAO_P1_TURN_WINDOW_M        2.40f
 #define GUANDAO_P1_TURN_DEADBAND_DEG    2.50f
-#define GUANDAO_P1_ACCEL_UNITS_PER_S    25.0f
+#define GUANDAO_P1_ACCEL_UNITS_PER_S    35.0f
 #define GUANDAO_P1_DECEL_UNITS_PER_S    40.0f
 #define GUANDAO_FAST_STRAIGHT_SPEED     25.0f
 #define GUANDAO_FAST_STRAIGHT_TURN_MAX  15.0f
@@ -203,12 +203,9 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_REVERSE_ENTRY_DIST     0.25f
 #define GUANDAO_REVERSE_ENTRY_MS       900u
 #define GUANDAO_REVERSE_FINE_DIST      0.35f
-#define GUANDAO_REVERSE_FINE_SPEED     -4.0f
 #define GUANDAO_REVERSE_FORWARD_SPEED  5.0f
 #define GUANDAO_REVERSE_PLAN_TOL_DIST  0.16f
 #define GUANDAO_REVERSE_PLAN_TOL_YAW   6.0f
-#define GUANDAO_TAUGHT_REVERSE_SPEED   -4.0f
-#define GUANDAO_TAUGHT_REVERSE_FINE_SPEED -3.0f
 #define GUANDAO_TAUGHT_REVERSE_LOOKAHEAD 0.35f
 #define GUANDAO_TAUGHT_REVERSE_POINT_DIST 0.20f
 #define GUANDAO_TAUGHT_REVERSE_SEARCH  6
@@ -245,6 +242,11 @@ static state_t guandao_planned_map[MAX_LENGTH_INDEX];
 
 static float guandao_normalize_angle(float angle);
 static uint32 guandao_elapsed_ms(uint32 now_ms, uint32 start_ms);
+
+static guandao_reverse_speed_plan_t guandao_current_reverse_speed_plan(void)
+{
+    return guandao_reverse_speed_plan((float)control[1]);
+}
 
 static uint8 portion1_park_gps_ready = 0;
 static uint8 portion1_park_gps_count = 0;
@@ -755,6 +757,7 @@ static float guandao_reverse_route_finish_distance(const AutoParkRoute *route)
 static uint8 guandao_reverse_execute_plan(void)
 {
     AutoParkRoute *route = 0;
+    guandao_reverse_speed_plan_t reverse_plan = guandao_current_reverse_speed_plan();
     float travelled = 0.0f;
     float finish_distance = 0.0f;
     float speed_abs = GUANDAO_REVERSE_FORWARD_SPEED;
@@ -782,9 +785,14 @@ static uint8 guandao_reverse_execute_plan(void)
     }
 
     route = &portion1_reverse_plan.routes[portion1_reverse_route_index];
-    if(portion1_reverse_route_index + 1 >= (uint8)portion1_reverse_plan.route_count)
+    if(!route->is_forward)
     {
-        speed_abs = -GUANDAO_REVERSE_FINE_SPEED;
+        speed_abs = -reverse_plan.cruise_units;
+    }
+    if(!route->is_forward
+            && portion1_reverse_route_index + 1 >= (uint8)portion1_reverse_plan.route_count)
+    {
+        speed_abs = -reverse_plan.fine_units;
     }
 
     if(route->is_forward)
@@ -907,6 +915,7 @@ static void guandao_taught_reverse_prepare(void)
 
 static uint8 guandao_taught_reverse_update(void)
 {
+    guandao_reverse_speed_plan_t reverse_plan = guandao_current_reverse_speed_plan();
     state_t target;
     int16 search_end;
     int16 best_index;
@@ -922,7 +931,7 @@ static uint8 guandao_taught_reverse_update(void)
     float target_steering;
     float desired_servo;
     float steer_delta;
-    float reverse_speed = GUANDAO_TAUGHT_REVERSE_SPEED;
+    float reverse_speed = reverse_plan.cruise_units;
     uint32 now_ms = system_getval_ms();
     uint32 steer_elapsed_ms;
 
@@ -1006,7 +1015,7 @@ static uint8 guandao_taught_reverse_update(void)
     if(final_distance <= GUANDAO_REVERSE_FINE_DIST
             || portion1_taught_reverse_index >= portion1_taught_reverse_length - 1)
     {
-        reverse_speed = GUANDAO_TAUGHT_REVERSE_FINE_SPEED;
+        reverse_speed = reverse_plan.fine_units;
     }
 
     daoche_flag = 1;
@@ -1376,12 +1385,13 @@ void portion_1(void)
     }
     else if(portion1_reverse_state == 2)
     {
+        guandao_reverse_speed_plan_t reverse_plan = guandao_current_reverse_speed_plan();
         uint8 reverse_finished = 0;
         uint32 reverse_elapsed_ms = guandao_elapsed_ms(system_getval_ms(), portion1_reverse_run_start_ms);
         uint32 reverse_max_ms = portion1_taught_reverse_ready
                 ? GUANDAO_TAUGHT_REVERSE_MAX_MS : GUANDAO_REVERSE_MAX_MS;
         float reverse_travelled = get_distance(INS.current_state, portion1_reverse_start_state);
-        daoche_speed = GUANDAO_REVERSE_SPEED_UNITS;
+        daoche_speed = reverse_plan.cruise_units;
         guandao_debug_stop_reason = 7;
         conrtol_mode = DAOCHE;
         guandao_debug_dist_final = reverse_travelled;
@@ -1452,7 +1462,7 @@ void portion_1(void)
             }
             if(portion1_reverse_segment == 2)
             {
-                daoche_speed = GUANDAO_REVERSE_FINE_SPEED;
+                daoche_speed = reverse_plan.fine_units;
             }
             if(target_dist <= GUANDAO_REVERSE_TARGET_DIST && fabsf(yaw_error) <= GUANDAO_REVERSE_TARGET_YAW
                     && reverse_elapsed_ms >= GUANDAO_REVERSE_MIN_MS)

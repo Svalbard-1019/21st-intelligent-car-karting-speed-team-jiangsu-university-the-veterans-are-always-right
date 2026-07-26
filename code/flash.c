@@ -34,7 +34,7 @@
 #include "zf_common_headfile.h"
 
 float speed_pid[6]={0.5f, 1.0f, 0.0f, 0.3f, 0.4f, 3.0f};
-int16 control[5] = {15, -10, 2, 0, 0};
+int16 control[5] = {15, -4, 2, 0, 0};
 float kp;
 float ki;
 float kd;
@@ -51,6 +51,9 @@ float kd;
 #define FLASH_PREVIEW_STEPS_DEFAULT      (2)
 #define FLASH_PREVIEW_STEPS_MIN          (1)
 #define FLASH_PREVIEW_STEPS_MAX          (20)
+#define FLASH_REVERSE_SPEED_DEFAULT     (-4)
+#define FLASH_REVERSE_SPEED_MIN         (-40)
+#define FLASH_REVERSE_SPEED_MAX         (-2)
 #define FLASH_ROUTE_FORMAT_MAGIC         (0x4B525432u)
 #define FLASH_ROUTE_FIRST_PAGE_POINTS    (500)
 
@@ -84,6 +87,10 @@ static void flash_sanitize_runtime_params(void)
     if(control[2] < FLASH_PREVIEW_STEPS_MIN || control[2] > FLASH_PREVIEW_STEPS_MAX)
     {
         control[2] = FLASH_PREVIEW_STEPS_DEFAULT;
+    }
+    if(control[1] < FLASH_REVERSE_SPEED_MIN || control[1] > FLASH_REVERSE_SPEED_MAX)
+    {
+        control[1] = FLASH_REVERSE_SPEED_DEFAULT;
     }
 }
 
