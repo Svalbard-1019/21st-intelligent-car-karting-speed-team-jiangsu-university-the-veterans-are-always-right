@@ -93,6 +93,7 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
 
         self.assertIn("GUANDAO_P1_TURN_WINDOW_M", source)
         self.assertIn("GUANDAO_P1_TURN_DEADBAND_DEG", source)
+        self.assertIn("#define GUANDAO_P1_ACCEL_UNITS_PER_S    25.0f", source)
         self.assertIn("guandao_portion1_distance_turn(", source)
         self.assertIn("fabsf(upcoming_turn) < GUANDAO_ACCUM_TURN_SLOW_ANGLE", source)
         self.assertIn("guandao_speed_turn_level(", source)
@@ -111,7 +112,7 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
         auto_format = source[auto_start:auto_end]
 
         for field in (
-            "cfg=p1spd1",
+            "cfg=p1spd3",
             "pwm=%d",
             "turn10=%ld",
             "turnLv=%u",
@@ -123,8 +124,10 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
             "revLen=%d",
             "revD100=%ld",
             "revYaw10=%ld",
+            "revCmd10=%ld",
         ):
             self.assertIn(field, auto_format)
+        self.assertIn("guandao_reverse_debug_steer_command()", source)
 
 
 if __name__ == "__main__":

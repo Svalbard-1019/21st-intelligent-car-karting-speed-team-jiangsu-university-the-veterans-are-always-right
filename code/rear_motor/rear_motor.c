@@ -35,6 +35,7 @@
 #include "zf_common_headfile.h"
 #include "rear_motor/rear_motor.h"
 #include "rear_motor/rear_odometry_pose_buffer.h"
+#include "rear_motor/rear_reverse_pwm_floor.h"
 
 /* ---- 模块内部状态 ---- */
 static float  target_mps      = 0.0f;
@@ -482,10 +483,10 @@ void rear_motor_pid_update_100ms(void)
     }
     pid = profile->kp * error + profile->ki * integral + profile->kd * derivative;
     pwm_f = ff + pid;
-    if(target_mps < -0.01f && pwm_f > -(float)REAR_REVERSE_PWM_MIN)
-    {
-        pwm_f = -(float)REAR_REVERSE_PWM_MIN;
-    }
+    pwm_f = rear_reverse_apply_startup_pwm_floor(
+            target_mps, raw_actual_mps, pwm_f,
+            REAR_REVERSE_STARTUP_SPEED_MPS,
+            REAR_REVERSE_STARTUP_PWM_MIN);
     rear_motor_set_pwm((int16)pwm_f);
 }
 

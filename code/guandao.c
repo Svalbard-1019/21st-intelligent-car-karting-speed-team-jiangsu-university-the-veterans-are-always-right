@@ -188,7 +188,7 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_KMS_ACCUM_TURN_SHARP_RATIO 0.70f
 #define GUANDAO_P1_TURN_WINDOW_M        2.40f
 #define GUANDAO_P1_TURN_DEADBAND_DEG    2.50f
-#define GUANDAO_P1_ACCEL_UNITS_PER_S    12.0f
+#define GUANDAO_P1_ACCEL_UNITS_PER_S    25.0f
 #define GUANDAO_P1_DECEL_UNITS_PER_S    40.0f
 #define GUANDAO_FAST_STRAIGHT_SPEED     25.0f
 #define GUANDAO_FAST_STRAIGHT_TURN_MAX  15.0f
@@ -1101,6 +1101,11 @@ float guandao_reverse_debug_target_yaw_error(void)
     }
     if(!daoche_target_flag) return 0.0f;
     return guandao_normalize_angle(daoche_target_state.theta - Yaw_1);
+}
+
+float guandao_reverse_debug_steer_command(void)
+{
+    return portion1_reverse_steer_cmd;
 }
 /*初始化路径数据结构链*/
 /**
