@@ -334,6 +334,7 @@ int16 guandao_reverse_debug_route_count(void);
 float guandao_reverse_debug_target_distance(void);
 float guandao_reverse_debug_target_yaw_error(void);
 float guandao_reverse_debug_steer_command(void);
+float guandao_reverse_debug_lookahead(void);
 uint8 guandao_park_gps_debug_ready(void);
 uint8 guandao_park_gps_debug_count(void);
 int16 guandao_park_gps_debug_reference(void);

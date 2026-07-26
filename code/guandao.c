@@ -109,6 +109,7 @@ static uint32 portion1_taught_reverse_hold_ms = 0;
 static uint32 portion1_taught_reverse_steer_ms = 0;
 static float portion1_taught_reverse_path_length = 0.0f;
 static float portion1_taught_reverse_travelled = 0.0f;
+static float portion1_taught_reverse_lookahead_m = 0.0f;
 static state_t portion1_taught_reverse_last_state = {0.0f, 0.0f, 0.0f};
 static uint8 portion1_approach_active = 0;
 static float portion1_approach_steer_cmd = 0.0f;
@@ -206,7 +207,6 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_REVERSE_FORWARD_SPEED  5.0f
 #define GUANDAO_REVERSE_PLAN_TOL_DIST  0.16f
 #define GUANDAO_REVERSE_PLAN_TOL_YAW   6.0f
-#define GUANDAO_TAUGHT_REVERSE_LOOKAHEAD 0.35f
 #define GUANDAO_TAUGHT_REVERSE_POINT_DIST 0.20f
 #define GUANDAO_TAUGHT_REVERSE_SEARCH  6
 #define GUANDAO_TAUGHT_REVERSE_GAIN    1.40f
@@ -839,6 +839,7 @@ static void guandao_taught_reverse_prepare(void)
     portion1_taught_reverse_steer_ms = 0;
     portion1_taught_reverse_path_length = 0.0f;
     portion1_taught_reverse_travelled = 0.0f;
+    portion1_taught_reverse_lookahead_m = 0.0f;
     portion1_taught_reverse_last_state = INS.current_state;
     portion1_approach_active = 0;
     portion1_approach_steer_cmd = 0.0f;
@@ -932,6 +933,7 @@ static uint8 guandao_taught_reverse_update(void)
     float desired_servo;
     float steer_delta;
     float reverse_speed = reverse_plan.cruise_units;
+    float reverse_lookahead_m;
     uint32 now_ms = system_getval_ms();
     uint32 steer_elapsed_ms;
 
@@ -963,10 +965,19 @@ static uint8 guandao_taught_reverse_update(void)
         portion1_taught_reverse_index++;
     }
 
+    final_distance = get_distance(INS.current_state, portion1_taught_reverse_target);
+    if(final_distance <= GUANDAO_REVERSE_FINE_DIST
+            || portion1_taught_reverse_index >= portion1_taught_reverse_length - 1)
+    {
+        reverse_speed = reverse_plan.fine_units;
+    }
+    reverse_lookahead_m = guandao_reverse_lookahead_m(reverse_speed);
+    portion1_taught_reverse_lookahead_m = reverse_lookahead_m;
+
     lookahead_index = portion1_taught_reverse_index;
     target = portion1_taught_reverse_map[lookahead_index];
     while(lookahead_index < portion1_taught_reverse_length - 1
-            && get_distance(INS.current_state, target) < GUANDAO_TAUGHT_REVERSE_LOOKAHEAD)
+            && get_distance(INS.current_state, target) < reverse_lookahead_m)
     {
         lookahead_index++;
         target = portion1_taught_reverse_map[lookahead_index];
@@ -996,7 +1007,6 @@ static uint8 guandao_taught_reverse_update(void)
             -GUANDAO_STEERING_CMD_LIMIT, GUANDAO_STEERING_CMD_LIMIT);
     portion1_taught_reverse_steer_ms = now_ms;
 
-    final_distance = get_distance(INS.current_state, portion1_taught_reverse_target);
     final_yaw_error = guandao_normalize_angle(portion1_taught_reverse_target.theta - Yaw_1);
     if(portion1_taught_reverse_length > GUANDAO_PARK_FRAME_POINTS)
     {
@@ -1012,12 +1022,6 @@ static uint8 guandao_taught_reverse_update(void)
             final_gate_passed = 1;
         }
     }
-    if(final_distance <= GUANDAO_REVERSE_FINE_DIST
-            || portion1_taught_reverse_index >= portion1_taught_reverse_length - 1)
-    {
-        reverse_speed = reverse_plan.fine_units;
-    }
-
     daoche_flag = 1;
     conrtol_mode = DAOCHE;
     daoche_speed = reverse_speed;
@@ -1115,6 +1119,11 @@ float guandao_reverse_debug_target_yaw_error(void)
 float guandao_reverse_debug_steer_command(void)
 {
     return portion1_reverse_steer_cmd;
+}
+
+float guandao_reverse_debug_lookahead(void)
+{
+    return portion1_taught_reverse_lookahead_m;
 }
 /*初始化路径数据结构链*/
 /**
@@ -1247,6 +1256,7 @@ void portion_1_reset(void)
     portion1_taught_reverse_steer_ms = 0;
     portion1_taught_reverse_path_length = 0.0f;
     portion1_taught_reverse_travelled = 0.0f;
+    portion1_taught_reverse_lookahead_m = 0.0f;
     portion1_taught_reverse_last_state.x = 0.0f;
     portion1_taught_reverse_last_state.y = 0.0f;
     portion1_taught_reverse_last_state.theta = 0.0f;

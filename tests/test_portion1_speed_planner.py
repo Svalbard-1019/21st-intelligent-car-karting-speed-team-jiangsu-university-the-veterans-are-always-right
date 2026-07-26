@@ -113,7 +113,7 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
         auto_format = source[auto_start:auto_end]
 
         for field in (
-            "cfg=p1spd5",
+            "cfg=p1spd6",
             "pwm=%d",
             "turn10=%ld",
             "turnLv=%u",
@@ -126,6 +126,7 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
             "revD100=%ld",
             "revYaw10=%ld",
             "revCmd10=%ld",
+            "revLd100=%ld",
         ):
             self.assertIn(field, auto_format)
         self.assertIn("guandao_reverse_debug_steer_command()", source)
