@@ -38,7 +38,7 @@ class FinalRearInterfaceTests(unittest.TestCase):
         self.assertIn("rear_motor_get_odometry_pending_samples", self.main)
 
     def test_kms_diagnostics_include_timing_pose_and_steering(self):
-        self.assertIn("P3AUTO,cfg=p3save1", self.main)
+        self.assertIn("P3AUTO,cfg=p3save2", self.main)
         self.assertIn("pRel=%ld", self.main)
         self.assertIn("gE100=%ld", self.main)
         self.assertIn("steerAct10=%ld", self.main)

@@ -79,6 +79,10 @@ void IMU_init(void);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void IMU_gyro_Offset_Init(void);
+void IMU_yaw_rezero_start(void);
+uint8 IMU_yaw_rezero_active(void);
+int16 IMU_yaw_rezero_raw_z(void);
+float IMU_yaw_rezero_offset_z(void);
 /**
  * 接口说明：IMU_GetValues()。读取当前模块保存的状态量，主要用于屏幕显示和调试。
  * 所属模块：当前使用的 IMU963RA 姿态模块，给科目一提供车头航向 Yaw_1。

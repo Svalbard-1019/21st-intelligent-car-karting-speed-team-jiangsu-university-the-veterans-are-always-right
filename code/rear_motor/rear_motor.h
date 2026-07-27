@@ -135,6 +135,7 @@ void rear_motor_set_target_mps(float target_mps);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void rear_motor_encoder_update_10ms(float yaw_deg);
+void rear_motor_reset_odometry(void);
 uint8 rear_motor_take_odometry_sample(int32 *pulses, float *yaw_deg);
 uint32 rear_motor_get_odometry_merged_samples(void);
 int32 rear_motor_get_odometry_total_pulses(void);

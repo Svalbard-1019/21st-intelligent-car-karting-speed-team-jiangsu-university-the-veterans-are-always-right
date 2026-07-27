@@ -133,6 +133,7 @@ static uint8 portion1_park_brake_requested = 0;
 static uint8 guandao_trace_brake_requested = 0;
 static guandao_state *guandao_trace_brake_route = NULL;
 static rear_left_wheel_odometry_t portion3_center_odometry;
+static uint8 portion3_start_rezero_pending = 0;
 static guandao_speed_planner_t portion1_speed_planner;
 static uint32 portion1_speed_last_ms = 0u;
 
@@ -2710,6 +2711,24 @@ void guandao_trace(guandao_state * state)
         if(p == NULL)return;              // 空指针保护：若链表提前结束则退出函数
         choice_flag++;
     }
+    if(route_setting_choice == 2 && portion3_start_rezero_pending)
+    {
+        out_v_l = 0.0f;
+        out_v_r = 0.0f;
+        out_servo = 0.0f;
+        guandao_debug_stop_reason = 12;
+        if(IMU_yaw_rezero_active()) return;
+
+        rear_motor_reset_odometry();
+        rear_left_wheel_odometry_reset(&portion3_center_odometry);
+        p->current_state.x = 0.0f;
+        p->current_state.y = 0.0f;
+        p->current_state.theta = 0.0f;
+        p->current_point_index = 0;
+        p->planned_length = 0;
+        p->plan_ready = 0;
+        portion3_start_rezero_pending = 0;
+    }
     update_state(p,&guandao_ecd); // 基于编码器数据更新当前车辆位姿（x, y, theta）
 
     // ========== 纯追踪控制 ==========
@@ -2908,6 +2927,7 @@ uint8 portion3_points_switch(void)
 
 void portion3_return_reset(void)
 {
+    rear_motor_reset_odometry();
     rear_left_wheel_odometry_reset(&portion3_center_odometry);
     portion_3.current_state.x = 0.0f;
     portion_3.current_state.y = 0.0f;
@@ -2920,6 +2940,8 @@ void portion3_return_reset(void)
     out_servo = 0.0f;
     daoche_flag = 0;
     Yaw_1 = 0.0f;
+    portion3_start_rezero_pending = 1;
+    IMU_yaw_rezero_start();
     guandao_trace_brake_requested = 0;
     guandao_trace_brake_route = NULL;
 }

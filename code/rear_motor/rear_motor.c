@@ -692,6 +692,19 @@ int16  rear_motor_get_encoder_10ms(void)    { return encoder_10ms; }
  */
 int32  rear_motor_get_encoder_100ms(void)   { return encoder_100ms_last; }
 
+void rear_motor_reset_odometry(void)
+{
+    uint32 interrupt_state = interrupt_global_disable();
+
+    rear_odometry_pose_buffer_init(&odometry_pose_buffer);
+    odometry_total_pulses = 0;
+    encoder_10ms = 0;
+    last_encoder_count = encoder_get_count(TIM2_ENCODER);
+    encoder_first_read = 0;
+
+    interrupt_global_enable(interrupt_state);
+}
+
 uint8 rear_motor_take_odometry_sample(int32 *pulses, float *yaw_deg)
 {
     uint32 interrupt_state = interrupt_global_disable();

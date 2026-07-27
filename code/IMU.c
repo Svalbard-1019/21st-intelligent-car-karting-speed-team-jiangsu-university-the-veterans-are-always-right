@@ -32,6 +32,12 @@ gyro_param_t Gyro_Offset;
 IMU_param_t  IMU_Data;
 
 float Yaw_1 = 0;
+
+#define IMU_YAW_REZERO_SAMPLES (125u)
+
+static volatile int32 imu_yaw_rezero_sum = 0;
+static volatile uint16 imu_yaw_rezero_count = 0;
+static volatile uint8 imu_yaw_rezero_running = 0;
 float Roll_1 = 0;
 float Picth_1 = 0;
 
@@ -75,6 +81,34 @@ void IMU_gyro_Offset_Init(void)
     Gyro_Offset.Zdata /= 1000.0;
 }
 
+void IMU_yaw_rezero_start(void)
+{
+    uint32 interrupt_state = interrupt_global_disable();
+
+    imu_yaw_rezero_running = 0;
+    imu_yaw_rezero_sum = 0;
+    imu_yaw_rezero_count = 0;
+    Yaw_1 = 0.0f;
+    imu_yaw_rezero_running = 1;
+
+    interrupt_global_enable(interrupt_state);
+}
+
+uint8 IMU_yaw_rezero_active(void)
+{
+    return imu_yaw_rezero_running;
+}
+
+int16 IMU_yaw_rezero_raw_z(void)
+{
+    return imu963ra_gyro_z;
+}
+
+float IMU_yaw_rezero_offset_z(void)
+{
+    return Gyro_Offset.Zdata;
+}
+
 /**
  * 函数说明：IMU_GetValues()。读取当前模块保存的状态量，主要用于屏幕显示和调试。
  * 所属模块：当前使用的 IMU963RA 姿态模块，给科目一提供车头航向 Yaw_1。
@@ -86,6 +120,20 @@ void IMU_gyro_Offset_Init(void)
  */
 void IMU_GetValues(void)//将采集的数值转化为实际物理值, 并对陀螺仪进行去零漂处理
 {
+    if(imu_yaw_rezero_running)
+    {
+        imu_yaw_rezero_sum += (int32)imu963ra_gyro_z;
+        imu_yaw_rezero_count++;
+        IMU_Data.gyro_z = 0.0f;
+        Yaw_1 = 0.0f;
+
+        if(imu_yaw_rezero_count >= IMU_YAW_REZERO_SAMPLES)
+        {
+            Gyro_Offset.Zdata = (float)imu_yaw_rezero_sum / (float)imu_yaw_rezero_count;
+            imu_yaw_rezero_running = 0;
+        }
+        return;
+    }
 
     // Bench calibration: a physical 90 degree turn was reported as about
     // 100 degrees in both directions.  Increase the scale divisor by 100/90.
