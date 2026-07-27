@@ -42,7 +42,7 @@ static inline float guandao_reverse_lookahead_m(float speed_units)
     speed_mps = speed_units * 0.1f;
     if(speed_mps > 0.4f)
     {
-        lookahead_m += (speed_mps - 0.4f) * 0.60f;
+        lookahead_m += (speed_mps - 0.4f) * 0.40f;
     }
     if(lookahead_m > 1.20f)
     {

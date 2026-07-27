@@ -166,7 +166,7 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_HIGH_SPEED_THRESHOLD   5.0f
 #define GUANDAO_HIGH_SPEED_GAIN        1.55f
 #define GUANDAO_HIGH_SPEED_CMD_LIMIT   32.0f
-#define GUANDAO_KMY_CURVE_SPEED_RATIO      0.75f
+#define GUANDAO_KMY_CURVE_SPEED_RATIO      0.80f
 #define GUANDAO_KMS_CURVE_SPEED_RATIO      0.70f
 #define GUANDAO_VERY_HIGH_SPEED_GAIN   1.60f
 #define GUANDAO_VERY_HIGH_CMD_LIMIT    32.0f
@@ -174,16 +174,16 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_STEER_RATE_HIGH        3.0f
 #define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
 #define GUANDAO_SHARP_TURN_ANGLE       45.0f
-#define GUANDAO_KMY_SHARP_TURN_SPEED_RATIO 0.60f
+#define GUANDAO_KMY_SHARP_TURN_SPEED_RATIO 0.65f
 #define GUANDAO_KMS_SHARP_TURN_SPEED_RATIO 0.55f
 #define GUANDAO_HAIRPIN_TURN_ANGLE     70.0f
 #define GUANDAO_HAIRPIN_SPEED_RATIO    0.45f
 #define GUANDAO_ACCUM_TURN_SLOW_ANGLE  20.0f
 #define GUANDAO_ACCUM_TURN_MEDIUM_ANGLE 45.0f
 #define GUANDAO_ACCUM_TURN_SHARP_ANGLE 75.0f
-#define GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO  0.80f
-#define GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.70f
-#define GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.60f
+#define GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO  0.85f
+#define GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.75f
+#define GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.65f
 #define GUANDAO_KMS_ACCUM_TURN_SLOW_RATIO  0.80f
 #define GUANDAO_KMS_ACCUM_TURN_MEDIUM_RATIO 0.70f
 #define GUANDAO_KMS_ACCUM_TURN_SHARP_RATIO 0.70f
@@ -2170,9 +2170,9 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    }
    else if(base_speed > GUANDAO_HIGH_SPEED_THRESHOLD && (fabsf(angle_diff) > 30.0f || fabsf(preview_alpha2) > GUANDAO_CURVE_TRIGGER_ANGLE))
    {
-       if(v_center > base_speed * 0.75f)
+       if(v_center > base_speed * curve_speed_ratio)
        {
-           v_center = base_speed * 0.75f;
+           v_center = base_speed * curve_speed_ratio;
        }
    }
 

@@ -35,6 +35,7 @@
 #include "zf_common_headfile.h"
 #include "rear_motor/rear_motor.h"
 #include "rear_motor/rear_odometry_pose_buffer.h"
+#include "rear_motor/rear_pwm_slew.h"
 #include "rear_motor/rear_reverse_pwm_floor.h"
 
 /* ---- 模块内部状态 ---- */
@@ -44,6 +45,7 @@ static float  raw_actual_mps  = 0.0f;
 static float  filtered_pulses_100ms = 0.0f;
 static uint8  speed_filter_initialized = 0;
 static int16  current_pwm     = 0;
+static int16  requested_pwm   = 0;
 static int16  encoder_10ms    = 0;
 static int32  encoder_100ms_last = 0;
 static rear_odometry_pose_buffer_t odometry_pose_buffer;
@@ -72,15 +74,18 @@ typedef struct
     float ff_gain;
     float high_speed_ff_gain;
     int pwm_rate_limit;
+    int pwm_release_limit;
 } rear_motor_control_profile_t;
 
 static const rear_motor_control_profile_t rear_kmy_profile = {
     REAR_KMY_KP, REAR_KMY_KI, REAR_KMY_KD, REAR_KMY_FF_GAIN,
-    REAR_KMY_HIGH_SPEED_FF_GAIN, REAR_KMY_PWM_RATE_LIMIT
+    REAR_KMY_HIGH_SPEED_FF_GAIN, REAR_KMY_PWM_RATE_LIMIT,
+    REAR_KMY_PWM_RELEASE_LIMIT
 };
 static const rear_motor_control_profile_t rear_kms_profile = {
     REAR_KMS_KP, REAR_KMS_KI, REAR_KMS_KD, REAR_KMS_FF_GAIN,
-    REAR_KMS_HIGH_SPEED_FF_GAIN, REAR_KMS_PWM_RATE_LIMIT
+    REAR_KMS_HIGH_SPEED_FF_GAIN, REAR_KMS_PWM_RATE_LIMIT,
+    REAR_KMS_PWM_RELEASE_LIMIT
 };
 static uint8 rear_route_profile = 0u;
 
@@ -125,19 +130,31 @@ static int8 brake_motion_sign = 0;
  * 科目一关系：如果该函数处在科目一链路中，通常由 core0_main() 主循环、CCU61_CH0/CH1 中断或 Menu_Contral() 间接触发。
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
-static void rear_motor_set_pwm(int16 pwm)
+static void rear_motor_set_pwm_internal(int16 pwm, uint8 gradual_release)
 {
     extern float out_v_l;
     extern float out_v_r;
     extern MOTER_control_mode conrtol_mode;
-    int diff = pwm - last_pwm;
-    int rate_limit = rear_motor_active_profile()->pwm_rate_limit;
+    const rear_motor_control_profile_t *profile = rear_motor_active_profile();
+    int diff;
     int16 pwm_l;
     int16 pwm_r;
 
-    if(diff > rate_limit)  diff = rate_limit;
-    if(diff < -rate_limit) diff = -rate_limit;
-    last_pwm += diff;
+    if(gradual_release)
+    {
+        last_pwm = rear_pwm_slew_step(
+                last_pwm,
+                pwm,
+                profile->pwm_rate_limit,
+                profile->pwm_release_limit);
+    }
+    else
+    {
+        diff = pwm - last_pwm;
+        if(diff > profile->pwm_rate_limit) diff = profile->pwm_rate_limit;
+        if(diff < -profile->pwm_rate_limit) diff = -profile->pwm_rate_limit;
+        last_pwm += diff;
+    }
 
     if(last_pwm > REAR_PWM_HARD_LIMIT)  last_pwm = REAR_PWM_HARD_LIMIT;
     if(last_pwm < -REAR_PWM_HARD_LIMIT) last_pwm = -REAR_PWM_HARD_LIMIT;
@@ -214,6 +231,16 @@ static void rear_motor_set_pwm(int16 pwm)
     applied_pwm_r = pwm_r;
 }
 
+static void rear_motor_set_pwm(int16 pwm)
+{
+    rear_motor_set_pwm_internal(pwm, 0u);
+}
+
+static void rear_motor_set_drive_pwm(int16 pwm)
+{
+    rear_motor_set_pwm_internal(pwm, 1u);
+}
+
 /* ---- 公开接口 ---- */
 /**
  * 函数说明：rear_motor_init()。完成模块或硬件资源初始化，通常在系统启动阶段调用一次。
@@ -238,6 +265,7 @@ void rear_motor_init(void)
     filtered_pulses_100ms = 0.0f;
     speed_filter_initialized = 0;
     current_pwm = 0;
+    requested_pwm = 0;
     encoder_10ms  = 0;
     encoder_100ms_last = 0;
     rear_odometry_pose_buffer_init(&odometry_pose_buffer);
@@ -280,6 +308,7 @@ void rear_motor_stop(void)
     brake_output_pwm = 0;
     brake_motion_sign = 0;
     target_mps  = 0.0f;
+    requested_pwm = 0;
     integral    = 0.0f;
     last_error  = 0.0f;
     last_pwm    = 0;
@@ -325,6 +354,7 @@ void rear_motor_set_target_mps(float mps)
 
     if(mps == 0.0f)
     {
+        requested_pwm = 0;
         integral   = 0.0f;
         last_error = 0.0f;
         last_pwm   = 0;
@@ -487,7 +517,9 @@ void rear_motor_pid_update_100ms(void)
             target_mps, raw_actual_mps, pwm_f,
             REAR_REVERSE_STARTUP_SPEED_MPS,
             REAR_REVERSE_STARTUP_PWM_MIN);
-    rear_motor_set_pwm((int16)pwm_f);
+    requested_pwm = (int16)pwm_f;
+    requested_pwm = (int16)rear_pwm_limit_request_sign(target_mps, requested_pwm);
+    rear_motor_set_drive_pwm(requested_pwm);
 }
 
 /**
@@ -509,6 +541,7 @@ void rear_motor_open_loop_update(int16 pwm)
     }
 
     target_mps = 0.0f;
+    requested_pwm = pwm;
     integral = 0.0f;
     last_error = 0.0f;
     rear_motor_set_pwm(pwm);
@@ -637,6 +670,7 @@ float  rear_motor_get_raw_speed_mps(void)   { return raw_actual_mps; }
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 int16  rear_motor_get_pwm(void)             { return current_pwm; }
+int16  rear_motor_get_requested_pwm(void)   { return requested_pwm; }
 /**
  * 函数说明：rear_motor_get_encoder_10ms()。读取当前模块保存的状态量，主要用于屏幕显示和调试。
  * 所属模块：后轮 m/s 速度闭环模块，是当前科目一实际驱动后轮的主要模块。

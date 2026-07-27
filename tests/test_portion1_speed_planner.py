@@ -99,12 +99,17 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
         self.assertIn("fabsf(upcoming_turn) < GUANDAO_ACCUM_TURN_SLOW_ANGLE", source)
         self.assertIn("guandao_speed_turn_level(", source)
         self.assertIn("guandao_speed_rate_limit(", source)
-        self.assertIn("GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO  0.80f", source)
-        self.assertIn("GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.70f", source)
-        self.assertIn("GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.60f", source)
+        self.assertIn("GUANDAO_KMY_CURVE_SPEED_RATIO      0.80f", source)
+        self.assertIn("GUANDAO_KMY_SHARP_TURN_SPEED_RATIO 0.65f", source)
+        self.assertIn("GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO  0.85f", source)
+        self.assertIn("GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.75f", source)
+        self.assertIn("GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.65f", source)
+        self.assertIn("GUANDAO_HAIRPIN_SPEED_RATIO    0.45f", source)
         self.assertIn("GUANDAO_KMS_ACCUM_TURN_SLOW_RATIO  0.80f", source)
         self.assertIn("GUANDAO_KMS_ACCUM_TURN_MEDIUM_RATIO 0.70f", source)
         self.assertIn("GUANDAO_KMS_ACCUM_TURN_SHARP_RATIO 0.70f", source)
+        self.assertNotIn("base_speed * 0.75f", source)
+        self.assertGreaterEqual(source.count("base_speed * curve_speed_ratio"), 2)
 
     def test_portion1_serial_line_exposes_speed_and_reverse_diagnostics(self):
         source = (ROOT / "user" / "cpu0_main.c").read_text(encoding="utf-8")
@@ -113,8 +118,9 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
         auto_format = source[auto_start:auto_end]
 
         for field in (
-            "cfg=p1spd6",
+            "cfg=p1spd7",
             "pwm=%d",
+            "pwmReq=%d",
             "turn10=%ld",
             "turnLv=%u",
             "req100=%ld",
@@ -130,6 +136,7 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
         ):
             self.assertIn(field, auto_format)
         self.assertIn("guandao_reverse_debug_steer_command()", source)
+        self.assertIn("rear_motor_get_requested_pwm()", source)
 
 
 if __name__ == "__main__":

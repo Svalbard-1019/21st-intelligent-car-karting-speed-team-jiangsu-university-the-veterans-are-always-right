@@ -42,6 +42,7 @@
 #define REAR_KMY_FF_GAIN            8.0f
 #define REAR_KMY_HIGH_SPEED_FF_GAIN 500.0f
 #define REAR_KMY_PWM_RATE_LIMIT     600
+#define REAR_KMY_PWM_RELEASE_LIMIT  300
 
 #define REAR_KMS_KP                 10.0f
 #define REAR_KMS_KI                 0.3f
@@ -49,6 +50,7 @@
 #define REAR_KMS_FF_GAIN            13.0f
 #define REAR_KMS_HIGH_SPEED_FF_GAIN 0.0f
 #define REAR_KMS_PWM_RATE_LIMIT     1000
+#define REAR_KMS_PWM_RELEASE_LIMIT  1000
 
 #define REAR_HIGH_SPEED_FF_START_MPS 2.5f
 #define REAR_PWM_HARD_LIMIT     9500
@@ -183,6 +185,7 @@ float rear_motor_get_integral_pulses(void);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 int16  rear_motor_get_pwm(void);
+int16  rear_motor_get_requested_pwm(void);
 /**
  * 接口说明：rear_motor_get_encoder_10ms()。读取当前模块保存的状态量，主要用于屏幕显示和调试。
  * 所属模块：后轮 m/s 速度闭环模块，是当前科目一实际驱动后轮的主要模块。

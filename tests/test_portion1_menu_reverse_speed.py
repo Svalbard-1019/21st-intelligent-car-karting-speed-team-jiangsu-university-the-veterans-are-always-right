@@ -41,9 +41,9 @@ class Portion1MenuReverseSpeedTests(unittest.TestCase):
                 plan = guandao_reverse_speed_plan(0.0f);
                 if(!close_enough(plan.cruise_units, -2.0f)) return 8;
                 if(!close_enough(guandao_reverse_lookahead_m(-4.0f), 0.35f)) return 9;
-                if(!close_enough(guandao_reverse_lookahead_m(-10.0f), 0.71f)) return 10;
+                if(!close_enough(guandao_reverse_lookahead_m(-10.0f), 0.59f)) return 10;
                 if(!close_enough(guandao_reverse_lookahead_m(-40.0f), 1.20f)) return 11;
-                if(!close_enough(guandao_reverse_lookahead_m(10.0f), 0.71f)) return 12;
+                if(!close_enough(guandao_reverse_lookahead_m(10.0f), 0.59f)) return 12;
                 return 0;
             }
             """
