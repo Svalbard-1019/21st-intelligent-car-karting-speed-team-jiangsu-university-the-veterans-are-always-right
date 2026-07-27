@@ -104,7 +104,7 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
         self.assertIn("GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO  0.85f", source)
         self.assertIn("GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.75f", source)
         self.assertIn("GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.65f", source)
-        self.assertIn("GUANDAO_HAIRPIN_SPEED_RATIO    0.45f", source)
+        self.assertIn("GUANDAO_HAIRPIN_SPEED_RATIO    0.60f", source)
         self.assertIn("GUANDAO_KMS_ACCUM_TURN_SLOW_RATIO  0.80f", source)
         self.assertIn("GUANDAO_KMS_ACCUM_TURN_MEDIUM_RATIO 0.70f", source)
         self.assertIn("GUANDAO_KMS_ACCUM_TURN_SHARP_RATIO 0.70f", source)
@@ -118,7 +118,7 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
         auto_format = source[auto_start:auto_end]
 
         for field in (
-            "cfg=p1spd7",
+            "cfg=p1spd8",
             "pwm=%d",
             "pwmReq=%d",
             "turn10=%ld",

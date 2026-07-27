@@ -15,6 +15,7 @@
 **Files:**
 - Modify: `tests/test_portion1_speed_planner.py`
 - Modify: `code/guandao.c`
+- Modify: `user/cpu0_main.c`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -28,6 +29,12 @@ self.assertIn("GUANDAO_HAIRPIN_SPEED_RATIO    0.60f", source)
 Keep the test assertion that the portion1 acceleration limit remains
 `35.0f`; do not add a fixed curve-speed floor.
 
+Change the expected serial marker to:
+
+```python
+"cfg=p1spd8",
+```
+
 - [ ] **Step 2: Run the focused test and verify it fails**
 
 Run:
@@ -37,7 +44,8 @@ python -m unittest tests.test_portion1_speed_planner.Portion1SpeedPlannerTests.t
 ```
 
 Expected: failure because `code/guandao.c` still contains
-`GUANDAO_HAIRPIN_SPEED_RATIO    0.45f`.
+`GUANDAO_HAIRPIN_SPEED_RATIO    0.45f` and `user/cpu0_main.c` still contains
+`cfg=p1spd7`.
 
 - [ ] **Step 3: Apply the minimal production change**
 
@@ -51,6 +59,18 @@ to:
 
 ```c
 #define GUANDAO_HAIRPIN_SPEED_RATIO    0.60f
+```
+
+In `user/cpu0_main.c`, change the AUTO serial marker:
+
+```c
+cfg=p1spd7
+```
+
+to:
+
+```c
+cfg=p1spd8
 ```
 
 - [ ] **Step 4: Run the focused test and verify it passes**

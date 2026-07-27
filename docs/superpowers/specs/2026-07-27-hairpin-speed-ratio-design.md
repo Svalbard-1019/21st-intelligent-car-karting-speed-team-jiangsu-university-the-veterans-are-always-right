@@ -13,6 +13,8 @@ At the tested menu speeds, the hairpin center-speed targets become:
 ## Scope
 
 Change `GUANDAO_HAIRPIN_SPEED_RATIO` in `code/guandao.c`.
+Update the serial firmware marker from `cfg=p1spd7` to `cfg=p1spd8` so the
+resulting test log can be attributed to this ratio.
 
 Do not add a fixed minimum-speed clamp. Do not change the ordinary curve,
 sharp-turn, accumulated-turn, final approach, parking, reverse, or active-brake
@@ -22,5 +24,5 @@ less than the calculated hairpin speed.
 ## Verification
 
 Update the portion1 speed-planner source test to require the `0.60` ratio and
-to keep the final-approach ordering intact. Run the focused test first, then
-the complete host test suite.
+the `p1spd8` marker while keeping the final-approach ordering intact. Run the
+focused tests first, then the complete host test suite.

@@ -318,7 +318,7 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,cfg=p1spd7,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,vl10=%ld,vr10=%ld,enc10=%d,pend=%u,merge=%lu,odom=%ld,enc100=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld,pwm=%d,pwmReq=%d,turn10=%ld,turnLv=%u,req100=%ld,cmd100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,revSt=%u,revPlan=%u,revIdx=%d,revLen=%d,revD100=%ld,revYaw10=%ld,revCmd10=%ld,revLd100=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
+                      "AUTO,cfg=p1spd8,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,vl10=%ld,vr10=%ld,enc10=%d,pend=%u,merge=%lu,odom=%ld,enc100=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,actS10=%ld,tgt100=%ld,act100=%ld,pwm=%d,pwmReq=%d,turn10=%ld,turnLv=%u,req100=%ld,cmd100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,revSt=%u,revPlan=%u,revIdx=%d,revLen=%d,revD100=%ld,revYaw10=%ld,revCmd10=%ld,revLd100=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
                       (unsigned long)now_ms,
                       (unsigned long)main_loop_last_dt_ms,
                       (unsigned long)main_loop_max_dt_ms,
