@@ -47,9 +47,10 @@ class FinalIntegrationSourceTests(unittest.TestCase):
     def test_subject_three_has_latest_speed_and_finish_rules(self):
         self.assertNotIn("PORTION3_CURVE_SPEED_FLOOR_RATIO", self.guandao_c)
         self.assertIn("GUANDAO_KMY_CURVE_SPEED_RATIO      0.80f", self.guandao_c)
-        self.assertIn("GUANDAO_KMS_CURVE_SPEED_RATIO      0.70f", self.guandao_c)
         self.assertIn("GUANDAO_KMY_SHARP_TURN_SPEED_RATIO 0.65f", self.guandao_c)
-        self.assertIn("GUANDAO_KMS_SHARP_TURN_SPEED_RATIO 0.55f", self.guandao_c)
+        self.assertNotIn("GUANDAO_KMS_CURVE_SPEED_RATIO", self.guandao_c)
+        self.assertNotIn("GUANDAO_KMS_SHARP_TURN_SPEED_RATIO", self.guandao_c)
+        self.assertNotIn("GUANDAO_KMS_ACCUM_TURN_", self.guandao_c)
         self.assertIn("route_setting_choice == 2", self.guandao_c)
         self.assertIn("PORTION3_RETURN_TRIM_DIST      0.5f", self.guandao_c)
         self.assertIn("uint8 hold_portion3_final_point", self.guandao_c)
