@@ -13,7 +13,7 @@
 
 ## 当前状态
 
-- `final` 已包含今天全部功能代码，结束工作前本地与 `origin/final` 同步至 `fc8c74b`。
+- `final` 已包含今天全部功能代码；最新功能提交为 `fc8c74b`，其后只有交接文档更新。
 - Portion1 和 Portion3 已共用同一个连续速度规划器；按用户决定，切换科目时不重置规划速度状态。
 - Portion3 首次启动会静止约 1 秒采集 125 次陀螺仪 Z 轴零偏；完成后重新清空里程队列和编码器基线再追踪。
 - Portion3 保存和重新读取使用完全相同的路线长度，不再读取时减掉一个点。
@@ -57,7 +57,7 @@ python -m unittest discover -s tests -v
 - 新测试覆盖共享速度规划器、相同比例、距离窗口、档位滞回、不重置共享状态、Portion3 首次零偏校准和里程复位。
 - `git diff --check` 通过。
 - 今天修改的 C、Python 和 Markdown 文件均通过 UTF-8 解码检查。
-- 推送后 `HEAD` 与 `origin/final` 均为 `fc8c74b9ea851ec03ece6b33a6132c4ac5db021a`。
+- `fc8c74b9ea851ec03ece6b33a6132c4ac5db021a` 已包含在本地和远程 `final` 中。
 - 未验证：TASKING/ADS 编译、链接、烧录和实车表现。
 
 ## 关键决策
