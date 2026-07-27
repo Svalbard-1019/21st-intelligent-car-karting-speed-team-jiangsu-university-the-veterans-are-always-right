@@ -469,8 +469,7 @@ void Flash_Read_portion_3points(void)
             return;
         }
 
-        /* Preserve the legacy convention that excludes the final saved point. */
-        portion_3.length_index = flash_clamp_route_length(stored_length - 1);
+        portion_3.length_index = flash_clamp_route_length(stored_length);
         first_count = flash_route_first_count(portion_3.length_index);
         continuation_count = portion_3.length_index - first_count;
         flash_route_read_buffer(&portion_3, 0, first_count);
@@ -484,9 +483,7 @@ void Flash_Read_portion_3points(void)
             flash_read_page_to_buffer(FLASH_SECTION_INDEX, RECODE_PORTION_THREE_CONTINUATION);
             if(flash_union_buffer[0].uint32_type != FLASH_ROUTE_FORMAT_MAGIC
                     || (int16)(flash_union_buffer[1].uint32_type >> 16) != stored_length
-                    || (int16)(flash_union_buffer[1].uint32_type & 0xFFFFu) < continuation_count
-                    || (int16)(flash_union_buffer[1].uint32_type & 0xFFFFu)
-                            > MAX_LENGTH_INDEX - FLASH_ROUTE_FIRST_PAGE_POINTS)
+                    || (int16)(flash_union_buffer[1].uint32_type & 0xFFFFu) != continuation_count)
             {
                 portion_3.length_index = 0;
                 return;

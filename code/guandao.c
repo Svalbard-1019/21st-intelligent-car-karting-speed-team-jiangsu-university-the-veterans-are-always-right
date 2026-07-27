@@ -88,6 +88,7 @@ uint8 daoche_flash_cheack =0;// 倒车Flash检查标志
 static uint8 park_record_stage = 0;
 static uint32 park_start_record_ms = 0;
 static uint8 guandao_record_init_pending = 1;
+static uint8 guandao_record_saved = 0;
 static uint8 portion1_state_flag = 0;
 static uint16 portion1_finally_length = 0;
 static uint8 portion1_reverse_state = 0;
@@ -2448,6 +2449,7 @@ void guandao_recode(guandao_state * state)
         park_start_record_ms = 0;
         guandao_record_init_pending = 0;
     }
+    if(guandao_record_saved) return;
     update_state(p  , &guandao_ecd);
     gps_recode_average_update(p);
 
@@ -2465,6 +2467,10 @@ void guandao_recode(guandao_state * state)
             // 否则旧逻辑会在按键释放时才登记终点，导致 Flash 中 target_flag 仍为 0。
             guandao_record_park_target_now(p);
             Flash_Store_Mode(route_setting_choice);
+            if(route_setting_choice == 2 && p == &portion_3 && p->length_index > 1)
+            {
+                guandao_record_saved = 1;
+            }
             rear_motor_brake_start();
             Buzzer_check(200);
             key1_save_wait_release = 1;
@@ -2494,10 +2500,15 @@ void guandao_recode(guandao_state * state)
         {
             guandao_record_park_target_now(p);
             Flash_Store_Mode(route_setting_choice);
+            if(route_setting_choice == 2 && p == &portion_3 && p->length_index > 1)
+            {
+                guandao_record_saved = 1;
+            }
             rear_motor_brake_start();
             Buzzer_check(200);
             rc_ch3_wait_release = 1;
         }
+        if(guandao_record_saved) return;
         if( p == &passage)portion2_points_recode();
         else recode_waypoint(p);
         return;
@@ -2530,6 +2541,7 @@ void guandao_recode(guandao_state * state)
 void guandao_record_session_reset(void)
 {
     guandao_record_init_pending = 1;
+    guandao_record_saved = 0;
     park_record_stage = 0;
     park_start_record_ms = 0;
     daoche_point_length = 0;

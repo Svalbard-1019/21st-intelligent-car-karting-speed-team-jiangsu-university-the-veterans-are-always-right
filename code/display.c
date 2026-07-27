@@ -470,7 +470,6 @@ void Menu_Recode_Points(void)
         {
             case 2:
                 route_setting_choice = 0;
-                guandao_record_session_reset();
                 break;
             case 3:
                 route_setting_choice = 1;
@@ -480,6 +479,7 @@ void Menu_Recode_Points(void)
                 break;
             default :break;
         }
+        guandao_record_session_reset();
         angle_control_select_route(route_setting_choice);
          Buzzer_check(50);
     }

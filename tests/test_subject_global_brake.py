@@ -34,8 +34,15 @@ class SubjectGlobalBrakeTests(unittest.TestCase):
         self.assertGreaterEqual(self.guandao.count("rear_motor_brake_start();"), 5)
 
     def test_route_save_starts_brake_after_flash_write(self):
-        pattern = r"Flash_Store_Mode\(route_setting_choice\);\s*rear_motor_brake_start\(\);"
-        self.assertEqual(len(re.findall(pattern, self.guandao)), 2)
+        save_calls = list(
+            re.finditer(r"Flash_Store_Mode\(route_setting_choice\);", self.guandao)
+        )
+        self.assertEqual(len(save_calls), 2)
+        for save_call in save_calls:
+            brake_position = self.guandao.index(
+                "rear_motor_brake_start();", save_call.end()
+            )
+            self.assertLess(brake_position - save_call.end(), 400)
 
     def test_generic_route_endpoint_has_one_shot_brake_latch(self):
         self.assertIn("guandao_trace_brake_requested", self.guandao)
