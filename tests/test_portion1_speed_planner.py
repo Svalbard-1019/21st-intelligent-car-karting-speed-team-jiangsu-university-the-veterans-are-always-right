@@ -88,7 +88,7 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
                 msg=run_result.stdout + run_result.stderr,
             )
 
-    def test_portion1_uses_distance_window_and_keeps_portion3_isolated(self):
+    def test_portion1_and_portion3_share_distance_window_and_speed_ratios(self):
         source = (ROOT / "code" / "guandao.c").read_text(encoding="utf-8")
 
         self.assertIn("GUANDAO_P1_TURN_WINDOW_M", source)
@@ -105,9 +105,11 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
         self.assertIn("GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.75f", source)
         self.assertIn("GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.65f", source)
         self.assertIn("GUANDAO_HAIRPIN_SPEED_RATIO    0.60f", source)
-        self.assertIn("GUANDAO_KMS_ACCUM_TURN_SLOW_RATIO  0.80f", source)
-        self.assertIn("GUANDAO_KMS_ACCUM_TURN_MEDIUM_RATIO 0.70f", source)
-        self.assertIn("GUANDAO_KMS_ACCUM_TURN_SHARP_RATIO 0.70f", source)
+        self.assertNotIn("GUANDAO_KMS_ACCUM_TURN_", source)
+        self.assertIn(
+            "(route_setting_choice == 0 || route_setting_choice == 2)",
+            source,
+        )
         self.assertNotIn("base_speed * 0.75f", source)
         self.assertGreaterEqual(source.count("base_speed * curve_speed_ratio"), 2)
 

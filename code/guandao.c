@@ -134,7 +134,7 @@ static uint8 guandao_trace_brake_requested = 0;
 static guandao_state *guandao_trace_brake_route = NULL;
 static rear_left_wheel_odometry_t portion3_center_odometry;
 static uint8 portion3_start_rezero_pending = 0;
-static guandao_speed_planner_t portion1_speed_planner;
+static guandao_speed_planner_t portion1_speed_planner = {MIN_SPEED, 0u};
 static uint32 portion1_speed_last_ms = 0u;
 
 #define GUANDAO_START_SEARCH_POINTS    10
@@ -169,7 +169,6 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_HIGH_SPEED_GAIN        1.55f
 #define GUANDAO_HIGH_SPEED_CMD_LIMIT   32.0f
 #define GUANDAO_KMY_CURVE_SPEED_RATIO      0.80f
-#define GUANDAO_KMS_CURVE_SPEED_RATIO      0.70f
 #define GUANDAO_VERY_HIGH_SPEED_GAIN   1.60f
 #define GUANDAO_VERY_HIGH_CMD_LIMIT    32.0f
 #define GUANDAO_STEER_RATE_LOW         3.0f
@@ -177,7 +176,6 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
 #define GUANDAO_SHARP_TURN_ANGLE       45.0f
 #define GUANDAO_KMY_SHARP_TURN_SPEED_RATIO 0.65f
-#define GUANDAO_KMS_SHARP_TURN_SPEED_RATIO 0.55f
 #define GUANDAO_HAIRPIN_TURN_ANGLE     70.0f
 #define GUANDAO_HAIRPIN_SPEED_RATIO    0.60f
 #define GUANDAO_ACCUM_TURN_SLOW_ANGLE  20.0f
@@ -186,9 +184,6 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO  0.85f
 #define GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO 0.75f
 #define GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO 0.65f
-#define GUANDAO_KMS_ACCUM_TURN_SLOW_RATIO  0.80f
-#define GUANDAO_KMS_ACCUM_TURN_MEDIUM_RATIO 0.70f
-#define GUANDAO_KMS_ACCUM_TURN_SHARP_RATIO 0.70f
 #define GUANDAO_P1_TURN_WINDOW_M        2.40f
 #define GUANDAO_P1_TURN_DEADBAND_DEG    2.50f
 #define GUANDAO_P1_ACCEL_UNITS_PER_S    35.0f
@@ -1274,8 +1269,6 @@ void portion_1_reset(void)
     guandao_debug_speed_requested = 0.0f;
     guandao_debug_speed_command = 0.0f;
     guandao_debug_turn_level = 0u;
-    guandao_speed_planner_reset(&portion1_speed_planner, MIN_SPEED);
-    portion1_speed_last_ms = 0u;
     portion1_forward_brake_requested = 0;
     portion1_reverse_brake_requested = 0;
     portion1_park_brake_requested = 0;
@@ -1347,8 +1340,6 @@ void portion_1(void)
             if(end_index > GUANDAO_START_SEARCH_POINTS) end_index = GUANDAO_START_SEARCH_POINTS;
             INS.current_point_index = guandao_find_closest_index(&INS, 1, end_index);
         }
-        guandao_speed_planner_reset(&portion1_speed_planner, MIN_SPEED);
-        portion1_speed_last_ms = system_getval_ms();
         portion1_state_flag = 1;
     }
 
@@ -1865,16 +1856,11 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float dist_to_final = 0.0f;
     uint8 accumulated_turn_level = 0u;
     uint8 terminal_pass_advanced = 0;
-    float curve_speed_ratio = (route_setting_choice == 2)
-            ? GUANDAO_KMS_CURVE_SPEED_RATIO : GUANDAO_KMY_CURVE_SPEED_RATIO;
-    float sharp_turn_speed_ratio = (route_setting_choice == 2)
-            ? GUANDAO_KMS_SHARP_TURN_SPEED_RATIO : GUANDAO_KMY_SHARP_TURN_SPEED_RATIO;
-    float accum_turn_slow_ratio = (route_setting_choice == 2)
-            ? GUANDAO_KMS_ACCUM_TURN_SLOW_RATIO : GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO;
-    float accum_turn_medium_ratio = (route_setting_choice == 2)
-            ? GUANDAO_KMS_ACCUM_TURN_MEDIUM_RATIO : GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO;
-    float accum_turn_sharp_ratio = (route_setting_choice == 2)
-            ? GUANDAO_KMS_ACCUM_TURN_SHARP_RATIO : GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO;
+    float curve_speed_ratio = GUANDAO_KMY_CURVE_SPEED_RATIO;
+    float sharp_turn_speed_ratio = GUANDAO_KMY_SHARP_TURN_SPEED_RATIO;
+    float accum_turn_slow_ratio = GUANDAO_KMY_ACCUM_TURN_SLOW_RATIO;
+    float accum_turn_medium_ratio = GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO;
+    float accum_turn_sharp_ratio = GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO;
 
     guandao_debug_stop_reason = 0;
     guandao_debug_steer_preview = 0;
@@ -2013,12 +1999,12 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     {
         steer_preview_steps = PORTION3_FAST_PREVIEW_STEPS;
     }
-    upcoming_turn = (route_setting_choice == 0)
+    upcoming_turn = (route_setting_choice == 0 || route_setting_choice == 2)
             ? guandao_portion1_distance_turn(
                     state, state->current_point_index, GUANDAO_P1_TURN_WINDOW_M)
             : guandao_accumulated_route_turn(state, state->current_point_index, 12);
     max_single_turn = guandao_max_route_turn(state, state->current_point_index, 12);
-    if(route_setting_choice == 0)
+    if(route_setting_choice == 0 || route_setting_choice == 2)
     {
         accumulated_turn_level = guandao_speed_turn_level(
                 &portion1_speed_planner, upcoming_turn);
@@ -2200,7 +2186,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
    }
 
    guandao_debug_speed_requested = v_center;
-   if(route_setting_choice == 0)
+   if(route_setting_choice == 0 || route_setting_choice == 2)
    {
        uint32 speed_now_ms = system_getval_ms();
        uint32 speed_elapsed_ms = (portion1_speed_last_ms == 0u) ? 20u
