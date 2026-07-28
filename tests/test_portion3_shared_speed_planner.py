@@ -63,11 +63,11 @@ class Portion3SharedSpeedPlannerTests(unittest.TestCase):
     def test_portion3_uses_lower_curve_ratios_without_losing_shared_planning(self):
         self.assertRegex(
             self.source,
-            r"#define\s+GUANDAO_P3_CURVE_SPEED_RATIO\s+0\.72f",
+            r"#define\s+GUANDAO_P3_CURVE_SPEED_RATIO\s+0\.70f",
         )
         self.assertRegex(
             self.source,
-            r"#define\s+GUANDAO_P3_SHARP_TURN_SPEED_RATIO\s+0\.57f",
+            r"#define\s+GUANDAO_P3_SHARP_TURN_SPEED_RATIO\s+0\.55f",
         )
         self.assertIn(
             "float curve_speed_ratio = GUANDAO_KMY_CURVE_SPEED_RATIO;",
