@@ -97,7 +97,7 @@ class Portion3StartRezeroTests(unittest.TestCase):
         self.assertGreaterEqual(trace_body.count("rear_motor_reset_odometry();"), 1)
 
     def test_portion3_diagnostics_expose_startup_rezero(self):
-        self.assertIn("P3AUTO,cfg=p3track2", self.main_c)
+        self.assertIn("P3AUTO,cfg=p3track3", self.main_c)
         self.assertIn("p3Init=%u", self.main_c)
         self.assertIn("gzRaw=%d", self.main_c)
         self.assertIn("gzOff=%ld", self.main_c)

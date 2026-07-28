@@ -152,25 +152,15 @@ class Portion3SharedSpeedPlannerTests(unittest.TestCase):
         )
         self.assertLess(final_cross_stop, terminal_target_reload)
 
-    def test_portion3_starts_final_slowdown_at_least_four_metres_early(self):
-        self.assertRegex(
-            self.source,
-            r"#define\s+PORTION3_FINAL_SLOW_DIST\s+4\.00f",
-        )
+    def test_portion3_keeps_the_configured_final_slowdown_distance(self):
+        self.assertNotIn("PORTION3_FINAL_SLOW_DIST", self.source)
+        self.assertNotIn("final_slow_dist", self.pursuit)
         self.assertIn(
-            "float final_slow_dist = final_dsts;",
+            "if (dist_to_final < final_dsts",
             self.pursuit,
         )
         self.assertIn(
-            "if(final_slow_dist < PORTION3_FINAL_SLOW_DIST)",
-            self.pursuit,
-        )
-        self.assertIn(
-            "if (dist_to_final < final_slow_dist",
-            self.pursuit,
-        )
-        self.assertIn(
-            "base_speed * (dist_to_final / final_slow_dist)",
+            "base_speed * (dist_to_final / final_dsts)",
             self.pursuit,
         )
 
