@@ -33,13 +33,23 @@ class SubjectGlobalBrakeTests(unittest.TestCase):
         self.assertIn("portion1_park_brake_requested", self.guandao)
         self.assertGreaterEqual(self.guandao.count("rear_motor_brake_start();"), 5)
 
-    def test_route_save_starts_brake_after_flash_write(self):
+    def test_route_save_braking_order_matches_route_type(self):
+        recode = self.guandao.split("void guandao_recode(guandao_state * state)", 1)[1]
+        recode = recode.split("void guandao_record_session_reset(void)", 1)[0]
         save_calls = list(
-            re.finditer(r"Flash_Store_Mode\(route_setting_choice\);", self.guandao)
+            re.finditer(r"Flash_Store_Mode\(route_setting_choice\);", recode)
         )
-        self.assertEqual(len(save_calls), 2)
-        for save_call in save_calls:
-            brake_position = self.guandao.index(
+        self.assertEqual(len(save_calls), 3)
+
+        pending_block = recode.split("if(portion3_save_pending)", 1)[1]
+        pending_block = pending_block.split("// KEY4", 1)[0]
+        self.assertLess(
+            pending_block.index("if(rear_motor_brake_active()) return;"),
+            pending_block.index("Flash_Store_Mode(route_setting_choice);"),
+        )
+
+        for save_call in save_calls[1:]:
+            brake_position = recode.index(
                 "rear_motor_brake_start();", save_call.end()
             )
             self.assertLess(brake_position - save_call.end(), 400)

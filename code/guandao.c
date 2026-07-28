@@ -89,6 +89,7 @@ static uint8 park_record_stage = 0;
 static uint32 park_start_record_ms = 0;
 static uint8 guandao_record_init_pending = 1;
 static uint8 guandao_record_saved = 0;
+static uint8 portion3_save_pending = 0;
 static uint8 portion1_state_flag = 0;
 static uint16 portion1_finally_length = 0;
 static uint8 portion1_reverse_state = 0;
@@ -115,6 +116,28 @@ static state_t portion1_taught_reverse_last_state = {0.0f, 0.0f, 0.0f};
 static uint8 portion1_approach_active = 0;
 static float portion1_approach_steer_cmd = 0.0f;
 static uint32 portion1_approach_steer_ms = 0;
+
+static void guandao_record_current_endpoint(guandao_state *state)
+{
+    if(state == NULL) return;
+    if(state->length_index < 0) state->length_index = 0;
+
+    if(state->length_index > 0
+            && get_distance(state->recode_map[state->length_index - 1],
+                    state->current_state) <= 0.001f)
+    {
+        state->recode_map[state->length_index - 1] = state->current_state;
+    }
+    else if(state->length_index < MAX_LENGTH_INDEX)
+    {
+        state->recode_map[state->length_index] = state->current_state;
+        state->length_index++;
+    }
+    else
+    {
+        state->recode_map[state->length_index - 1] = state->current_state;
+    }
+}
 
 static void guandao_record_park_target_now(guandao_state *state)
 {
@@ -2460,11 +2483,23 @@ void guandao_recode(guandao_state * state)
         park_record_stage = 0;
         park_start_record_ms = 0;
         guandao_record_init_pending = 0;
+        portion3_save_pending = 0;
     }
     if(guandao_record_saved) return;
     update_state(p  , &guandao_ecd);
     gps_recode_average_update(p);
 
+    if(portion3_save_pending)
+    {
+        if(rear_motor_brake_active()) return;
+
+        guandao_record_current_endpoint(p);
+        Flash_Store_Mode(route_setting_choice);
+        guandao_record_saved = 1;
+        portion3_save_pending = 0;
+        Buzzer_check(200);
+        return;
+    }
 
     // KEY4 is used instead of the broken KEY1: released=1, pressed=0.
     // Hold longer than 1.5s to save; short release marks the parking point.
@@ -2475,16 +2510,20 @@ void guandao_recode(guandao_state * state)
         if(key1_save_start_ms == 0) key1_save_start_ms = now_ms;
         if(guandao_elapsed_ms(now_ms, key1_save_start_ms) > 1500 && !key1_save_wait_release)
         {
-            // 第二次按键若直接长按保存，先登记当前倒车终点，再写 Flash。
-            // 否则旧逻辑会在按键释放时才登记终点，导致 Flash 中 target_flag 仍为 0。
-            guandao_record_park_target_now(p);
-            Flash_Store_Mode(route_setting_choice);
             if(route_setting_choice == 2 && p == &portion_3 && p->length_index > 1)
             {
-                guandao_record_saved = 1;
+                portion3_save_pending = 1;
+                rear_motor_brake_start();
             }
-            rear_motor_brake_start();
-            Buzzer_check(200);
+            else
+            {
+                // 第二次按键若直接长按保存，先登记当前倒车终点，再写 Flash。
+                // 否则旧逻辑会在按键释放时才登记终点，导致 Flash 中 target_flag 仍为 0。
+                guandao_record_park_target_now(p);
+                Flash_Store_Mode(route_setting_choice);
+                rear_motor_brake_start();
+                Buzzer_check(200);
+            }
             key1_save_wait_release = 1;
         }
         return;
@@ -2510,14 +2549,18 @@ void guandao_recode(guandao_state * state)
         if(rc_ch3_start_ms == 0) rc_ch3_start_ms = now_ms;
         if(guandao_elapsed_ms(now_ms, rc_ch3_start_ms) > 1500 && !rc_ch3_wait_release)
         {
-            guandao_record_park_target_now(p);
-            Flash_Store_Mode(route_setting_choice);
             if(route_setting_choice == 2 && p == &portion_3 && p->length_index > 1)
             {
-                guandao_record_saved = 1;
+                portion3_save_pending = 1;
+                rear_motor_brake_start();
             }
-            rear_motor_brake_start();
-            Buzzer_check(200);
+            else
+            {
+                guandao_record_park_target_now(p);
+                Flash_Store_Mode(route_setting_choice);
+                rear_motor_brake_start();
+                Buzzer_check(200);
+            }
             rc_ch3_wait_release = 1;
         }
         if(guandao_record_saved) return;
@@ -2554,6 +2597,7 @@ void guandao_record_session_reset(void)
 {
     guandao_record_init_pending = 1;
     guandao_record_saved = 0;
+    portion3_save_pending = 0;
     park_record_stage = 0;
     park_start_record_ms = 0;
     daoche_point_length = 0;

@@ -32,7 +32,8 @@ class Portion3SaveConsistencyTests(unittest.TestCase):
         )
 
         self.assertIn("static uint8 guandao_record_saved = 0;", self.guandao_c)
-        self.assertEqual(recode_body.count("guandao_record_saved = 1;"), 2)
+        self.assertEqual(recode_body.count("guandao_record_saved = 1;"), 1)
+        self.assertEqual(recode_body.count("portion3_save_pending = 1;"), 2)
         self.assertLess(
             recode_body.index("if(guandao_record_saved) return;"),
             recode_body.index("update_state(p  , &guandao_ecd);"),
@@ -41,11 +42,11 @@ class Portion3SaveConsistencyTests(unittest.TestCase):
         sbus_end = recode_body.index("\n    else", sbus_start)
         sbus_body = recode_body[sbus_start:sbus_end]
         self.assertLess(
-            sbus_body.index("guandao_record_saved = 1;"),
+            sbus_body.index("portion3_save_pending = 1;"),
             sbus_body.index("recode_waypoint(p);"),
         )
-        self.assertIn("if(guandao_record_saved) return;", sbus_body)
         self.assertIn("guandao_record_saved = 0;", reset_body)
+        self.assertIn("portion3_save_pending = 0;", reset_body)
 
     def test_record_menu_starts_a_fresh_session(self):
         menu_body = function_body(
@@ -79,8 +80,40 @@ class Portion3SaveConsistencyTests(unittest.TestCase):
             read_body,
         )
 
+    def test_portion3_save_captures_stopped_endpoint_after_brake(self):
+        recode_body = function_body(
+            self.guandao_c,
+            "void guandao_recode(guandao_state * state)",
+            "void guandao_record_session_reset(void)",
+        )
+        self.assertIn("static uint8 portion3_save_pending = 0;", self.guandao_c)
+        endpoint_signature = (
+            "static void guandao_record_current_endpoint(guandao_state *state)"
+        )
+        self.assertIn(endpoint_signature, self.guandao_c)
+        endpoint_body = function_body(
+            self.guandao_c,
+            endpoint_signature,
+            "static void guandao_record_park_target_now(guandao_state *state)",
+        )
+        self.assertIn("if(portion3_save_pending)", recode_body)
+        self.assertIn("if(rear_motor_brake_active()) return;", recode_body)
+        self.assertLess(
+            recode_body.index("guandao_record_current_endpoint(p);"),
+            recode_body.index("Flash_Store_Mode(route_setting_choice);"),
+        )
+        self.assertIn(
+            "state->recode_map[state->length_index] = state->current_state;",
+            endpoint_body,
+        )
+        self.assertIn("state->length_index++;", endpoint_body)
+        self.assertIn(
+            "state->recode_map[state->length_index - 1] = state->current_state;",
+            endpoint_body,
+        )
+
     def test_portion3_serial_marker_identifies_fix(self):
-        self.assertIn("P3AUTO,cfg=p3track1", self.main_c)
+        self.assertIn("P3AUTO,cfg=p3save3", self.main_c)
 
 
 if __name__ == "__main__":
