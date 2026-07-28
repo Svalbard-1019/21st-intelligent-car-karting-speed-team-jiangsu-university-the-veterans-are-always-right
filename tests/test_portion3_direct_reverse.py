@@ -150,7 +150,7 @@ class Portion3DirectReverseIntegrationTests(unittest.TestCase):
             trace_body.index("if(route_setting_choice == 2 && portion3_start_rezero_pending)"),
         )
 
-    def test_reverse_update_uses_reverse_heading_and_protected_stop(self):
+    def test_reverse_update_has_geometric_stops_without_time_limit(self):
         signature = "static void portion3_direct_reverse_update(void)"
         self.assertIn(signature, self.guandao_c)
         update_body = braced_function_body(self.guandao_c, signature)
@@ -160,8 +160,10 @@ class Portion3DirectReverseIntegrationTests(unittest.TestCase):
         self.assertIn("daoche_flag = 1;", update_body)
         self.assertIn("conrtol_mode = DAOCHE;", update_body)
         self.assertIn("rear_motor_brake_start();", update_body)
-        self.assertIn("PORTION3_DIRECT_REVERSE_MAX_MS", update_body)
+        self.assertNotIn("PORTION3_DIRECT_REVERSE_MAX_MS", self.guandao_c)
+        self.assertNotIn("portion3_direct_reverse_start_ms", self.guandao_c)
         self.assertIn("portion3_reverse_safety_stop(", update_body)
+        self.assertIn("portion3_reverse_should_stop(", update_body)
 
     def test_diagnostics_identify_direct_reverse_firmware(self):
         self.assertIn("P3AUTO,cfg=p3rev1", self.main_c)

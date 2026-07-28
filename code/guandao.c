@@ -93,7 +93,6 @@ static uint8 guandao_record_saved = 0;
 static uint8 portion3_save_pending = 0;
 static uint8 portion3_direct_reverse_state = 0;
 static int16 portion3_direct_reverse_route_index = 0;
-static uint32 portion3_direct_reverse_start_ms = 0;
 static uint32 portion3_direct_reverse_steer_ms = 0;
 static float portion3_direct_reverse_route_length = 0.0f;
 static float portion3_direct_reverse_travelled = 0.0f;
@@ -274,7 +273,6 @@ static uint32 portion1_speed_last_ms = 0u;
 #define PORTION3_DIRECT_REVERSE_GAIN         1.40f
 #define PORTION3_DIRECT_REVERSE_STEER_RATE   2.0f
 #define PORTION3_DIRECT_REVERSE_OVERRUN      0.15f
-#define PORTION3_DIRECT_REVERSE_MAX_MS       (GUANDAO_REVERSE_MAX_MS * 6u)
 
 /* 科目一和科目三不会同时追踪，复用规划缓存可在路线扩展到800点时
  * 避免四个 guandao_state 各自重复分配同样大小的 planned_map。 */
@@ -297,7 +295,6 @@ static void portion3_direct_reverse_reset(void)
 {
     portion3_direct_reverse_state = 0;
     portion3_direct_reverse_route_index = 0;
-    portion3_direct_reverse_start_ms = 0;
     portion3_direct_reverse_steer_ms = 0;
     portion3_direct_reverse_route_length = 0.0f;
     portion3_direct_reverse_travelled = 0.0f;
@@ -343,7 +340,6 @@ static uint8 portion3_direct_reverse_prepare(guandao_state *route)
     portion3_direct_reverse_last_state = route->current_state;
     portion3_direct_reverse_final_dist = get_distance(
             route->current_state, route->recode_map[length - 1]);
-    portion3_direct_reverse_start_ms = system_getval_ms();
     portion3_direct_reverse_state = 1;
     route->current_point_index = portion3_direct_reverse_route_index;
     route->planned_length = 0;
@@ -485,9 +481,7 @@ static void portion3_direct_reverse_update(void)
                 || portion3_reverse_safety_stop(
                         portion3_direct_reverse_travelled,
                         portion3_direct_reverse_route_length,
-                        PORTION3_DIRECT_REVERSE_OVERRUN)
-                || guandao_elapsed_ms(now_ms, portion3_direct_reverse_start_ms)
-                        >= PORTION3_DIRECT_REVERSE_MAX_MS)
+                        PORTION3_DIRECT_REVERSE_OVERRUN))
         {
             stop_requested = 1;
         }
