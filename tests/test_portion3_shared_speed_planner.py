@@ -63,11 +63,11 @@ class Portion3SharedSpeedPlannerTests(unittest.TestCase):
     def test_portion3_uses_lower_curve_ratios_without_losing_shared_planning(self):
         self.assertRegex(
             self.source,
-            r"#define\s+GUANDAO_P3_CURVE_SPEED_RATIO\s+0\.70f",
+            r"#define\s+GUANDAO_P3_CURVE_SPEED_RATIO\s+0\.72f",
         )
         self.assertRegex(
             self.source,
-            r"#define\s+GUANDAO_P3_SHARP_TURN_SPEED_RATIO\s+0\.55f",
+            r"#define\s+GUANDAO_P3_SHARP_TURN_SPEED_RATIO\s+0\.57f",
         )
         self.assertIn(
             "float curve_speed_ratio = GUANDAO_KMY_CURVE_SPEED_RATIO;",
@@ -151,6 +151,28 @@ class Portion3SharedSpeedPlannerTests(unittest.TestCase):
             self.pursuit.index("guandao_portion3_terminal_passed("),
         )
         self.assertLess(final_cross_stop, terminal_target_reload)
+
+    def test_portion3_starts_final_slowdown_at_least_four_metres_early(self):
+        self.assertRegex(
+            self.source,
+            r"#define\s+PORTION3_FINAL_SLOW_DIST\s+4\.00f",
+        )
+        self.assertIn(
+            "float final_slow_dist = final_dsts;",
+            self.pursuit,
+        )
+        self.assertIn(
+            "if(final_slow_dist < PORTION3_FINAL_SLOW_DIST)",
+            self.pursuit,
+        )
+        self.assertIn(
+            "if (dist_to_final < final_slow_dist",
+            self.pursuit,
+        )
+        self.assertIn(
+            "base_speed * (dist_to_final / final_slow_dist)",
+            self.pursuit,
+        )
 
 
 if __name__ == "__main__":

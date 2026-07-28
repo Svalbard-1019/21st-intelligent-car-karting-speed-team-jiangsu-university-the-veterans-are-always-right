@@ -424,7 +424,7 @@ static void Serial_Debug_Update(void)
         angle_plan(&angle_error);
 
         len = sprintf(line,
-                      "P3AUTO,cfg=p3track1,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,p3Init=%u,gzRaw=%d,gzOff=%ld,txDrop=%lu,odomMerge=%lu,pRel=%ld,pend=%u,gOrg=%u,gE100=%ld,gN100=%ld,gps=%u,sat=%u,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,steerAct10=%ld,tgt100=%ld,act100=%ld,pwm=%d,turn10=%ld,turnLv=%u,req100=%ld,cmd100=%ld,enc10=%d,enc100=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
+                      "P3AUTO,cfg=p3track2,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,p3Init=%u,gzRaw=%d,gzOff=%ld,txDrop=%lu,odomMerge=%lu,pRel=%ld,pend=%u,gOrg=%u,gE100=%ld,gN100=%ld,gps=%u,sat=%u,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,steerAct10=%ld,tgt100=%ld,act100=%ld,pwm=%d,turn10=%ld,turnLv=%u,req100=%ld,cmd100=%ld,enc10=%d,enc100=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
                       (unsigned long)now_ms,
                       (unsigned long)main_loop_last_dt_ms,
                       (unsigned long)main_loop_max_dt_ms,

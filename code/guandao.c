@@ -169,7 +169,7 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_HIGH_SPEED_GAIN        1.55f
 #define GUANDAO_HIGH_SPEED_CMD_LIMIT   32.0f
 #define GUANDAO_KMY_CURVE_SPEED_RATIO      0.80f
-#define GUANDAO_P3_CURVE_SPEED_RATIO       0.70f
+#define GUANDAO_P3_CURVE_SPEED_RATIO       0.72f
 #define GUANDAO_VERY_HIGH_SPEED_GAIN   1.60f
 #define GUANDAO_VERY_HIGH_CMD_LIMIT    32.0f
 #define GUANDAO_STEER_RATE_LOW         3.0f
@@ -177,7 +177,7 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
 #define GUANDAO_SHARP_TURN_ANGLE       45.0f
 #define GUANDAO_KMY_SHARP_TURN_SPEED_RATIO 0.65f
-#define GUANDAO_P3_SHARP_TURN_SPEED_RATIO  0.55f
+#define GUANDAO_P3_SHARP_TURN_SPEED_RATIO  0.57f
 #define GUANDAO_HAIRPIN_TURN_ANGLE     70.0f
 #define GUANDAO_HAIRPIN_SPEED_RATIO    0.60f
 #define GUANDAO_ACCUM_TURN_SLOW_ANGLE  20.0f
@@ -231,6 +231,7 @@ static uint32 portion1_speed_last_ms = 0u;
 #define PORTION3_FINAL_CROSS_TRACK     0.75f
 #define PORTION3_TERMINAL_HEADING_ERR  60.0f
 #define PORTION3_FINAL_STOP_DIST       0.15f
+#define PORTION3_FINAL_SLOW_DIST       4.00f
 #define PORTION3_RETURN_TRIM_DIST      0.5f
 #define PORTION3_FAST_PREVIEW_STEPS    7
 #define PORTION3_SHARP_PREVIEW_STEPS   5
@@ -1862,6 +1863,7 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float upcoming_turn = 0.0f;
     float max_single_turn = 0.0f;
     float dist_to_final = 0.0f;
+    float final_slow_dist = final_dsts;
     uint8 accumulated_turn_level = 0u;
     uint8 terminal_pass_advanced = 0;
     float curve_speed_ratio = GUANDAO_KMY_CURVE_SPEED_RATIO;
@@ -1874,6 +1876,10 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     {
         curve_speed_ratio = GUANDAO_P3_CURVE_SPEED_RATIO;
         sharp_turn_speed_ratio = GUANDAO_P3_SHARP_TURN_SPEED_RATIO;
+        if(final_slow_dist < PORTION3_FINAL_SLOW_DIST)
+        {
+            final_slow_dist = PORTION3_FINAL_SLOW_DIST;
+        }
     }
 
     guandao_debug_stop_reason = 0;
@@ -2189,12 +2195,12 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
        }
    }
 
-   if (dist_to_final < final_dsts && state->current_point_index >= route_length - 30)
+   if (dist_to_final < final_slow_dist && state->current_point_index >= route_length - 30)
    {
 
-       arrive_threshold = persuit_threshold*(dist_to_final / final_dsts);
+       arrive_threshold = persuit_threshold*(dist_to_final / final_slow_dist);
        if(arrive_threshold < 0.3f){arrive_threshold = 0.3f;}
-       v_center = base_speed * (dist_to_final / final_dsts);
+       v_center = base_speed * (dist_to_final / final_slow_dist);
        if (v_center < MIN_SPEED) v_center = MIN_SPEED; // 最低速度限制
    }
    if(route_setting_choice == 2 && state->current_point_index >= route_length - 1
