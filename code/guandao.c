@@ -169,6 +169,7 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_HIGH_SPEED_GAIN        1.55f
 #define GUANDAO_HIGH_SPEED_CMD_LIMIT   32.0f
 #define GUANDAO_KMY_CURVE_SPEED_RATIO      0.80f
+#define GUANDAO_P3_CURVE_SPEED_RATIO       0.70f
 #define GUANDAO_VERY_HIGH_SPEED_GAIN   1.60f
 #define GUANDAO_VERY_HIGH_CMD_LIMIT    32.0f
 #define GUANDAO_STEER_RATE_LOW         3.0f
@@ -176,6 +177,7 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_CURVE_TRIGGER_ANGLE    35.0f
 #define GUANDAO_SHARP_TURN_ANGLE       45.0f
 #define GUANDAO_KMY_SHARP_TURN_SPEED_RATIO 0.65f
+#define GUANDAO_P3_SHARP_TURN_SPEED_RATIO  0.55f
 #define GUANDAO_HAIRPIN_TURN_ANGLE     70.0f
 #define GUANDAO_HAIRPIN_SPEED_RATIO    0.60f
 #define GUANDAO_ACCUM_TURN_SLOW_ANGLE  20.0f
@@ -226,6 +228,7 @@ static uint32 portion1_speed_last_ms = 0u;
 #define PORTION3_TERMINAL_PASS_POINTS  3
 #define PORTION3_TERMINAL_PASS_DIST    0.35f
 #define PORTION3_TERMINAL_CROSS_TRACK  0.25f
+#define PORTION3_FINAL_CROSS_TRACK     0.75f
 #define PORTION3_TERMINAL_HEADING_ERR  60.0f
 #define PORTION3_FINAL_STOP_DIST       0.15f
 #define PORTION3_RETURN_TRIM_DIST      0.5f
@@ -682,12 +685,14 @@ static uint8 guandao_portion3_terminal_passed(
     float vehicle_y;
     float projection;
     float cross_track;
+    float cross_track_limit;
     float heading_error;
 
     if(route_length < PORTION3_TERMINAL_PASS_POINTS) return 0;
-    if(target_index <= 0 || target_index >= route_length - 1) return 0;
+    if(target_index <= 0 || target_index >= route_length) return 0;
     if(target_index < route_length - PORTION3_TERMINAL_PASS_POINTS) return 0;
-    if(distance_to_target > PORTION3_TERMINAL_PASS_DIST) return 0;
+    if(target_index < route_length - 1
+            && distance_to_target > PORTION3_TERMINAL_PASS_DIST) return 0;
 
     previous = guandao_route_point(state, target_index - 1);
     target = guandao_route_point(state, target_index);
@@ -701,11 +706,14 @@ static uint8 guandao_portion3_terminal_passed(
     projection = (vehicle_x * segment_x + vehicle_y * segment_y) / segment_length_sq;
     cross_track = fabsf(vehicle_x * segment_y - vehicle_y * segment_x)
             / sqrtf(segment_length_sq);
+    cross_track_limit = target_index >= route_length - 1
+            ? PORTION3_FINAL_CROSS_TRACK
+            : PORTION3_TERMINAL_CROSS_TRACK;
     heading_error = fabsf(guandao_normalize_angle(
             state->current_state.theta - guandao_segment_yaw(previous, target)));
 
     return projection >= 1.0f
-            && cross_track <= PORTION3_TERMINAL_CROSS_TRACK
+            && cross_track <= cross_track_limit
             && heading_error <= PORTION3_TERMINAL_HEADING_ERR;
 }
 
@@ -1862,6 +1870,12 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
     float accum_turn_medium_ratio = GUANDAO_KMY_ACCUM_TURN_MEDIUM_RATIO;
     float accum_turn_sharp_ratio = GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO;
 
+    if(route_setting_choice == 2)
+    {
+        curve_speed_ratio = GUANDAO_P3_CURVE_SPEED_RATIO;
+        sharp_turn_speed_ratio = GUANDAO_P3_SHARP_TURN_SPEED_RATIO;
+    }
+
     guandao_debug_stop_reason = 0;
     guandao_debug_steer_preview = 0;
     guandao_debug_curve_preview = 0;
@@ -1939,6 +1953,17 @@ void pursuit_contral_mode(guandao_state * state,float * out_v_l,float * out_v_r,
             state, state->current_point_index, route_length, distance_to_target))
     {
         state->current_point_index++;
+        if(state->current_point_index >= route_length)
+        {
+            state->current_point_index = route_length;
+            guandao_debug_stop_reason = 8;
+            * out_v_l = 0;
+            * out_v_r = 0;
+            *out_servo = 0;
+            last_target_steering = 0.0f;
+            last_steer_limit_ms = 0;
+            return;
+        }
         terminal_pass_advanced = 1;
         guandao_debug_stop_reason = 9;
 

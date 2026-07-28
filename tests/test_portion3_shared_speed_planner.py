@@ -60,10 +60,15 @@ class Portion3SharedSpeedPlannerTests(unittest.TestCase):
             self.pursuit,
         )
 
-    def test_portion3_uses_portion1_curve_ratios(self):
-        self.assertNotIn("GUANDAO_KMS_CURVE_SPEED_RATIO", self.source)
-        self.assertNotIn("GUANDAO_KMS_SHARP_TURN_SPEED_RATIO", self.source)
-        self.assertNotIn("GUANDAO_KMS_ACCUM_TURN_", self.source)
+    def test_portion3_uses_lower_curve_ratios_without_losing_shared_planning(self):
+        self.assertRegex(
+            self.source,
+            r"#define\s+GUANDAO_P3_CURVE_SPEED_RATIO\s+0\.70f",
+        )
+        self.assertRegex(
+            self.source,
+            r"#define\s+GUANDAO_P3_SHARP_TURN_SPEED_RATIO\s+0\.55f",
+        )
         self.assertIn(
             "float curve_speed_ratio = GUANDAO_KMY_CURVE_SPEED_RATIO;",
             self.pursuit,
@@ -84,6 +89,14 @@ class Portion3SharedSpeedPlannerTests(unittest.TestCase):
             "float accum_turn_sharp_ratio = GUANDAO_KMY_ACCUM_TURN_SHARP_RATIO;",
             self.pursuit,
         )
+        self.assertIn(
+            "curve_speed_ratio = GUANDAO_P3_CURVE_SPEED_RATIO;",
+            self.pursuit,
+        )
+        self.assertIn(
+            "sharp_turn_speed_ratio = GUANDAO_P3_SHARP_TURN_SPEED_RATIO;",
+            self.pursuit,
+        )
 
     def test_portion3_uses_shared_rate_limiter_without_entry_reset(self):
         self.assertIn(
@@ -99,6 +112,45 @@ class Portion3SharedSpeedPlannerTests(unittest.TestCase):
             "guandao_speed_planner_reset(&portion1_speed_planner",
             self.source,
         )
+
+    def test_portion3_stops_after_crossing_the_final_segment_gate(self):
+        terminal_pass = function_body(
+            self.source,
+            "static uint8 guandao_portion3_terminal_passed(",
+            "static AutoParkPose guandao_pose_from_state(",
+        )
+        self.assertRegex(
+            self.source,
+            r"#define\s+PORTION3_FINAL_CROSS_TRACK\s+0\.75f",
+        )
+        self.assertIn(
+            "if(target_index <= 0 || target_index >= route_length) return 0;",
+            terminal_pass,
+        )
+        self.assertNotIn(
+            "if(target_index <= 0 || target_index >= route_length - 1) return 0;",
+            terminal_pass,
+        )
+        self.assertIn(
+            "cross_track_limit = target_index >= route_length - 1",
+            terminal_pass,
+        )
+        self.assertIn(
+            "if(target_index < route_length - 1",
+            terminal_pass,
+        )
+        self.assertIn(
+            "if(state->current_point_index >= route_length)",
+            self.pursuit,
+        )
+        final_cross_stop = self.pursuit.index(
+            "if(state->current_point_index >= route_length)"
+        )
+        terminal_target_reload = self.pursuit.index(
+            "target_point = guandao_route_point(state, state->current_point_index);",
+            self.pursuit.index("guandao_portion3_terminal_passed("),
+        )
+        self.assertLess(final_cross_stop, terminal_target_reload)
 
 
 if __name__ == "__main__":
