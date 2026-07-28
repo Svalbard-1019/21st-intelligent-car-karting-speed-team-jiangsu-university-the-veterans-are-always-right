@@ -154,7 +154,8 @@ static void Guandao_Rear_Motor_Update(void)
     /* Keep remote recording on the proven KMY response.  Only the
      * autonomous subject-three return selects the KMS rear profile. */
     rear_motor_select_route((conrtol_mode == GUANDAO
-            && route_setting_choice == 2u) ? 2u : 0u);
+            || conrtol_mode == DAOCHE)
+            && route_setting_choice == 2u ? 2u : 0u);
 
     /* An explicit route/save/parking stop owns the rear motor until
      * its nonblocking brake sequence finishes. Remote neutral never
@@ -424,11 +425,17 @@ static void Serial_Debug_Update(void)
         angle_plan(&angle_error);
 
         len = sprintf(line,
-                      "P3AUTO,cfg=p3save3,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,p3Init=%u,gzRaw=%d,gzOff=%ld,txDrop=%lu,odomMerge=%lu,pRel=%ld,pend=%u,gOrg=%u,gE100=%ld,gN100=%ld,gps=%u,sat=%u,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,steerAct10=%ld,tgt100=%ld,act100=%ld,pwm=%d,turn10=%ld,turnLv=%u,req100=%ld,cmd100=%ld,enc10=%d,enc100=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
+                      "P3AUTO,cfg=p3rev1,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,p3Rev=%u,revIdx=%d,revD100=%ld,revCmd10=%ld,p3Init=%u,gzRaw=%d,gzOff=%ld,txDrop=%lu,odomMerge=%lu,pRel=%ld,pend=%u,gOrg=%u,gE100=%ld,gN100=%ld,gps=%u,sat=%u,idx=%d,len=%d,gpslen=%d,D100=%ld,A10=%ld,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,tx100=%ld,ty100=%ld,tth10=%ld,dx100=%ld,dy100=%ld,tang10=%ld,err10=%ld,vl10=%ld,vr10=%ld,servo10=%ld,steerAct10=%ld,tgt100=%ld,act100=%ld,pwm=%d,turn10=%ld,turnLv=%u,req100=%ld,cmd100=%ld,enc10=%d,enc100=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
                       (unsigned long)now_ms,
                       (unsigned long)main_loop_last_dt_ms,
                       (unsigned long)main_loop_max_dt_ms,
                       (long)Serial_Debug_Scale(base_speed, 10.0f),
+                      (unsigned int)guandao_portion3_reverse_active(),
+                      guandao_portion3_reverse_index(),
+                      (long)Serial_Debug_Scale(
+                              guandao_portion3_reverse_final_distance(), 100.0f),
+                      (long)Serial_Debug_Scale(
+                              guandao_portion3_reverse_steer_command(), 10.0f),
                       (unsigned int)IMU_yaw_rezero_active(),
                       (int)IMU_yaw_rezero_raw_z(),
                       (long)Serial_Debug_Scale(IMU_yaw_rezero_offset_z(), 1.0f),

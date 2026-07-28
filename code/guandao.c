@@ -41,6 +41,7 @@
 #include "parking_se2.h"
 #include "guandao_speed_planner.h"
 #include "guandao_reverse_speed_planner.h"
+#include "portion3_reverse_tracker.h"
 #include <string.h>
 
 guandao_state INS;                               //0 = route_setting_choice
@@ -90,6 +91,15 @@ static uint32 park_start_record_ms = 0;
 static uint8 guandao_record_init_pending = 1;
 static uint8 guandao_record_saved = 0;
 static uint8 portion3_save_pending = 0;
+static uint8 portion3_direct_reverse_state = 0;
+static int16 portion3_direct_reverse_route_index = 0;
+static uint32 portion3_direct_reverse_start_ms = 0;
+static uint32 portion3_direct_reverse_steer_ms = 0;
+static float portion3_direct_reverse_route_length = 0.0f;
+static float portion3_direct_reverse_travelled = 0.0f;
+static float portion3_direct_reverse_steer_cmd = 0.0f;
+static float portion3_direct_reverse_final_dist = -1.0f;
+static state_t portion3_direct_reverse_last_state = {0.0f, 0.0f, 0.0f};
 static uint8 portion1_state_flag = 0;
 static uint16 portion1_finally_length = 0;
 static uint8 portion1_reverse_state = 0;
@@ -258,6 +268,13 @@ static uint32 portion1_speed_last_ms = 0u;
 #define PORTION3_FAST_PREVIEW_STEPS    7
 #define PORTION3_SHARP_PREVIEW_STEPS   5
 #define GUANDAO_SYSTEM_MS_WRAP         42950u
+#define PORTION3_DIRECT_REVERSE_SEARCH       8
+#define PORTION3_DIRECT_REVERSE_POINT_DIST   0.20f
+#define PORTION3_DIRECT_REVERSE_FINE_DIST    0.50f
+#define PORTION3_DIRECT_REVERSE_GAIN         1.40f
+#define PORTION3_DIRECT_REVERSE_STEER_RATE   2.0f
+#define PORTION3_DIRECT_REVERSE_OVERRUN      0.15f
+#define PORTION3_DIRECT_REVERSE_MAX_MS       (GUANDAO_REVERSE_MAX_MS * 6u)
 
 /* 科目一和科目三不会同时追踪，复用规划缓存可在路线扩展到800点时
  * 避免四个 guandao_state 各自重复分配同样大小的 planned_map。 */
@@ -265,10 +282,262 @@ static state_t guandao_planned_map[MAX_LENGTH_INDEX];
 
 static float guandao_normalize_angle(float angle);
 static uint32 guandao_elapsed_ms(uint32 now_ms, uint32 start_ms);
+static uint8 portion3_direct_reverse_prepare(guandao_state *route);
+static void portion3_direct_reverse_update(void);
+static void portion3_direct_reverse_reset(void);
+static uint8 portion3_direct_reverse_active(void);
 
 static guandao_reverse_speed_plan_t guandao_current_reverse_speed_plan(void)
 {
     return guandao_reverse_speed_plan((float)control[1]);
+}
+
+
+static void portion3_direct_reverse_reset(void)
+{
+    portion3_direct_reverse_state = 0;
+    portion3_direct_reverse_route_index = 0;
+    portion3_direct_reverse_start_ms = 0;
+    portion3_direct_reverse_steer_ms = 0;
+    portion3_direct_reverse_route_length = 0.0f;
+    portion3_direct_reverse_travelled = 0.0f;
+    portion3_direct_reverse_steer_cmd = 0.0f;
+    portion3_direct_reverse_final_dist = -1.0f;
+    portion3_direct_reverse_last_state.x = 0.0f;
+    portion3_direct_reverse_last_state.y = 0.0f;
+    portion3_direct_reverse_last_state.theta = 0.0f;
+}
+
+static uint8 portion3_direct_reverse_active(void)
+{
+    return portion3_direct_reverse_state != 0u;
+}
+
+static uint8 portion3_direct_reverse_prepare(guandao_state *route)
+{
+    int16 length;
+    state_t swap_point;
+
+    portion3_direct_reverse_reset();
+    if(route != &portion_3 || route == NULL) return 0;
+    length = route->length_index;
+    if(length < 3 || length > MAX_LENGTH_INDEX) return 0;
+
+    for(int16 i = 1; i < length; i++)
+    {
+        portion3_direct_reverse_route_length += get_distance(
+                route->recode_map[i - 1], route->recode_map[i]);
+    }
+    if(portion3_direct_reverse_route_length <= 0.01f) return 0;
+
+    /* Flash already owns the original start-to-end order. Reverse only RAM,
+     * preserving the recording frame and the live endpoint pose. */
+    for(int16 i = 0; i < length / 2; i++)
+    {
+        swap_point = route->recode_map[i];
+        route->recode_map[i] = route->recode_map[length - 1 - i];
+        route->recode_map[length - 1 - i] = swap_point;
+    }
+
+    portion3_direct_reverse_route_index = (int16)portion3_reverse_initial_index(length);
+    portion3_direct_reverse_last_state = route->current_state;
+    portion3_direct_reverse_final_dist = get_distance(
+            route->current_state, route->recode_map[length - 1]);
+    portion3_direct_reverse_start_ms = system_getval_ms();
+    portion3_direct_reverse_state = 1;
+    route->current_point_index = portion3_direct_reverse_route_index;
+    route->planned_length = 0;
+    route->plan_ready = 0;
+    portion3_start_rezero_pending = 0;
+    out_v_l = 0.0f;
+    out_v_r = 0.0f;
+    out_servo = 0.0f;
+    daoche_speed = 0.0f;
+    daoche_flag = 1;
+    main_mode = Guandao_portion_3;
+    conrtol_mode = DAOCHE;
+    return 1;
+}
+
+static void portion3_direct_reverse_update(void)
+{
+    guandao_reverse_speed_plan_t reverse_plan;
+    state_t target;
+    int16 length;
+    int16 search_end;
+    int16 best_index;
+    int16 lookahead_index;
+    float best_distance;
+    float target_distance;
+    float target_angle;
+    float motion_heading;
+    float heading_error;
+    float final_yaw_error;
+    float desired_steer;
+    float steer_delta;
+    float reverse_speed;
+    float reverse_lookahead;
+    uint32 now_ms;
+    uint32 steer_elapsed_ms;
+    uint8 stop_requested = 0;
+
+    out_v_l = 0.0f;
+    out_v_r = 0.0f;
+    if(portion3_direct_reverse_state == 2u)
+    {
+        out_servo = portion3_direct_reverse_steer_cmd;
+        daoche_speed = 0.0f;
+        daoche_flag = 1;
+        conrtol_mode = DAOCHE;
+        return;
+    }
+    if(portion3_direct_reverse_state != 1u) return;
+
+    length = portion_3.length_index;
+    if(length < 3 || portion3_direct_reverse_route_index >= length)
+    {
+        stop_requested = 1;
+    }
+    if(!stop_requested)
+    {
+        update_state(&portion_3, &guandao_ecd);
+        portion3_direct_reverse_travelled += get_distance(
+                portion3_direct_reverse_last_state, portion_3.current_state);
+        portion3_direct_reverse_last_state = portion_3.current_state;
+
+        search_end = portion3_direct_reverse_route_index + PORTION3_DIRECT_REVERSE_SEARCH;
+        if(search_end >= length) search_end = length - 1;
+        best_index = portion3_direct_reverse_route_index;
+        best_distance = get_distance(
+                portion_3.current_state, portion_3.recode_map[best_index]);
+        for(int16 i = portion3_direct_reverse_route_index + 1; i <= search_end; i++)
+        {
+            float distance = get_distance(
+                    portion_3.current_state, portion_3.recode_map[i]);
+            if(distance + 0.03f < best_distance)
+            {
+                best_distance = distance;
+                best_index = i;
+            }
+        }
+        if(best_index > portion3_direct_reverse_route_index)
+        {
+            portion3_direct_reverse_route_index = best_index;
+        }
+        while(portion3_direct_reverse_route_index < length - 1
+                && get_distance(portion_3.current_state,
+                        portion_3.recode_map[portion3_direct_reverse_route_index])
+                        <= PORTION3_DIRECT_REVERSE_POINT_DIST)
+        {
+            portion3_direct_reverse_route_index++;
+        }
+        portion_3.current_point_index = portion3_direct_reverse_route_index;
+
+        reverse_plan = guandao_current_reverse_speed_plan();
+        portion3_direct_reverse_final_dist = get_distance(
+                portion_3.current_state, portion_3.recode_map[length - 1]);
+        reverse_speed = reverse_plan.cruise_units;
+        if(portion3_direct_reverse_final_dist <= PORTION3_DIRECT_REVERSE_FINE_DIST
+                || portion3_direct_reverse_route_index >= length - 2)
+        {
+            reverse_speed = reverse_plan.fine_units;
+        }
+        reverse_lookahead = guandao_reverse_lookahead_m(reverse_speed);
+        lookahead_index = portion3_direct_reverse_route_index;
+        target = portion_3.recode_map[lookahead_index];
+        while(lookahead_index < length - 1
+                && get_distance(portion_3.current_state, target) < reverse_lookahead)
+        {
+            lookahead_index++;
+            target = portion_3.recode_map[lookahead_index];
+        }
+
+        target_distance = get_distance(portion_3.current_state, target);
+        target_angle = atan2f(
+                target.x - portion_3.current_state.x,
+                target.y - portion_3.current_state.y) / M_PI * 180.0f;
+        motion_heading = portion3_reverse_motion_heading(Yaw_1);
+        heading_error = guandao_normalize_angle(target_angle - motion_heading);
+        desired_steer = portion3_reverse_steering(
+                heading_error, target_distance, WHEEL_BASE,
+                PORTION3_DIRECT_REVERSE_GAIN, GUANDAO_STEERING_CMD_LIMIT);
+
+        now_ms = system_getval_ms();
+        steer_elapsed_ms = (portion3_direct_reverse_steer_ms == 0u) ? 20u
+                : guandao_elapsed_ms(now_ms, portion3_direct_reverse_steer_ms);
+        if(steer_elapsed_ms > 100u) steer_elapsed_ms = 20u;
+        steer_delta = desired_steer - portion3_direct_reverse_steer_cmd;
+        {
+            float steer_limit = PORTION3_DIRECT_REVERSE_STEER_RATE
+                    * ((float)steer_elapsed_ms / 20.0f);
+            Value_Limit_float(&steer_delta, -steer_limit, steer_limit);
+        }
+        portion3_direct_reverse_steer_cmd += steer_delta;
+        Value_Limit_float(&portion3_direct_reverse_steer_cmd,
+                -GUANDAO_STEERING_CMD_LIMIT, GUANDAO_STEERING_CMD_LIMIT);
+        portion3_direct_reverse_steer_ms = now_ms;
+
+        final_yaw_error = guandao_normalize_angle(
+                portion_3.recode_map[length - 1].theta - Yaw_1);
+        if(portion3_reverse_should_stop(
+                portion3_direct_reverse_final_dist, final_yaw_error,
+                portion3_direct_reverse_route_index, length)
+                || portion3_reverse_safety_stop(
+                        portion3_direct_reverse_travelled,
+                        portion3_direct_reverse_route_length,
+                        PORTION3_DIRECT_REVERSE_OVERRUN)
+                || guandao_elapsed_ms(now_ms, portion3_direct_reverse_start_ms)
+                        >= PORTION3_DIRECT_REVERSE_MAX_MS)
+        {
+            stop_requested = 1;
+        }
+        else
+        {
+            daoche_flag = 1;
+            conrtol_mode = DAOCHE;
+            daoche_speed = reverse_speed;
+            out_v_l = reverse_speed;
+            out_v_r = reverse_speed;
+            out_servo = portion3_direct_reverse_steer_cmd;
+            guandao_debug_stop_reason = 14;
+            guandao_debug_distance = target_distance;
+            guandao_debug_angle_diff = heading_error;
+            guandao_debug_dist_final = portion3_direct_reverse_final_dist;
+        }
+    }
+
+    if(stop_requested)
+    {
+        portion3_direct_reverse_state = 2;
+        daoche_flag = 1;
+        conrtol_mode = DAOCHE;
+        daoche_speed = 0.0f;
+        out_v_l = 0.0f;
+        out_v_r = 0.0f;
+        out_servo = portion3_direct_reverse_steer_cmd;
+        guandao_debug_stop_reason = 13;
+        rear_motor_brake_start();
+    }
+}
+
+uint8 guandao_portion3_reverse_active(void)
+{
+    return portion3_direct_reverse_state == 1u;
+}
+
+int16 guandao_portion3_reverse_index(void)
+{
+    return portion3_direct_reverse_route_index;
+}
+
+float guandao_portion3_reverse_final_distance(void)
+{
+    return portion3_direct_reverse_final_dist;
+}
+
+float guandao_portion3_reverse_steer_command(void)
+{
+    return portion3_direct_reverse_steer_cmd;
 }
 
 static uint8 portion1_park_gps_ready = 0;
@@ -2493,8 +2762,28 @@ void guandao_recode(guandao_state * state)
     {
         if(rear_motor_brake_active()) return;
 
+        uint8 reverse_ready;
+        int16 direct_route_length;
+        state_t direct_current_state;
         guandao_record_current_endpoint(p);
+        direct_route_length = p->length_index;
+        direct_current_state = p->current_state;
+        for(int16 i = 0; i < direct_route_length; i++)
+        {
+            guandao_planned_map[i] = p->recode_map[i];
+        }
         Flash_Store_Mode(route_setting_choice);
+        p->length_index = direct_route_length;
+        p->current_state = direct_current_state;
+        for(int16 i = 0; i < direct_route_length; i++)
+        {
+            p->recode_map[i] = guandao_planned_map[i];
+        }
+        reverse_ready = portion3_direct_reverse_prepare(p);
+        if(!reverse_ready)
+        {
+            rear_motor_brake_start();
+        }
         guandao_record_saved = 1;
         portion3_save_pending = 0;
         Buzzer_check(200);
@@ -2605,6 +2894,7 @@ void guandao_record_session_reset(void)
     daoche_target_length = 0;
     daoche_target_flag = 0;
     daoche_flash_cheack = 0;
+    portion3_direct_reverse_reset();
     daoche_flag = 0;
     key1_flag = 0;
     key4_flag = 0;
@@ -2765,6 +3055,12 @@ void guandao_trace(guandao_state * state)
         p = p->next;                             // 指针后移，指向下一个路径节点
         if(p == NULL)return;              // 空指针保护：若链表提前结束则退出函数
         choice_flag++;
+    }
+    if(portion3_direct_reverse_active())
+    {
+        portion3_direct_reverse_update();
+        follow_points_show(&portion_3);
+        return;
     }
     if(route_setting_choice == 2 && portion3_start_rezero_pending)
     {
@@ -2982,6 +3278,7 @@ uint8 portion3_points_switch(void)
 
 void portion3_return_reset(void)
 {
+    portion3_direct_reverse_reset();
     rear_motor_reset_odometry();
     rear_left_wheel_odometry_reset(&portion3_center_odometry);
     portion_3.current_state.x = 0.0f;

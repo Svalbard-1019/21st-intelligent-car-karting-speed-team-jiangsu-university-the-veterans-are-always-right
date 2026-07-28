@@ -4,7 +4,7 @@
 
 **Goal:** After a Portion3 route is saved, automatically reverse along that same route to its original start without a reset, button press, or turn-around.
 
-**Architecture:** Keep the saved Flash payload in its original order, then reverse only the RAM route after `Flash_Store_Mode(2)` returns. A Portion3-only reverse state machine follows the reversed RAM points in the unchanged recording coordinate frame, using the physical reverse motion heading `Yaw_1 + 180°`, limited reverse steering, approach slowdown, and distance/time safety stops.
+**Architecture:** Preserve the existing Flash payload format by temporarily backing up the recorded route and live endpoint pose in the existing planning buffer while `Flash_Store_Mode(2)` performs its legacy conversion. Restore the recording frame afterward, reverse only that RAM route, and run a Portion3-only reverse state machine using `Yaw_1 + 180°`, limited reverse steering, approach slowdown, and distance/time safety stops.
 
 **Tech Stack:** Infineon TC264 C, existing rear-motor/IMU/route modules, Python `unittest`, host GCC tests for isolated math helpers.
 

@@ -113,7 +113,7 @@ class Portion3SaveConsistencyTests(unittest.TestCase):
         )
 
     def test_portion3_serial_marker_identifies_fix(self):
-        self.assertIn("P3AUTO,cfg=p3save3", self.main_c)
+        self.assertIn("P3AUTO,cfg=p3rev1", self.main_c)
 
 
 if __name__ == "__main__":
