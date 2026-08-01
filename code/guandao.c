@@ -43,6 +43,7 @@
 #include "guandao_reverse_speed_planner.h"
 #include "portion3_reverse_tracker.h"
 #include "portion1_precoast.h"
+#include "remote_one_shot.h"
 
 guandao_state INS;                               //0 = route_setting_choice
 guandao_state passage;                    //1 = route_setting_choice
@@ -91,6 +92,8 @@ static uint32 park_start_record_ms = 0;
 static uint8 guandao_record_init_pending = 1;
 static uint8 guandao_record_saved = 0;
 static uint8 portion3_save_pending = 0;
+static remote_one_shot_t portion3_ch5_trigger = {1u};
+static uint8 portion3_ch5_triggered = 0u;
 static uint8 portion3_direct_reverse_state = 0;
 static uint8 portion3_direct_reverse_stop_cause = 0;
 static int16 portion3_direct_reverse_route_index = 0;
@@ -581,6 +584,11 @@ uint8 guandao_portion3_reverse_turn_level(void)
 float guandao_portion3_reverse_speed_command(void)
 {
     return portion3_direct_reverse_speed_command;
+}
+
+uint8 guandao_portion3_ch5_triggered(void)
+{
+    return portion3_ch5_triggered;
 }
 
 static uint8 portion1_park_gps_ready = 0;
@@ -2755,10 +2763,25 @@ void guandao_recode(guandao_state * state)
         park_start_record_ms = 0;
         guandao_record_init_pending = 0;
         portion3_save_pending = 0;
+        remote_one_shot_reset(&portion3_ch5_trigger);
+        portion3_ch5_triggered = 0u;
     }
     if(guandao_record_saved) return;
     update_state(p  , &guandao_ecd);
     gps_recode_average_update(p);
+
+    if(remote_one_shot_update(&portion3_ch5_trigger,
+            (uint8)(x6f_out[4] == 200)))
+    {
+        if(route_setting_choice == 2 && p == &portion_3
+                && p->length_index > 1
+                && !portion3_save_pending && !guandao_record_saved)
+        {
+            portion3_ch5_triggered = 1u;
+            portion3_save_pending = 1;
+            rear_motor_brake_start();
+        }
+    }
 
     if(portion3_save_pending)
     {
@@ -2889,6 +2912,8 @@ void guandao_record_session_reset(void)
     guandao_record_init_pending = 1;
     guandao_record_saved = 0;
     portion3_save_pending = 0;
+    remote_one_shot_reset(&portion3_ch5_trigger);
+    portion3_ch5_triggered = 0u;
     park_record_stage = 0;
     park_start_record_ms = 0;
     daoche_point_length = 0;

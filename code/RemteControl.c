@@ -133,6 +133,7 @@ void sbus_rc_control(void)
     uint16 ch_throttle;
     uint16 ch_save;
     uint16 ch_stop;
+    uint16 ch_reverse;
     float steer_full_scale;
 
     if(uart_receiver.state == 0)
@@ -140,6 +141,7 @@ void sbus_rc_control(void)
         sbus_rc_clear_output();
         x6f_out[2] = 100;
         x6f_out[3] = 100;
+        x6f_out[4] = 100;
         return;
     }
 
@@ -147,11 +149,13 @@ void sbus_rc_control(void)
     ch_throttle = uart_receiver.channel[1];
     ch_save = uart_receiver.channel[2];
     ch_stop = uart_receiver.channel[3];
+    ch_reverse = uart_receiver.channel[4];
 
     x6f_out[0] = (int16)ch_steer;
     x6f_out[1] = (int16)ch_throttle;
     x6f_out[2] = (ch_save > 1500u) ? 200 : 100;
     x6f_out[3] = (ch_stop > 1500u) ? 200 : 100;
+    x6f_out[4] = (ch_reverse > 1500u) ? 200 : 100;
 
     if(!sbus_rc_channel_valid(ch_steer) || !sbus_rc_channel_valid(ch_throttle))
     {

@@ -344,6 +344,7 @@ float guandao_portion3_reverse_steer_command(void);
 float guandao_portion3_reverse_lookahead(void);
 uint8 guandao_portion3_reverse_turn_level(void);
 float guandao_portion3_reverse_speed_command(void);
+uint8 guandao_portion3_ch5_triggered(void);
 uint8 guandao_park_gps_debug_ready(void);
 uint8 guandao_park_gps_debug_count(void);
 int16 guandao_park_gps_debug_reference(void);

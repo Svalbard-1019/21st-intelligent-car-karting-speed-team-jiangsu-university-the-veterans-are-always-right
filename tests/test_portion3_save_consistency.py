@@ -33,7 +33,8 @@ class Portion3SaveConsistencyTests(unittest.TestCase):
 
         self.assertIn("static uint8 guandao_record_saved = 0;", self.guandao_c)
         self.assertEqual(recode_body.count("guandao_record_saved = 1;"), 1)
-        self.assertEqual(recode_body.count("portion3_save_pending = 1;"), 2)
+        # KEY4 hold, CH3 hold, and the CH5 one-shot all enter the same save pipeline.
+        self.assertEqual(recode_body.count("portion3_save_pending = 1;"), 3)
         self.assertLess(
             recode_body.index("if(guandao_record_saved) return;"),
             recode_body.index("update_state(p  , &guandao_ecd);"),
