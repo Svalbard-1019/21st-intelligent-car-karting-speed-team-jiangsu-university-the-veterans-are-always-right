@@ -344,7 +344,7 @@ static void Serial_Debug_Update(void)
     else if(main_mode == Guandao_portion_1)
     {
         len = sprintf(line,
-                      "AUTO,cfg=p1spd8,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,vl10=%ld,vr10=%ld,enc10=%d,pend=%u,merge=%lu,odom=%ld,enc100=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,cmdS10=%ld,actS10=%ld,gRaw=%d,gOff10=%ld,gZ1000=%ld,kinW1000=%ld,tgt100=%ld,act100=%ld,pwm=%d,pwmReq=%d,turn10=%ld,turnLv=%u,req100=%ld,cmd100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,revSt=%u,revPlan=%u,revFail=%u,revIdx=%d,revLen=%d,revD100=%ld,revYaw10=%ld,revCmd10=%ld,revLd100=%ld,brk=%u,brkP=%d,brkR=%u\r\n",
+                      "AUTO,cfg=p1spd8,t=%lu,dt=%lu,dtMax=%lu,base10=%ld,vl10=%ld,vr10=%ld,enc10=%d,pend=%u,merge=%lu,odom=%ld,enc100=%ld,idx=%d,len=%d,reason=%d,x100=%ld,y100=%ld,yaw10=%ld,rawS10=%ld,finS10=%ld,cmdS10=%ld,actS10=%ld,gRaw=%d,gOff10=%ld,gZ1000=%ld,kinW1000=%ld,tgt100=%ld,act100=%ld,pwm=%d,pwmReq=%d,turn10=%ld,turnLv=%u,req100=%ld,cmd100=%ld,app=%d,elong100=%ld,elat100=%ld,eyaw10=%ld,revSt=%u,revPlan=%u,revFail=%u,revIdx=%d,revLen=%d,revD100=%ld,revYaw10=%ld,revCmd10=%ld,revLd100=%ld,brk=%u,brkP=%d,brkR=%u,preCoast=%u,remain100=%ld,coastTrig100=%ld,coastOut=%u\r\n",
                       (unsigned long)now_ms,
                       (unsigned long)main_loop_last_dt_ms,
                       (unsigned long)main_loop_max_dt_ms,
@@ -398,7 +398,13 @@ static void Serial_Debug_Update(void)
                               guandao_reverse_debug_lookahead(), 100.0f),
                       (unsigned int)rear_motor_brake_active(),
                       rear_motor_brake_pwm(),
-                      (unsigned int)rear_motor_brake_reason());
+                      (unsigned int)rear_motor_brake_reason(),
+                      (unsigned int)guandao_portion1_precoast_latched(),
+                      (long)Serial_Debug_Scale(
+                              guandao_portion1_precoast_remaining_m(), 100.0f),
+                      (long)Serial_Debug_Scale(
+                              guandao_portion1_precoast_trigger_m(), 100.0f),
+                      (unsigned int)guandao_portion1_precoast_output());
         if(len > 0)
         {
             Serial_Debug_Write(line);

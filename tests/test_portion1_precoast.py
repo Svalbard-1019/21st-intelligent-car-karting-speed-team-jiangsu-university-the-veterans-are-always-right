@@ -168,5 +168,26 @@ class Portion1PreCoastPolicyTests(unittest.TestCase):
         self.assertNotIn("INS.current_state.theta =", remaining)
 
 
+    def test_serial_exposes_precoast_diagnostics(self):
+        source = (ROOT / "user/cpu0_main.c").read_text(encoding="utf-8")
+        start = source.index('"AUTO,')
+        end = source.index("\\r\\n", start)
+        auto_format = source[start:end]
+        for field in (
+            "preCoast=%u",
+            "remain100=%ld",
+            "coastTrig100=%ld",
+            "coastOut=%u",
+        ):
+            self.assertIn(field, auto_format)
+        for getter in (
+            "guandao_portion1_precoast_latched()",
+            "guandao_portion1_precoast_remaining_m()",
+            "guandao_portion1_precoast_trigger_m()",
+            "guandao_portion1_precoast_output()",
+        ):
+            self.assertIn(getter, source)
+
+
 if __name__ == "__main__":
     unittest.main()
