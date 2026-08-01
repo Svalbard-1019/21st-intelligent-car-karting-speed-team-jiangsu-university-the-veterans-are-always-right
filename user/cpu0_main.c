@@ -34,6 +34,7 @@
 ********************************************************************************************************************/
 #include "zf_common_headfile.h"
 #include "rear_motor/rear_motor.h"
+#include "portion1_precoast.h"
 #include <stdio.h>
 #pragma section all "cpu0_dsram"
 // 将本语句与#pragma section all restore语句之间的全局变量都放在CPU0的RAM中
@@ -186,6 +187,24 @@ static void Guandao_Rear_Motor_Update(void)
     else
     {
         return;
+    }
+
+    if(main_mode == Guandao_portion_1 && conrtol_mode == GUANDAO)
+    {
+        if(guandao_portion1_precoast_output())
+        {
+            rear_motor_coast_update();
+            return;
+        }
+        if(guandao_portion1_precoast_latched()
+                && target_mps > PORTION1_PRECOAST_TARGET_MPS)
+        {
+            target_mps = PORTION1_PRECOAST_TARGET_MPS;
+        }
+    }
+    else
+    {
+        guandao_portion1_precoast_cancel();
     }
 
     if(target_mps == 0.0f)

@@ -356,6 +356,11 @@ float guandao_park_gps_debug_offset_y(void);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void portion_1_reset(void);                   // 进入科目一前清零里程、输出、追点索引，避免沿用上一次状态
+uint8 guandao_portion1_precoast_latched(void);
+uint8 guandao_portion1_precoast_output(void);
+float guandao_portion1_precoast_remaining_m(void);
+float guandao_portion1_precoast_trigger_m(void);
+void guandao_portion1_precoast_cancel(void);
 /**
  * 接口说明：portion3_points_switch()。执行路线追踪或科目阶段逻辑，输出目标速度和转向角。
  * 所属模块：科目一惯导路线记录、纯追踪和自动驾驶决策核心模块。

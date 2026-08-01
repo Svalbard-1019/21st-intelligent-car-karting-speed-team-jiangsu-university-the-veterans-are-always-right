@@ -42,6 +42,7 @@
 #include "guandao_speed_planner.h"
 #include "guandao_reverse_speed_planner.h"
 #include "portion3_reverse_tracker.h"
+#include "portion1_precoast.h"
 
 guandao_state INS;                               //0 = route_setting_choice
 guandao_state passage;                    //1 = route_setting_choice
@@ -119,6 +120,8 @@ static state_t portion1_taught_reverse_last_state = {0.0f, 0.0f, 0.0f};
 static uint8 portion1_approach_active = 0;
 static float portion1_approach_steer_cmd = 0.0f;
 static uint32 portion1_approach_steer_ms = 0;
+static portion1_precoast_t portion1_precoast;
+static float portion1_route_remaining_m[MAX_LENGTH_INDEX];
 
 static void guandao_record_current_endpoint(guandao_state *state)
 {
@@ -1445,6 +1448,82 @@ void update_state(guandao_state * state , Encoder_t * ecd)
     state->current_state.theta = daoche_flag ? Yaw_1 + 180.0f : Yaw_1;
     angle_plan(&state->current_state.theta);
 }
+/* Build the route tail once. Runtime tracking only reads this cache. */
+static void guandao_portion1_precoast_prepare(void)
+{
+    int stop_index = daoche_point_length;
+
+    for(int i = 0; i < MAX_LENGTH_INDEX; i++)
+    {
+        portion1_route_remaining_m[i] = 0.0f;
+    }
+    if(stop_index <= 0 || stop_index >= portion1_finally_length
+            || stop_index >= MAX_LENGTH_INDEX)
+    {
+        return;
+    }
+
+    portion1_route_remaining_m[stop_index] = 0.0f;
+    for(int i = stop_index - 1; i >= 0; i--)
+    {
+        portion1_route_remaining_m[i] = portion1_route_remaining_m[i + 1]
+                + get_distance(INS.recode_map[i], INS.recode_map[i + 1]);
+    }
+}
+
+static float guandao_portion1_remaining_m(void)
+{
+    int index = INS.current_point_index;
+
+    if(daoche_point_length <= 0 || daoche_point_length >= MAX_LENGTH_INDEX)
+    {
+        return 0.0f;
+    }
+    if(index < 0) index = 0;
+    if(index > daoche_point_length) index = daoche_point_length;
+    return get_distance(INS.current_state, INS.recode_map[index])
+            + portion1_route_remaining_m[index];
+}
+
+static void guandao_portion1_precoast_update(uint8 reverse_route_valid)
+{
+    float actual_speed_mps = rear_motor_get_speed_mps();
+    uint8 speed_valid = (actual_speed_mps >= 0.0f
+            && actual_speed_mps <= REAR_SPEED_MAX_MPS);
+
+    portion1_precoast_update(&portion1_precoast,
+            (uint8)(reverse_route_valid && speed_valid),
+            (uint8)(portion1_reverse_state == 0u && daoche_flag == 0u),
+            base_speed,
+            actual_speed_mps,
+            guandao_portion1_remaining_m());
+}
+
+uint8 guandao_portion1_precoast_latched(void)
+{
+    return portion1_precoast.latched;
+}
+
+uint8 guandao_portion1_precoast_output(void)
+{
+    return portion1_precoast.coast_output;
+}
+
+float guandao_portion1_precoast_remaining_m(void)
+{
+    return portion1_precoast.remaining_m;
+}
+
+float guandao_portion1_precoast_trigger_m(void)
+{
+    return portion1_precoast.trigger_m;
+}
+
+void guandao_portion1_precoast_cancel(void)
+{
+    portion1_precoast_reset(&portion1_precoast);
+}
+
 // 科目一自动驾驶入口前的状态复位。
 // 注意：Flash 里的 INS.length_index 不能清零，它是已保存路线长度；这里只清运行态。
 // current_point_index 从 1 开始，是为了避开记录路线时的第 0 个起点，防止起步时追起点。
@@ -1459,6 +1538,7 @@ void update_state(guandao_state * state , Encoder_t * ecd)
  */
 void portion_1_reset(void)
 {
+    portion1_precoast_reset(&portion1_precoast);
     portion1_state_flag = 0;
     portion1_finally_length = 0;
     portion1_reverse_state = 0;
@@ -1564,6 +1644,7 @@ void portion_1(void)
             if(end_index > GUANDAO_START_SEARCH_POINTS) end_index = GUANDAO_START_SEARCH_POINTS;
             INS.current_point_index = guandao_find_closest_index(&INS, 1, end_index);
         }
+        guandao_portion1_precoast_prepare();
         portion1_state_flag = 1;
     }
 
@@ -1711,6 +1792,7 @@ void portion_1(void)
         reverse_route_valid = (daoche_point_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && active_route_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
                 && daoche_point_length < portion1_finally_length);
+        guandao_portion1_precoast_update(reverse_route_valid);
         if(reverse_route_valid
                 && guandao_parking_entry_errors(&entry_longitudinal, &entry_lateral,
                         &entry_yaw_error, &entry_gate_passed))
@@ -1768,6 +1850,7 @@ void portion_1(void)
         {
             if(reverse_ready)
             {
+                portion1_precoast_reset(&portion1_precoast);
                 portion1_reverse_steer_cmd = out_servo * GUANDAO_REVERSE_STEERING_GAIN;
                 Value_Limit_float(&portion1_reverse_steer_cmd, -GUANDAO_STEERING_CMD_LIMIT, GUANDAO_STEERING_CMD_LIMIT);
             }

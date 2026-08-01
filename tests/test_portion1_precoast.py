@@ -108,5 +108,65 @@ class Portion1PreCoastPolicyTests(unittest.TestCase):
             self.assertNotIn(forbidden, body)
 
 
+    def test_precoast_is_portion1_forward_only_and_caps_motor_target(self):
+        guandao = (ROOT / "code/guandao.c").read_text(encoding="utf-8")
+        main = (ROOT / "user/cpu0_main.c").read_text(encoding="utf-8")
+        dispatch = main.split(
+            "static void Guandao_Rear_Motor_Update(void)", 1
+        )[1].split("static int32 Serial_Debug_Scale", 1)[0]
+        self.assertIn("main_mode == Guandao_portion_1", dispatch)
+        self.assertIn("conrtol_mode == GUANDAO", dispatch)
+        self.assertIn("guandao_portion1_precoast_output()", dispatch)
+        self.assertIn("rear_motor_coast_update();", dispatch)
+        self.assertIn("PORTION1_PRECOAST_TARGET_MPS", dispatch)
+        self.assertLess(
+            dispatch.index("rear_motor_brake_active()"),
+            dispatch.index("guandao_portion1_precoast_output()"),
+        )
+        self.assertIn(
+            "portion1_precoast_update(&portion1_precoast", guandao
+        )
+
+    def test_precoast_does_not_write_inertial_or_steering_state(self):
+        source = (ROOT / "code/guandao.c").read_text(encoding="utf-8")
+        self.assertIn("static void guandao_portion1_precoast_update", source)
+        block = source.split(
+            "static void guandao_portion1_precoast_update", 1
+        )[1].split(
+            "\n}\n\nuint8 guandao_portion1_precoast_latched", 1
+        )[0]
+        for forbidden in (
+            "INS.current_state.x =",
+            "INS.current_state.y =",
+            "INS.current_state.theta =",
+            "INS.current_point_index =",
+            "out_servo =",
+            "pursuit_contral_mode(",
+            "update_state(",
+        ):
+            self.assertNotIn(forbidden, block)
+
+    def test_route_remaining_cache_is_built_once_and_tracking_read_is_const(self):
+        source = (ROOT / "code/guandao.c").read_text(encoding="utf-8")
+        self.assertIn("static void guandao_portion1_precoast_prepare", source)
+        self.assertIn("static float guandao_portion1_remaining_m", source)
+        prepare = source.split(
+            "static void guandao_portion1_precoast_prepare", 1
+        )[1].split("static float guandao_portion1_remaining_m", 1)[0]
+        remaining = source.split(
+            "static float guandao_portion1_remaining_m", 1
+        )[1].split("static void guandao_portion1_precoast_update", 1)[0]
+        self.assertIn("portion1_route_remaining_m[i]", prepare)
+        self.assertIn("get_distance", prepare)
+        self.assertIn(
+            "get_distance(INS.current_state, INS.recode_map[index])",
+            remaining,
+        )
+        self.assertNotIn("INS.current_point_index =", remaining)
+        self.assertNotIn("INS.current_state.x =", remaining)
+        self.assertNotIn("INS.current_state.y =", remaining)
+        self.assertNotIn("INS.current_state.theta =", remaining)
+
+
 if __name__ == "__main__":
     unittest.main()
