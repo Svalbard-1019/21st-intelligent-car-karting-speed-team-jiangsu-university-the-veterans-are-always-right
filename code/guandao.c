@@ -42,7 +42,6 @@
 #include "guandao_speed_planner.h"
 #include "guandao_reverse_speed_planner.h"
 #include "portion3_reverse_tracker.h"
-#include "portion1_parking_brake.h"
 
 guandao_state INS;                               //0 = route_setting_choice
 guandao_state passage;                    //1 = route_setting_choice
@@ -120,7 +119,6 @@ static state_t portion1_taught_reverse_last_state = {0.0f, 0.0f, 0.0f};
 static uint8 portion1_approach_active = 0;
 static float portion1_approach_steer_cmd = 0.0f;
 static uint32 portion1_approach_steer_ms = 0;
-static uint8 portion1_approach_brake_requested = 0;
 
 static void guandao_record_current_endpoint(guandao_state *state)
 {
@@ -176,7 +174,6 @@ static uint32 portion1_speed_last_ms = 0u;
 #define GUANDAO_PARK_APPROACH_SPEED_FAST 10.0f
 #define GUANDAO_PARK_APPROACH_SPEED_MID  8.0f
 #define GUANDAO_PARK_APPROACH_SPEED_SLOW 5.0f
-#define GUANDAO_PARK_APPROACH_TARGET_MPS 1.0f
 #define GUANDAO_PARK_APPROACH_LAT_KP   18.0f
 #define GUANDAO_PARK_APPROACH_YAW_KP   0.80f
 #define GUANDAO_PARK_APPROACH_STEER_LIMIT 25.0f
@@ -1488,7 +1485,6 @@ void portion_1_reset(void)
     portion1_approach_active = 0;
     portion1_approach_steer_cmd = 0.0f;
     portion1_approach_steer_ms = 0;
-    portion1_approach_brake_requested = 0;
     guandao_debug_approach_active = 0;
     guandao_debug_entry_gate = 0;
     guandao_debug_entry_long = 0.0f;
@@ -1710,10 +1706,6 @@ void portion_1(void)
         float entry_longitudinal = 0.0f;
         float entry_lateral = 0.0f;
         float entry_yaw_error = 0.0f;
-        float approach_speed_mps = 0.0f;
-        float approach_slowdown_distance = 0.0f;
-        float approach_longitudinal_distance = GUANDAO_PARK_APPROACH_DIST;
-        float approach_radius = GUANDAO_PARK_APPROACH_RADIUS;
         pursuit_contral_mode(&INS ,&out_v_l ,&out_v_r ,&out_servo);
         active_route_length = guandao_route_length(&INS);
         reverse_route_valid = (daoche_point_length >= GUANDAO_REVERSE_MIN_ROUTE_POINTS
@@ -1728,34 +1720,15 @@ void portion_1(void)
             guandao_debug_entry_yaw = entry_yaw_error;
             guandao_debug_entry_gate = entry_gate_passed;
             guandao_debug_dist_final = get_distance(INS.current_state, daoche_start_state);
-            approach_speed_mps = fabsf(rear_motor_get_speed_mps());
-            approach_slowdown_distance = portion1_parking_slowdown_distance(
-                    approach_speed_mps, GUANDAO_PARK_APPROACH_TARGET_MPS);
-            if(approach_slowdown_distance > approach_longitudinal_distance)
-            {
-                approach_longitudinal_distance = approach_slowdown_distance;
-            }
-            if(approach_slowdown_distance > approach_radius)
-            {
-                approach_radius = approach_slowdown_distance;
-            }
 
             if(!portion1_approach_active
                     && INS.current_point_index >= active_route_length - 30
-                    && entry_longitudinal >= -approach_longitudinal_distance
-                    && guandao_debug_dist_final <= approach_radius)
+                    && entry_longitudinal >= -GUANDAO_PARK_APPROACH_DIST
+                    && guandao_debug_dist_final <= GUANDAO_PARK_APPROACH_RADIUS)
             {
                 portion1_approach_active = 1;
                 portion1_approach_steer_cmd = out_servo;
                 portion1_approach_steer_ms = system_getval_ms();
-            }
-            if(portion1_approach_active
-                    && portion1_parking_should_slowdown(entry_longitudinal,
-                            approach_speed_mps, GUANDAO_PARK_APPROACH_TARGET_MPS,
-                            portion1_approach_brake_requested))
-            {
-                rear_motor_brake_to_speed_start(GUANDAO_PARK_APPROACH_TARGET_MPS);
-                portion1_approach_brake_requested = 1;
             }
             guandao_debug_approach_active = portion1_approach_active;
             if(portion1_approach_active)

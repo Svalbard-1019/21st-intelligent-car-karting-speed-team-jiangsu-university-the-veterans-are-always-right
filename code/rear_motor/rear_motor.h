@@ -77,7 +77,6 @@
 #define REAR_BRAKE_REASON_LOW_SPEED  1u
 #define REAR_BRAKE_REASON_REVERSE    2u
 #define REAR_BRAKE_REASON_TIMEOUT    3u
-#define REAR_BRAKE_REASON_TARGET     4u
 
 /* 速度限幅 (架上测试) */
 #define REAR_SPEED_MAX_MPS      5.0f
@@ -107,7 +106,6 @@ void rear_motor_stop(void);
 
 /* Explicit-stop active brake. Call update from the normal control loop. */
 void rear_motor_brake_start(void);
-void rear_motor_brake_to_speed_start(float target_speed_mps);
 void rear_motor_brake_update(void);
 uint8 rear_motor_brake_active(void);
 uint8 rear_motor_brake_reason(void);
