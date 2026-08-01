@@ -187,22 +187,44 @@ class Portion3DirectReverseIntegrationTests(unittest.TestCase):
         self.assertNotIn("portion3_direct_reverse_travelled", self.guandao_c)
         self.assertNotIn("portion3_direct_reverse_route_length", self.guandao_c)
 
-    def test_reverse_uses_portion1_forward_five_point_preview(self):
+    def test_reverse_uses_portion1_metric_lookahead_and_curve_speed(self):
         signature = "static void portion3_direct_reverse_update(void)"
         update_body = braced_function_body(self.guandao_c, signature)
+        self.assertNotIn("PORTION3_DIRECT_REVERSE_PREVIEW_STEPS", self.guandao_c)
+        self.assertIn("guandao_reverse_lookahead_m(reference_speed)", update_body)
+        self.assertIn("portion3_reverse_metric_preview_index(", update_body)
+        self.assertIn("portion3_reverse_turn_level(", update_body)
+        self.assertIn("portion3_reverse_curve_speed(", update_body)
 
+    def test_reverse_prepare_builds_arc_cache_after_ram_route_reversal(self):
+        signature = "static uint8 portion3_direct_reverse_prepare(guandao_state *route)"
+        body = braced_function_body(self.guandao_c, signature)
+        reverse = body.index(
+            "route->recode_map[i] = route->recode_map[length - 1 - i];"
+        )
+        cache = body.index("portion3_direct_reverse_route_m[i]")
+        self.assertLess(reverse, cache)
         self.assertIn(
-            "#define PORTION3_DIRECT_REVERSE_PREVIEW_STEPS 5",
-            self.guandao_c,
+            "get_distance(route->recode_map[i - 1], route->recode_map[i])",
+            body,
         )
-        self.assertIn(
-            "portion3_reverse_preview_index(",
-            update_body,
+
+    def test_adaptive_target_does_not_replace_pose_or_index_updates(self):
+        signature = "static void portion3_direct_reverse_update(void)"
+        body = braced_function_body(self.guandao_c, signature)
+        self.assertEqual(body.count("update_state(&portion_3, &guandao_ecd);"), 1)
+        self.assertEqual(
+            body.count(
+                "portion_3.current_point_index = "
+                "portion3_direct_reverse_route_index;"
+            ),
+            1,
         )
-        self.assertNotIn(
-            "guandao_reverse_lookahead_m(reverse_speed)",
-            update_body,
-        )
+        target_call = body.split(
+            "portion3_reverse_metric_preview_index(", 1
+        )[1].split(");", 1)[0]
+        self.assertNotIn("current_state =", target_call)
+        self.assertNotIn("current_point_index =", target_call)
 
     def test_reverse_does_not_exceed_portion1_forward_steering_limit(self):
         signature = "static void portion3_direct_reverse_update(void)"
