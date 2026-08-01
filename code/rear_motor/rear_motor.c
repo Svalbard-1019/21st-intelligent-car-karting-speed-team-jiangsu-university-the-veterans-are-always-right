@@ -118,6 +118,7 @@ static uint32 brake_elapsed_ms = 0;
 static int16 brake_output_pwm = 0;
 static float brake_start_speed_mps = 0.0f;
 static float brake_end_raw_mps = 0.0f;
+static float brake_target_speed_mps = 0.0f;
 static int8 brake_motion_sign = 0;
 
 /* ---- HIP4082 电机驱动（每个电机两路 PWM） ---- */
@@ -288,6 +289,7 @@ void rear_motor_init(void)
     brake_output_pwm = 0;
     brake_start_speed_mps = 0.0f;
     brake_end_raw_mps = 0.0f;
+    brake_target_speed_mps = 0.0f;
     brake_motion_sign = 0;
 }
 
@@ -306,6 +308,7 @@ void rear_motor_stop(void)
 
     brake_active = 0;
     brake_output_pwm = 0;
+    brake_target_speed_mps = 0.0f;
     brake_motion_sign = 0;
     target_mps  = 0.0f;
     requested_pwm = 0;
@@ -560,12 +563,54 @@ static void rear_motor_brake_finish(uint8 reason, float raw_speed_mps)
     rear_motor_stop();
 }
 
+static void rear_motor_brake_finish_slowdown(uint8 reason, float raw_speed_mps)
+{
+    brake_active = 0;
+    brake_exit_reason = reason;
+    brake_end_raw_mps = raw_speed_mps;
+    brake_output_pwm = 0;
+    brake_target_speed_mps = 0.0f;
+    brake_motion_sign = 0;
+    target_mps = 0.0f;
+    requested_pwm = 0;
+    integral = 0.0f;
+    last_error = 0.0f;
+    last_pwm = 0;
+    pwm_set_duty(PWM_L1, 0);
+    pwm_set_duty(PWM_L2, 0);
+    pwm_set_duty(PWM_R1, 0);
+    pwm_set_duty(PWM_R2, 0);
+    current_pwm = 0;
+    applied_pwm_l = 0;
+    applied_pwm_r = 0;
+}
+
+static void rear_motor_brake_finish_for_target(uint8 reason, float raw_speed_mps)
+{
+    if(brake_target_speed_mps > REAR_BRAKE_STOP_SPEED_MPS)
+    {
+        rear_motor_brake_finish_slowdown(reason, raw_speed_mps);
+    }
+    else
+    {
+        rear_motor_brake_finish(reason, raw_speed_mps);
+    }
+}
+
 void rear_motor_brake_start(void)
 {
     float direction_speed_mps;
 
-    if(brake_active) return;
+    if(brake_active)
+    {
+        brake_target_speed_mps = 0.0f;
+        brake_start_speed_mps = fabsf(actual_mps);
+        brake_start_ms = system_getval_ms();
+        brake_elapsed_ms = 0;
+        return;
+    }
 
+    brake_target_speed_mps = 0.0f;
     direction_speed_mps = (fabsf(raw_actual_mps) > REAR_BRAKE_STOP_SPEED_MPS)
             ? raw_actual_mps : actual_mps;
     brake_start_speed_mps = fabsf(actual_mps);
@@ -590,6 +635,28 @@ void rear_motor_brake_start(void)
     brake_active = 1;
 }
 
+void rear_motor_brake_to_speed_start(float target_speed_mps)
+{
+    float target = fabsf(target_speed_mps);
+    float start_speed = fabsf(actual_mps);
+    float raw_speed = fabsf(raw_actual_mps);
+
+    if(target <= REAR_BRAKE_STOP_SPEED_MPS)
+    {
+        rear_motor_brake_start();
+        return;
+    }
+    if(brake_active) return;
+    if(start_speed <= target + 0.10f && raw_speed <= target + 0.10f)
+    {
+        brake_exit_reason = REAR_BRAKE_REASON_TARGET;
+        return;
+    }
+
+    rear_motor_brake_start();
+    if(brake_active) brake_target_speed_mps = target;
+}
+
 void rear_motor_brake_update(void)
 {
     float raw_speed_mps;
@@ -607,19 +674,26 @@ void rear_motor_brake_update(void)
 
     if(brake_elapsed_ms >= REAR_BRAKE_TIMEOUT_MS)
     {
-        rear_motor_brake_finish(REAR_BRAKE_REASON_TIMEOUT, raw_speed_mps);
+        rear_motor_brake_finish_for_target(REAR_BRAKE_REASON_TIMEOUT, raw_speed_mps);
+        return;
+    }
+    if(brake_target_speed_mps > REAR_BRAKE_STOP_SPEED_MPS
+            && brake_elapsed_ms >= 100u
+            && signed_speed_mps <= brake_target_speed_mps + 0.10f)
+    {
+        rear_motor_brake_finish_slowdown(REAR_BRAKE_REASON_TARGET, raw_speed_mps);
         return;
     }
     if(signed_speed_mps < -REAR_BRAKE_REVERSE_MPS
             && (!high_speed_guard
                     || brake_elapsed_ms >= REAR_BRAKE_HIGH_REVERSE_GUARD_MS))
     {
-        rear_motor_brake_finish(REAR_BRAKE_REASON_REVERSE, raw_speed_mps);
+        rear_motor_brake_finish_for_target(REAR_BRAKE_REASON_REVERSE, raw_speed_mps);
         return;
     }
     if(brake_elapsed_ms >= 100u && abs_speed_mps <= REAR_BRAKE_STOP_SPEED_MPS)
     {
-        rear_motor_brake_finish(REAR_BRAKE_REASON_LOW_SPEED, raw_speed_mps);
+        rear_motor_brake_finish_for_target(REAR_BRAKE_REASON_LOW_SPEED, raw_speed_mps);
         return;
     }
 

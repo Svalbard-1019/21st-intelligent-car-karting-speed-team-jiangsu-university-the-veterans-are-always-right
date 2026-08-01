@@ -52,4 +52,25 @@ static inline float parking_se2_transform_heading(
             source_heading_deg - recorded_heading_deg + runtime_heading_deg);
 }
 
+static inline void parking_se2_blend_pose_to_fixed(
+        float anchored_x, float anchored_y, float anchored_heading_deg,
+        float fixed_x, float fixed_y, float fixed_heading_deg,
+        float progress,
+        float *target_x, float *target_y, float *target_heading_deg)
+{
+    float blend;
+    float heading_delta;
+
+    if(progress < 0.0f) progress = 0.0f;
+    if(progress > 1.0f) progress = 1.0f;
+    blend = progress * progress * (3.0f - 2.0f * progress);
+    heading_delta = parking_se2_normalize_angle(
+            fixed_heading_deg - anchored_heading_deg);
+
+    *target_x = anchored_x + (fixed_x - anchored_x) * blend;
+    *target_y = anchored_y + (fixed_y - anchored_y) * blend;
+    *target_heading_deg = parking_se2_normalize_angle(
+            anchored_heading_deg + heading_delta * blend);
+}
+
 #endif

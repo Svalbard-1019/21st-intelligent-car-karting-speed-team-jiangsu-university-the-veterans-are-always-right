@@ -33,6 +33,89 @@ class SubjectGlobalBrakeTests(unittest.TestCase):
         self.assertIn("portion1_park_brake_requested", self.guandao)
         self.assertGreaterEqual(self.guandao.count("rear_motor_brake_start();"), 5)
 
+    def test_subject_one_preserves_original_reverse_entry_steering(self):
+        portion_one = self.guandao.split("void portion_1(void)", 1)[1]
+        portion_one = portion_one.split("void recode_waypoint(", 1)[0]
+        reverse_entry = portion_one.split(
+            "if(reverse_ready || final_stop_ready)", 1
+        )[1]
+        reverse_entry = reverse_entry.split("follow_points_show(&INS);", 1)[0]
+
+        self.assertNotIn("portion1_reverse_entry_state", self.guandao)
+        self.assertIn(
+            "portion1_reverse_steer_cmd = out_servo * GUANDAO_REVERSE_STEERING_GAIN;",
+            reverse_entry,
+        )
+
+    def test_subject_one_keeps_original_steering_while_braking(self):
+        portion_one = self.guandao.split("void portion_1(void)", 1)[1]
+        wait_state = portion_one.split(
+            "if(portion1_reverse_state == 1)", 1
+        )[1].split("else if(portion1_reverse_state == 2)", 1)[0]
+
+        self.assertIn("out_servo = portion1_reverse_steer_cmd;", wait_state)
+
+    def test_taught_reverse_blends_runtime_start_into_fixed_taught_target(self):
+        prepare = self.guandao.split(
+            "static void guandao_taught_reverse_prepare(void)", 1
+        )[1].split("static uint8 guandao_taught_reverse_update(void)", 1)[0]
+
+        self.assertIn("portion1_reverse_start_state.theta", prepare)
+        self.assertIn("portion1_reverse_start_state.x", prepare)
+        self.assertIn("portion1_reverse_start_state.y", prepare)
+        self.assertIn("parking_se2_blend_pose_to_fixed(", prepare)
+        self.assertIn(
+            "portion1_taught_reverse_target = daoche_target_state;",
+            prepare,
+        )
+        self.assertNotIn("&portion1_taught_reverse_target.x", prepare)
+
+    def test_subject_one_disables_generated_reverse_plan_fallback(self):
+        portion_one = self.guandao.split("void portion_1(void)", 1)[1]
+        portion_one = portion_one.split("void recode_waypoint(", 1)[0]
+
+        self.assertNotIn("auto_park_build_plan(", self.guandao)
+        self.assertNotIn("guandao_reverse_prepare_plan", self.guandao)
+        self.assertNotIn("guandao_reverse_execute_plan", self.guandao)
+        self.assertNotIn("portion1_reverse_plan.routes[0].is_forward", portion_one)
+
+    def test_subject_one_uses_reverse_only_target_fallback(self):
+        portion_one = self.guandao.split("void portion_1(void)", 1)[1]
+        wait_state = portion_one.split(
+            "if(portion1_reverse_state == 1)", 1
+        )[1].split("else if(portion1_reverse_state == 2)", 1)[0]
+        reverse_state = portion_one.split(
+            "else if(portion1_reverse_state == 2)", 1
+        )[1].split("else if(portion1_reverse_state == 3)", 1)[0]
+
+        self.assertNotIn("guandao_reverse_prepare_plan();", wait_state)
+        self.assertIn("daoche_flag = 1;", wait_state)
+        self.assertIn("conrtol_mode = DAOCHE;", wait_state)
+        self.assertIn(
+            "if(!portion1_taught_reverse_ready && daoche_target_flag)",
+            reverse_state,
+        )
+        self.assertNotIn("guandao_reverse_execute_plan", reverse_state)
+
+    def test_reverse_plan_diagnostic_reports_disabled(self):
+        diagnostic = self.guandao.split(
+            "uint8 guandao_reverse_debug_plan_ready(void)", 1
+        )[1].split("uint8 guandao_reverse_debug_fail_reason(void)", 1)[0]
+        self.assertIn("return 0u;", diagnostic)
+
+    def test_subject_one_uses_original_approach_and_gate_rules(self):
+        for token in (
+            "#define GUANDAO_PARK_APPROACH_DIST     2.00f",
+            "#define GUANDAO_PARK_APPROACH_RADIUS   1.80f",
+            "#define GUANDAO_PARK_APPROACH_SPEED_FAST 10.0f",
+            "#define GUANDAO_PARK_APPROACH_SPEED_MID  8.0f",
+            "#define GUANDAO_PARK_APPROACH_SPEED_SLOW 5.0f",
+        ):
+            self.assertIn(token, self.guandao)
+
+        self.assertNotIn("GUANDAO_PARK_GATE_LONG_LIMIT", self.guandao)
+        self.assertNotIn("GUANDAO_PARK_GATE_PRESTOP_DIST", self.guandao)
+
     def test_route_save_braking_order_matches_route_type(self):
         recode = self.guandao.split("void guandao_recode(guandao_state * state)", 1)[1]
         recode = recode.split("void guandao_record_session_reset(void)", 1)[0]

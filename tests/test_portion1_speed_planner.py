@@ -135,10 +135,25 @@ class Portion1SpeedPlannerTests(unittest.TestCase):
             "revYaw10=%ld",
             "revCmd10=%ld",
             "revLd100=%ld",
+            "revFail=%u",
         ):
             self.assertIn(field, auto_format)
         self.assertIn("guandao_reverse_debug_steer_command()", source)
+        self.assertIn("guandao_reverse_debug_fail_reason()", source)
         self.assertIn("rear_motor_get_requested_pwm()", source)
+
+    def test_taught_reverse_validation_exposes_each_failure_reason(self):
+        source = (ROOT / "code" / "guandao.c").read_text(encoding="utf-8")
+        header = (ROOT / "code" / "guandao.h").read_text(encoding="utf-8")
+
+        self.assertIn("static uint8 portion1_taught_reverse_fail_reason", source)
+        for reason in range(1, 8):
+            self.assertIn(
+                f"portion1_taught_reverse_fail_reason = {reason};",
+                source,
+            )
+        self.assertIn("uint8 guandao_reverse_debug_fail_reason(void)", source)
+        self.assertIn("uint8 guandao_reverse_debug_fail_reason(void);", header)
 
 
 if __name__ == "__main__":

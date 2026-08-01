@@ -24,6 +24,21 @@ static inline int portion3_reverse_initial_index(int route_length)
     return (route_length >= 3) ? 1 : 0;
 }
 
+static inline int portion3_reverse_preview_index(
+        int route_index,
+        int route_length,
+        int preview_steps)
+{
+    int preview_index;
+
+    if(route_length <= 0) return 0;
+    if(route_index < 0) route_index = 0;
+    if(preview_steps < 0) preview_steps = 0;
+    preview_index = route_index + preview_steps;
+    if(preview_index >= route_length) preview_index = route_length - 1;
+    return preview_index;
+}
+
 static inline float portion3_reverse_steering(
         float heading_error_deg,
         float target_distance_m,

@@ -117,7 +117,7 @@ class Portion3SharedSpeedPlannerTests(unittest.TestCase):
         terminal_pass = function_body(
             self.source,
             "static uint8 guandao_portion3_terminal_passed(",
-            "static AutoParkPose guandao_pose_from_state(",
+            "static void guandao_taught_reverse_prepare(",
         )
         self.assertRegex(
             self.source,

@@ -122,6 +122,28 @@ class FinalIntegrationSourceTests(unittest.TestCase):
         self.assertIn("Serial_Debug_Service();", self.main_c)
         self.assertIn("base10=%ld", self.main_c)
 
+    def test_subject_one_serial_logs_steering_and_imu_rates(self):
+        auto_debug = self.main_c.split(
+            "else if(main_mode == Guandao_portion_1)", 1
+        )[1].split("else if(main_mode == Guandao_portion_3)", 1)[0]
+
+        for field in (
+            "cmdS10=%ld",
+            "gRaw=%d",
+            "gOff10=%ld",
+            "gZ1000=%ld",
+            "kinW1000=%ld",
+        ):
+            self.assertIn(field, auto_debug)
+        for source in (
+            "Serial_Debug_Scale(out_servo, 10.0f)",
+            "imu963ra_gyro_z",
+            "Serial_Debug_Scale(Gyro_Offset.Zdata, 10.0f)",
+            "Serial_Debug_Scale(IMU_Data.gyro_z, 1000.0f)",
+            "Serial_Debug_Kinematic_Yaw_Rate()",
+        ):
+            self.assertIn(source, auto_debug)
+
     def test_combined_remote_preserves_both_subject_limits(self):
         self.assertIn("sbus_rc_capture_neutral", self.remote_c)
         self.assertIn("(route_setting_choice == 2) ? 45.0f : 40.0f", self.remote_c)

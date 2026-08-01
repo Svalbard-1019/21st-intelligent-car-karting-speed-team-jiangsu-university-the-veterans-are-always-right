@@ -40,6 +40,8 @@ int main(void)
     assert(fabsf(portion3_reverse_motion_heading(10.0f) + 170.0f) < 0.001f);
     assert(portion3_reverse_initial_index(6) == 1);
     assert(portion3_reverse_initial_index(2) == 0);
+    assert(portion3_reverse_preview_index(1, 10, 5) == 6);
+    assert(portion3_reverse_preview_index(7, 10, 5) == 9);
     steering = portion3_reverse_steering(20.0f, 0.8f, 0.724f, 1.0f, 25.0f);
     assert(steering < 0.0f);
     assert(fabsf(steering) <= 25.0f);
@@ -162,15 +164,60 @@ class Portion3DirectReverseIntegrationTests(unittest.TestCase):
         self.assertIn("rear_motor_brake_start();", update_body)
         self.assertNotIn("PORTION3_DIRECT_REVERSE_MAX_MS", self.guandao_c)
         self.assertNotIn("portion3_direct_reverse_start_ms", self.guandao_c)
-        self.assertIn("portion3_reverse_safety_stop(", update_body)
+        self.assertNotIn("portion3_reverse_safety_stop(", update_body)
         self.assertIn("portion3_reverse_should_stop(", update_body)
+        self.assertIn("guandao_portion3_terminal_passed(", update_body)
+        self.assertNotIn("portion3_direct_reverse_travelled", self.guandao_c)
+        self.assertNotIn("portion3_direct_reverse_route_length", self.guandao_c)
+
+    def test_reverse_uses_portion1_forward_five_point_preview(self):
+        signature = "static void portion3_direct_reverse_update(void)"
+        update_body = braced_function_body(self.guandao_c, signature)
+
+        self.assertIn(
+            "#define PORTION3_DIRECT_REVERSE_PREVIEW_STEPS 5",
+            self.guandao_c,
+        )
+        self.assertIn(
+            "portion3_reverse_preview_index(",
+            update_body,
+        )
+        self.assertNotIn(
+            "guandao_reverse_lookahead_m(reverse_speed)",
+            update_body,
+        )
+
+    def test_reverse_does_not_exceed_portion1_forward_steering_limit(self):
+        signature = "static void portion3_direct_reverse_update(void)"
+        update_body = braced_function_body(self.guandao_c, signature)
+
+        self.assertIn(
+            "#define PORTION3_DIRECT_REVERSE_STEER_LIMIT GUANDAO_VERY_HIGH_CMD_LIMIT",
+            self.guandao_c,
+        )
+        self.assertIn(
+            "PORTION3_DIRECT_REVERSE_GAIN, PORTION3_DIRECT_REVERSE_STEER_LIMIT",
+            update_body,
+        )
+        self.assertIn(
+            "-PORTION3_DIRECT_REVERSE_STEER_LIMIT,\n"
+            "                PORTION3_DIRECT_REVERSE_STEER_LIMIT",
+            update_body,
+        )
 
     def test_diagnostics_identify_direct_reverse_firmware(self):
         self.assertIn("P3AUTO,cfg=p3rev1", self.main_c)
-        for field in ("p3Rev=%u", "revIdx=%d", "revD100=%ld", "revCmd10=%ld"):
+        for field in (
+            "p3Rev=%u",
+            "p3Stop=%u",
+            "revIdx=%d",
+            "revD100=%ld",
+            "revCmd10=%ld",
+        ):
             self.assertIn(field, self.main_c)
         for declaration in (
             "uint8 guandao_portion3_reverse_active(void);",
+            "uint8 guandao_portion3_reverse_stop_cause(void);",
             "int16 guandao_portion3_reverse_index(void);",
             "float guandao_portion3_reverse_final_distance(void);",
             "float guandao_portion3_reverse_steer_command(void);",
