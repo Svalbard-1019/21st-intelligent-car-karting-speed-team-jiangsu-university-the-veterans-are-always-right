@@ -37,11 +37,14 @@ class Portion3DirectReverseMathTests(unittest.TestCase):
 int main(void)
 {
     float steering;
+    float route_m[5] = {0.0f, 0.15f, 0.55f, 0.75f, 1.40f};
+    portion3_reverse_turn_state_t turn_state;
     assert(fabsf(portion3_reverse_motion_heading(10.0f) + 170.0f) < 0.001f);
     assert(portion3_reverse_initial_index(6) == 1);
     assert(portion3_reverse_initial_index(2) == 0);
-    assert(portion3_reverse_preview_index(1, 10, 5) == 6);
-    assert(portion3_reverse_preview_index(7, 10, 5) == 9);
+    assert(portion3_reverse_metric_preview_index(route_m, 1, 5, 0.50f) == 3);
+    assert(portion3_reverse_metric_preview_index(route_m, 3, 5, 1.20f) == 4);
+    assert(portion3_reverse_metric_preview_index(route_m, -2, 5, 0.10f) == 1);
     steering = portion3_reverse_steering(20.0f, 0.8f, 0.724f, 1.0f, 25.0f);
     assert(steering < 0.0f);
     assert(fabsf(steering) <= 25.0f);
@@ -49,6 +52,20 @@ int main(void)
     assert(!portion3_reverse_should_stop(0.40f, 4.0f, 5, 6));
     assert(portion3_reverse_safety_stop(10.2f, 10.0f, 0.15f));
     assert(!portion3_reverse_safety_stop(10.1f, 10.0f, 0.15f));
+    portion3_reverse_turn_reset(&turn_state);
+    assert(portion3_reverse_turn_level(&turn_state, 14.0f) == 0u);
+    assert(portion3_reverse_turn_level(&turn_state, 16.0f) == 1u);
+    assert(portion3_reverse_turn_level(&turn_state, 12.0f) == 1u);
+    assert(portion3_reverse_turn_level(&turn_state, 31.0f) == 2u);
+    assert(portion3_reverse_turn_level(&turn_state, 27.0f) == 2u);
+    assert(portion3_reverse_turn_level(&turn_state, 46.0f) == 3u);
+    assert(portion3_reverse_turn_level(&turn_state, 42.0f) == 3u);
+    assert(portion3_reverse_turn_level(&turn_state, 39.0f) == 2u);
+    assert(fabsf(portion3_reverse_curve_speed(-20.0f, -15.0f, 0u, 0u) + 20.0f) < 0.001f);
+    assert(fabsf(portion3_reverse_curve_speed(-20.0f, -15.0f, 1u, 0u) + 17.0f) < 0.001f);
+    assert(fabsf(portion3_reverse_curve_speed(-20.0f, -15.0f, 2u, 0u) + 14.0f) < 0.001f);
+    assert(fabsf(portion3_reverse_curve_speed(-20.0f, -15.0f, 3u, 0u) + 11.0f) < 0.001f);
+    assert(fabsf(portion3_reverse_curve_speed(-20.0f, -8.0f, 3u, 1u) + 8.0f) < 0.001f);
     return 0;
 }
 '''

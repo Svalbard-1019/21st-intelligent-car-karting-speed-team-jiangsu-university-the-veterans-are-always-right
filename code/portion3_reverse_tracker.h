@@ -39,6 +39,90 @@ static inline int portion3_reverse_preview_index(
     return preview_index;
 }
 
+static inline int portion3_reverse_metric_preview_index(
+        const float *route_m, int route_index, int route_length,
+        float lookahead_m)
+{
+    int preview_index;
+    float target_m;
+
+    if(route_length <= 0) return 0;
+    if(route_index < 0) route_index = 0;
+    if(route_index >= route_length) route_index = route_length - 1;
+    if(lookahead_m < 0.0f) lookahead_m = 0.0f;
+    target_m = route_m[route_index] + lookahead_m;
+    preview_index = route_index;
+    while(preview_index < route_length - 1
+            && route_m[preview_index] < target_m)
+    {
+        preview_index++;
+    }
+    return preview_index;
+}
+
+typedef struct
+{
+    unsigned char level;
+} portion3_reverse_turn_state_t;
+
+static inline void portion3_reverse_turn_reset(
+        portion3_reverse_turn_state_t *state)
+{
+    state->level = 0u;
+}
+
+static inline unsigned char portion3_reverse_turn_level(
+        portion3_reverse_turn_state_t *state, float heading_error_deg)
+{
+    float magnitude = fabsf(heading_error_deg);
+    unsigned char level = state->level;
+
+    if(level == 0u)
+    {
+        if(magnitude >= 45.0f) level = 3u;
+        else if(magnitude >= 30.0f) level = 2u;
+        else if(magnitude >= 15.0f) level = 1u;
+    }
+    else if(level == 1u)
+    {
+        if(magnitude >= 45.0f) level = 3u;
+        else if(magnitude >= 30.0f) level = 2u;
+        else if(magnitude < 10.0f) level = 0u;
+    }
+    else if(level == 2u)
+    {
+        if(magnitude >= 45.0f) level = 3u;
+        else if(magnitude < 25.0f)
+        {
+            level = (magnitude >= 15.0f) ? 1u : 0u;
+        }
+    }
+    else if(magnitude < 40.0f)
+    {
+        if(magnitude >= 30.0f) level = 2u;
+        else if(magnitude >= 15.0f) level = 1u;
+        else level = 0u;
+    }
+
+    state->level = level;
+    return level;
+}
+
+static inline float portion3_reverse_curve_speed(
+        float cruise_speed, float fine_speed,
+        unsigned char turn_level, unsigned char fine_active)
+{
+    float ratio = 1.0f;
+    float command;
+
+    if(turn_level >= 3u) ratio = 0.55f;
+    else if(turn_level == 2u) ratio = 0.70f;
+    else if(turn_level == 1u) ratio = 0.85f;
+    command = cruise_speed * ratio;
+    if(fine_active && fabsf(fine_speed) < fabsf(command)) command = fine_speed;
+    return command;
+}
+
 static inline float portion3_reverse_steering(
         float heading_error_deg,
         float target_distance_m,
