@@ -252,6 +252,9 @@ class Portion3DirectReverseIntegrationTests(unittest.TestCase):
             "revIdx=%d",
             "revD100=%ld",
             "revCmd10=%ld",
+            "revLd100=%ld",
+            "revTurn=%u",
+            "revSpd10=%ld",
         ):
             self.assertIn(field, self.main_c)
         for declaration in (
@@ -260,6 +263,9 @@ class Portion3DirectReverseIntegrationTests(unittest.TestCase):
             "int16 guandao_portion3_reverse_index(void);",
             "float guandao_portion3_reverse_final_distance(void);",
             "float guandao_portion3_reverse_steer_command(void);",
+            "float guandao_portion3_reverse_lookahead(void);",
+            "uint8 guandao_portion3_reverse_turn_level(void);",
+            "float guandao_portion3_reverse_speed_command(void);",
         ):
             self.assertIn(declaration, self.guandao_h)
 
