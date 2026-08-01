@@ -17,6 +17,9 @@
 - Modify `code/guandao.c`: cumulative arc-length cache, adaptive target selection, turn-aware speed command, lifecycle reset, and diagnostic getters.
 - Modify `code/guandao.h`: public diagnostic getter declarations.
 - Modify `user/cpu0_main.c`: append `revLd100`, `revTurn`, and `revSpd10` to `P3AUTO`.
+- Create `code/remote_one_shot.h`: hardware-independent press-edge latch used by CH5.
+- Create `tests/test_portion3_ch5_trigger.py`: host latch test plus SBUS, save-flow, and serial contracts.
+- Modify `code/RemteControl.c`: decode SBUS CH5 into `x6f_out[4]` with receiver-loss reset.
 
 ### Task 1: Pure metric lookahead and curve-speed policy
 
@@ -431,6 +434,243 @@ git add -- user/cpu0_main.c tests/test_portion3_direct_reverse.py
 git commit -m "test: expose portion3 adaptive reverse diagnostics"
 ```
 
+### Task 4: CH5 one-press save and direct reverse
+
+**Files:**
+- Create: `code/remote_one_shot.h`
+- Create: `tests/test_portion3_ch5_trigger.py`
+- Modify: `code/RemteControl.c:130-173`
+- Modify: `code/guandao.c:2700-2840`
+- Modify: `code/guandao.h:339-370`
+- Modify: `user/cpu0_main.c:288-340`
+
+- [ ] **Step 1: Write a failing host test for one-shot press behavior**
+
+Create `tests/test_portion3_ch5_trigger.py` with:
+
+```python
+from pathlib import Path
+import subprocess
+import tempfile
+import textwrap
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+
+class Portion3Ch5TriggerTests(unittest.TestCase):
+    def test_one_shot_fires_once_until_release(self):
+        source = textwrap.dedent(r"""
+            #include "remote_one_shot.h"
+            int main(void)
+            {
+                remote_one_shot_t trigger;
+                remote_one_shot_reset(&trigger);
+                if(remote_one_shot_update(&trigger, 0u)) return 1;
+                if(!remote_one_shot_update(&trigger, 1u)) return 2;
+                if(remote_one_shot_update(&trigger, 1u)) return 3;
+                if(remote_one_shot_update(&trigger, 1u)) return 4;
+                if(remote_one_shot_update(&trigger, 0u)) return 5;
+                if(!remote_one_shot_update(&trigger, 1u)) return 6;
+                return 0;
+            }
+        """)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            src = Path(temp_dir) / "remote_one_shot_test.c"
+            exe = Path(temp_dir) / "remote_one_shot_test.exe"
+            src.write_text(source, encoding="utf-8")
+            result = subprocess.run(
+                ["gcc", "-std=c99", "-Wall", "-Wextra", "-Werror",
+                 "-I", str(ROOT / "code"), str(src), "-o", str(exe)],
+                capture_output=True, text=True, encoding="utf-8", errors="replace")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True,
+                                 encoding="utf-8", errors="replace")
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+```
+
+- [ ] **Step 2: Run the latch test and verify RED**
+
+Run:
+
+```powershell
+python -m unittest tests.test_portion3_ch5_trigger.Portion3Ch5TriggerTests.test_one_shot_fires_once_until_release -v
+```
+
+Expected: `FAIL` because `remote_one_shot.h` does not exist.
+
+- [ ] **Step 3: Implement the standalone latch**
+
+Create `code/remote_one_shot.h`:
+
+```c
+#ifndef CODE_REMOTE_ONE_SHOT_H_
+#define CODE_REMOTE_ONE_SHOT_H_
+
+typedef struct
+{
+    unsigned char armed;
+} remote_one_shot_t;
+
+static inline void remote_one_shot_reset(remote_one_shot_t *state)
+{
+    state->armed = 1u;
+}
+
+static inline unsigned char remote_one_shot_update(
+        remote_one_shot_t *state, unsigned char pressed)
+{
+    if(!pressed)
+    {
+        state->armed = 1u;
+        return 0u;
+    }
+    if(!state->armed) return 0u;
+    state->armed = 0u;
+    return 1u;
+}
+
+#endif
+```
+
+- [ ] **Step 4: Run the latch test and verify GREEN**
+
+Run:
+
+```powershell
+python -m unittest tests.test_portion3_ch5_trigger.Portion3Ch5TriggerTests.test_one_shot_fires_once_until_release -v
+```
+
+Expected: `OK` with one passing test.
+
+- [ ] **Step 5: Add failing SBUS and save-flow contracts**
+
+Append:
+
+```python
+def test_sbus_decodes_ch5_and_clears_it_on_receiver_loss(self):
+    source = (ROOT / "code/RemteControl.c").read_text(encoding="utf-8")
+    body = source.split("void sbus_rc_control(void)", 1)[1].split(
+        "void hotRc_Show", 1
+    )[0]
+    self.assertIn("ch_reverse = uart_receiver.channel[4];", body)
+    self.assertIn("x6f_out[4] = (ch_reverse > 1500u) ? 200 : 100;", body)
+    receiver_lost = body.split("if(uart_receiver.state == 0)", 1)[1].split(
+        "return;", 1
+    )[0]
+    self.assertIn("x6f_out[4] = 100;", receiver_lost)
+
+def test_ch5_reuses_existing_portion3_pending_save_flow(self):
+    source = (ROOT / "code/guandao.c").read_text(encoding="utf-8")
+    body = source.split("void guandao_recode(guandao_state * state)", 1)[1]
+    body = body.split("void guandao_record_session_reset", 1)[0]
+    self.assertIn("remote_one_shot_update(&portion3_ch5_trigger", body)
+    self.assertIn("x6f_out[4] == 200", body)
+    self.assertIn("route_setting_choice == 2", body)
+    self.assertIn("p == &portion_3", body)
+    self.assertIn("p->length_index > 1", body)
+    trigger = body.index("portion3_save_pending = 1;")
+    pending = body.index("if(portion3_save_pending)")
+    self.assertLess(trigger, pending)
+    self.assertIn("rear_motor_brake_start();", body[trigger:pending])
+    self.assertNotIn("portion3_direct_reverse_prepare", body[trigger:pending])
+
+def test_record_serial_exposes_ch5_trigger(self):
+    source = (ROOT / "user/cpu0_main.c").read_text(encoding="utf-8")
+    start = source.index('"REC,')
+    end = source.index("\\r\\n", start)
+    record_format = source[start:end]
+    self.assertIn("ch5=%d", record_format)
+    self.assertIn("p3Trig=%u", record_format)
+    self.assertIn("x6f_out[4]", source)
+    self.assertIn("guandao_portion3_ch5_triggered()", source)
+```
+
+- [ ] **Step 6: Run the contracts and verify RED**
+
+Run:
+
+```powershell
+python -m unittest tests.test_portion3_ch5_trigger -v
+```
+
+Expected: three new tests fail because CH5 is not decoded or connected to the pending-save flow and diagnostics.
+
+- [ ] **Step 7: Decode CH5 with receiver-loss protection**
+
+In `sbus_rc_control()` declare `uint16 ch_reverse;`, set `x6f_out[4] = 100;` in the receiver-loss branch, then add:
+
+```c
+ch_reverse = uart_receiver.channel[4];
+x6f_out[4] = (ch_reverse > 1500u) ? 200 : 100;
+```
+
+Keep CH1 steering, CH2 throttle, CH3 save, and CH4 stop mappings unchanged.
+
+- [ ] **Step 8: Connect the one-shot to the existing Portion3 pending save**
+
+Include `remote_one_shot.h` in `code/guandao.c` and add:
+
+```c
+static remote_one_shot_t portion3_ch5_trigger = {1u};
+static uint8 portion3_ch5_triggered = 0u;
+```
+
+After `update_state(p, &guandao_ecd);` and before `if(portion3_save_pending)`, add:
+
+```c
+if(remote_one_shot_update(&portion3_ch5_trigger,
+        (uint8)(x6f_out[4] == 200)))
+{
+    if(route_setting_choice == 2 && p == &portion_3
+            && p->length_index > 1
+            && !portion3_save_pending && !guandao_record_saved)
+    {
+        portion3_ch5_triggered = 1u;
+        portion3_save_pending = 1;
+        rear_motor_brake_start();
+    }
+}
+```
+
+Keep `portion3_ch5_triggered` latched after a successful press so the periodic serial output cannot miss it. Reset the one-shot state and diagnostic only when a new recording session starts. Expose:
+
+```c
+uint8 guandao_portion3_ch5_triggered(void)
+{
+    return portion3_ch5_triggered;
+}
+```
+
+and declare `uint8 guandao_portion3_ch5_triggered(void);` in `code/guandao.h`.
+
+- [ ] **Step 9: Append record diagnostics**
+
+Add `ch5=%d,p3Trig=%u` to the existing `REC` format and matching arguments:
+
+```c
+x6f_out[4],
+(unsigned int)guandao_portion3_ch5_triggered(),
+```
+
+- [ ] **Step 10: Run focused and full verification**
+
+Run:
+
+```powershell
+python -m unittest tests.test_portion3_ch5_trigger tests.test_portion3_direct_reverse tests.test_portion3_save_consistency -v
+python -m unittest discover -s tests -p "test_*.py" -v
+git diff --check
+```
+
+Expected: all focused and full tests pass; strict UTF-8 decoding succeeds for every modified/new text file. If `cctc` remains unavailable, record that the TC264 firmware binary was not compiled locally.
+
+- [ ] **Step 11: Commit CH5 support**
+
+```powershell
+git add -- code/remote_one_shot.h code/RemteControl.c code/guandao.c code/guandao.h user/cpu0_main.c tests/test_portion3_ch5_trigger.py
+git commit -m "feat: trigger portion3 return with ch5"
+```
+
 ## Real-car verification gate
 
 Use one unchanged Portion3 recording and run reverse settings -10, -15, and -20 three times each:
@@ -442,4 +682,6 @@ Late route: revCmd10 does not remain saturated near +/-320
 Tracking: no repeated left-right correction and reverse index remains monotonic
 Finish: existing p3Stop cause and final brake still occur normally
 Isolation: IMU/pose fields remain continuous and Portion1 behavior is unchanged
+CH5: one press brakes, saves the stopped endpoint, then enters direct reverse
+CH5 held: no duplicate save; release and press again rearms the trigger
 ```
