@@ -84,5 +84,29 @@ class Portion1PreCoastPolicyTests(unittest.TestCase):
             )
 
 
+    def test_rear_coast_updates_speed_without_resetting_odometry(self):
+        source = (ROOT / "code/rear_motor/rear_motor.c").read_text(
+            encoding="utf-8"
+        )
+        header = (ROOT / "code/rear_motor/rear_motor.h").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("void rear_motor_coast_update(void);", header)
+        body = source.split("void rear_motor_coast_update(void)", 1)[1]
+        body = body.split("\n}\n", 1)[0]
+        self.assertIn("rear_motor_take_speed_windows", body)
+        self.assertIn("rear_motor_filter_speed", body)
+        self.assertIn("rear_motor_set_pwm(0);", body)
+        self.assertNotIn("rear_motor_stop", body)
+        for forbidden in (
+            "encoder_10ms = 0",
+            "speed_window_build_pulses = 0",
+            "speed_window_ready_pulses = 0",
+            "odometry_total_pulses = 0",
+            "rear_odometry_pose_buffer_init",
+        ):
+            self.assertNotIn(forbidden, body)
+
+
 if __name__ == "__main__":
     unittest.main()

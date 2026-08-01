@@ -150,6 +150,7 @@ uint8 rear_motor_get_odometry_pending_samples(void);
  * 注意事项：调用前确认相关全局状态和硬件初始化已经完成，避免在中断和主循环中重复抢占同一硬件资源。
  */
 void rear_motor_pid_update_100ms(void);
+void rear_motor_coast_update(void);
 /** RackTest Stage 4：绕过 PID，以固定 PWM 驱动并刷新实际速度。 */
 void rear_motor_open_loop_update(int16 pwm);
 

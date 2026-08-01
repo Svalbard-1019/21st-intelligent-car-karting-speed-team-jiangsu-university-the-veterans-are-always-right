@@ -523,6 +523,30 @@ void rear_motor_pid_update_100ms(void)
 }
 
 /**
+ * Portion1 预减速滑行：撤销后轮驱动力，但保留编码器测速和里程数据。
+ * 与 rear_motor_stop() 不同，这里不会清空 ISR 累计窗口或惯导里程队列。
+ */
+void rear_motor_coast_update(void)
+{
+    int32 window_pulses;
+    uint16 window_count;
+
+    if(rear_motor_take_speed_windows(&window_pulses, &window_count))
+    {
+        float measured_pulses = (float)window_pulses / (float)window_count;
+        encoder_100ms_last = (int32)measured_pulses;
+        rear_motor_filter_speed(measured_pulses);
+    }
+
+    target_mps = 0.0f;
+    requested_pwm = 0;
+    integral = 0.0f;
+    last_error = 0.0f;
+    last_pwm = 0;
+    rear_motor_set_pwm(0);
+}
+
+/**
  * 函数说明：rear_motor_open_loop_update()。RackTest Stage 4 使用固定 PWM 驱动后轮，
  * 绕过速度 PID，同时继续更新编码器换算得到的实际速度。
  * 参数说明：pwm 为目标 PWM，正负号表示方向，内部仍执行变化率和硬限幅保护。
