@@ -152,7 +152,7 @@ python -m unittest discover -s tests -v
 4. 确认没有编译错误、链接溢出或未解析符号。
 5. 烧录 TC264 后连接串口，确认日志中的配置标识与预期一致。
 
-当前目录是从提交 `24b6c22` 提取的独立仓库，详细工程操作日志见 [`PROJECT_LOG.md`](../PROJECT_LOG.md)。
+本仓库从提交 `24b6c22` 提取；工程操作记录见 [`PROJECT_LOG.md`](PROJECT_LOG.md)。
 
 ## 维护建议
 
